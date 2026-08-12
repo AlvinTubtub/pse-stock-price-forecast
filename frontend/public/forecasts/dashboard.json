@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-08-11T17:01:08.493498+08:00",
+  "forecastDate": "2026-08-12",
+  "lastRunAt": "2026-08-11T08:56:35+00:00",
+  "status": "ok",
+  "totalCompanies": 15,
+  "missingCompanies": [],
+  "sectors": [
+    {
+      "name": "Financials",
+      "count": 3
+    },
+    {
+      "name": "Industrial",
+      "count": 3
+    },
+    {
+      "name": "Mining and Oil",
+      "count": 3
+    },
+    {
+      "name": "Property",
+      "count": 3
+    },
+    {
+      "name": "Services",
+      "count": 3
+    }
+  ],
+  "marketSummary": {
+    "gainers": 4,
+    "losers": 9,
+    "unchanged": 2
+  },
+  "topGainer": {
+    "symbol": "APX",
+    "name": "Apex Mining Co., Inc.",
+    "sector": "Mining and Oil",
+    "latestClose": 15.06,
+    "predictedClose": 15.11,
+    "pctChange": 0.33,
+    "direction": "bullish",
+    "bestModel": "Lag-Informed Regression",
+    "confidence": 97.0,
+    "forecastDate": "2026-08-12"
+  },
+  "topLoser": {
+    "symbol": "SMPH",
+    "name": "SM Prime Holdings, Inc.",
+    "sector": "Property",
+    "latestClose": 19.1,
+    "predictedClose": 18.98,
+    "pctChange": -0.63,
+    "direction": "bearish",
+    "bestModel": "ARIMA",
+    "confidence": 95.6,
+    "forecastDate": "2026-08-12"
+  }
+}

@@ -1,0 +1,81 @@
+name: Fast Pipeline (data + inference, no training)
+
+# Triggered externally by Cron-job.org (Mon-Fri, 4:00 PM Philippine Time)
+# via repository_dispatch.
+# workflow_dispatch is included for manual/debug runs.
+#
+# This workflow NEVER trains models.
+# It:
+#   1. Ingests the latest PSE EOD data
+#   2. Runs daily inference using persisted weekly models
+#   3. Exports frontend JSON artifacts
+#   4. Validates the exported artifacts
+#   5. Commits and pushes updated artifacts
+#
+# Weekly model retraining is handled separately.
+
+on:
+  repository_dispatch:
+    types: [update-pse-data]
+  workflow_dispatch: {}
+
+concurrency:
+  group: pse-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-fast.txt
+          pip install -r requirements-inference.txt
+
+      - name: Run pipeline (ingestion) and Run daily inference (no training)
+        working-directory: backend
+        run: |
+          python run_pipeline.py --no-train
+
+      - name: Export frontend JSON artifacts
+        working-directory: backend
+        run: |
+          python scripts/export_forecast_artifacts.py
+
+      - name: Validate exported artifacts
+        working-directory: backend
+        run: |
+          python scripts/validate_exports.py
+
+      - name: Commit and push changed artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            backend/data/raw/*.csv \
+            backend/prediction_cache/*.json \
+            backend/latest_processed.json \
+            frontend/public/forecasts
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Automated data + inference update ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git push
+          fi

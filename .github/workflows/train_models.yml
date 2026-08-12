@@ -1,0 +1,122 @@
+name: PSE Weekly Model Training
+
+# Weekly model retraining is intentionally separate from the Fast Pipeline.
+# The Fast Pipeline runs daily inference against these persisted artifacts.
+# This workflow retrains all three models for the canonical 15-ticker universe,
+# validates the generated artifacts, exports the frontend JSON, then commits the
+# complete training result only after every ticker succeeds.
+
+on:
+  schedule:
+    # Sunday 00:00 UTC = Sunday 08:00 Philippine Time (UTC+8).
+    - cron: "0 0 * * 0"
+  workflow_dispatch: {}
+
+concurrency:
+  group: pse-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    name: Train all 15 PSE tickers
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+          cache: pip
+          cache-dependency-path: backend/requirements-pipeline.txt
+
+      - name: Install training dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-pipeline.txt
+
+      - name: Verify training environment
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import numpy, pandas, sklearn, scipy, statsmodels, torch, joblib
+          print("numpy", numpy.__version__)
+          print("pandas", pandas.__version__)
+          print("scikit-learn", sklearn.__version__)
+          print("scipy", scipy.__version__)
+          print("statsmodels", statsmodels.__version__)
+          print("torch", torch.__version__)
+          print("joblib", joblib.__version__)
+          PY
+
+      - name: Train all models strictly
+        working-directory: backend
+        run: |
+          python -m services.model_selector --strict
+
+      - name: Verify all persisted model artifacts
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from services.pdf_pipeline.config import TARGET_COMPANIES
+
+          root = Path(".")
+          tickers = sorted(TARGET_COMPANIES)
+          expected = {
+              "lag_regression": [root / "models" / "lag_regression" / f"{t}.pkl" for t in tickers],
+              "arima": [root / "models" / "arima" / f"{t}.pkl" for t in tickers],
+              "lstm": [root / "models" / "lstm" / f"{t}.pth" for t in tickers],
+              "prediction_cache": [root / "prediction_cache" / f"{t}.json" for t in tickers],
+          }
+
+          for kind, paths in expected.items():
+              missing = [str(p) for p in paths if not p.is_file()]
+              if missing:
+                  raise SystemExit(f"{kind}: missing {len(missing)} artifact(s): {missing}")
+              print(f"{kind}: {len(paths)}/{len(paths)} present")
+
+          best_models = root / "best_models.json"
+          statistical_tests = root / "statistical_tests.json"
+          if not best_models.is_file():
+              raise SystemExit("best_models.json was not generated")
+          if not statistical_tests.is_file():
+              raise SystemExit("statistical_tests.json was not generated")
+          print(f"Universe: {len(tickers)}/{len(tickers)} tickers")
+          PY
+
+      - name: Export frontend forecast artifacts
+        working-directory: backend
+        run: |
+          python scripts/export_forecast_artifacts.py
+
+      - name: Validate exported artifacts
+        working-directory: backend
+        run: |
+          python scripts/validate_exports.py
+
+      - name: Commit and push trained artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            backend/models \
+            backend/prediction_cache \
+            backend/best_models.json \
+            backend/statistical_tests.json \
+            frontend/public/forecasts
+
+          if git diff --cached --quiet; then
+            echo "No training changes to commit."
+          else
+            git commit -m "Automated weekly model training ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git push
+          fi
