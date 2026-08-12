@@ -1,0 +1,5 @@
+model,model_key,rank,mean_rmse,selection_frequency,selection_count,mean_rmse_improvement_pct_vs_naive,fraction_beating_naive
+ARIMA,arima,1,4.38952,0.4,6.0,0.2001071846706573,0.6
+Naive baseline,naive,2,4.413053333333335,,,,
+Lag-Informed Regression (LASSO),lag_reg,3,7.847146666666668,0.4666666666666667,7.0,-19.413594654896176,0.4
+LSTM,lstm,4,14.7503,0.13333333333333333,2.0,-85.93807731654364,0.06666666666666667
