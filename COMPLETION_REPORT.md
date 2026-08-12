@@ -1,224 +1,942 @@
-# PSE Forecasting Dashboard — Operational Fixes: Completion Report
+# ForecastPH — PSE Stock Price Forecast Dashboard
 
-All 9 items completed and verified with a real local run against your actual
-repo data (no mocking). Full pytest suite: **35/35 passing**.
+## Completion Report
 
-## 1. Fast Pipeline workflow — created
+**Project:** ForecastPH — PSE Stock Price Forecast Dashboard
+**Repository:** `AlvinTubtub/pse-stock-price-forecast`
+**Frontend:** Next.js
+**Backend:** Python
+**Deployment:** Vercel
+**Automation:** GitHub Actions + Cron-job.org
+**Market:** Philippine Stock Exchange (PSE)
+**Project Status:** **IN PROGRESS — Predictive Accuracy Integration and Final Verification**
 
-`.github/workflows/update_pipeline.yml` did not exist in the uploaded repo at
-all — created from scratch.
+---
 
-- Trigger: `repository_dispatch` (type `update-pse-data`, matching the
-  Cron-job.org → GitHub Actions design described in `backend/README.md`) +
-  `workflow_dispatch` for manual runs.
-- Order: install deps → **ingestion + daily inference** (one step, since
-  `run_pipeline.py`'s own retry logic decides internally whether inference
-  runs — see #2) → **export** → **validate** → **commit/push**.
-- No training: only `requirements-fast.txt` + `requirements-inference.txt`
-  are installed (no scikit-learn/statsmodels/torch training path), and the
-  command is `run_pipeline.py --no-train`.
-- Failure propagation: no `continue-on-error` anywhere — a failed inference,
-  export, or validation step fails the job (and `run_pipeline.py` itself
-  already sets `status="error"` and returns exit 1 if daily inference fails
-  for any symbol).
-- New `backend/scripts/validate_exports.py` — the "validation" step. Checks
-  the exported `frontend/public/forecasts/` JSON has exactly the 15 expected
-  tickers, no `missingCompanies`, and `latest.json` status isn't `"error"`,
-  before anything gets committed.
-- `test_fast_pipeline_ordering` (already in the repo) passes against this file.
+# 1. Project Status
 
-## 2. Retry logic — fixed in `backend/run_pipeline.py`
+The ForecastPH system has substantial completed functionality across the data pipeline, forecasting models, evaluation framework, historical OHLCV data, interactive charts, dashboard UI, automated workflows, and deployment architecture.
 
-**Confirmed the bug for real**: every `prediction_cache/<TICKER>.json` in
-your upload had **no `inference_metadata` at all** — they were training-time
-caches that had never been through daily inference. Under the old logic
-(`if merge_summaries: run inference`), a day with no new PDF would never
-even check this and would leave those stale forever.
+However, the project is **not yet considered fully completed**.
 
-Added `tickers_needing_inference()`, which compares each of the 15 expected
-tickers' latest raw OHLCV date against its cache's
-`inference_metadata.data_as_of`, independent of `merge_summaries`. A ticker
-is stale if the cache is missing, has no inference metadata yet, or its
-`data_as_of` is older than the latest raw date. Inference runs whenever any
-ticker is stale; it's skipped only when every ticker's cache is already
-current (which naturally covers "market closed" too — if there's no new
-trading session, the raw date hasn't advanced, so nothing is stale).
+The remaining completion requirement is the final integration and verification of the **predictive-accuracy evaluation system** with the production forecasting codebase.
 
-**Verified locally** (see #6): first run detected 15/15 stale → ran
-inference → wrote `data_as_of`/`forecast_for` to all 15 caches. Second
-run (immediately after, no new data) correctly detected 0/15 stale and
-skipped inference (0.06s vs. 6.9s). New tests in
-`backend/tests/test_run_pipeline_retry.py` (8 tests) cover: stale-cache
-detection, current-cache skip, missing-metadata treated as stale, no-cache
-treated as stale, and the exact "no new PDF but stale cache" scenario from
-the bug report.
+The predictive-accuracy work includes a dedicated evaluation suite designed to verify:
 
-## 3. 2026 PSE calendar — fixed in `backend/services/pse_calendar.py`
+* Model computations
+* Training workflows
+* Algorithmic accuracy
+* Data preprocessing
+* Feature engineering
+* Evaluation metrics
+* Final unseen-test performance
+* Cross-model statistical comparisons
+* Reproducibility of model results
+* Correctness of the forecasting workflow
 
-Applied your listed corrections, verified against Malacañang Proclamation
-No. 1006:
-- Added 2026-02-17 (Chinese New Year)
-- Fixed Eid'l Fitr to 2026-03-20 (was an incorrect placeholder)
-- Added 2026-05-27 (Eid'l Adha)
-- Removed the incorrect 2026-05-25 entry
+The predictive-accuracy suite has already been implemented and verified with:
 
-**One more bug found during the audit you asked for**, outside your
-explicit list: **National Heroes Day 2026 was hardcoded to Aug 24**, but
-the actual "last Monday of August 2026" is **Aug 31** (both are Mondays;
-Aug 31 is later in the month and is the one in the official proclamation).
-Fixed.
+**63/63 tests passing**
 
-8 new regression tests in `backend/tests/test_pse_calendar.py` lock in all
-of the above, including `next_trading_day()` behavior around each new
-holiday. All pass.
+The final project status therefore remains **IN PROGRESS** until the predictive-accuracy implementation is fully integrated and confirmed against the final `pse-stock-price-forecast` codebase.
 
-## 4. 15-ticker universe enforcement — `backend/scripts/daily_inference.py`
+---
 
-`run_daily_inference()` now sources `EXPECTED_TICKERS` from
-`services/pdf_pipeline/config.py:TARGET_COMPANIES` (the same list already
-used by the PDF ingestion side, so there's one canonical 15-ticker list for
-the whole backend). In its **default production mode** (`symbols=None`), it
-iterates exactly those 15 and reports any missing raw CSV as a failure
-(`"Expected ticker missing entirely — no raw data at ..."`) rather than
-silently omitting it — so a run can never report success with fewer than
-15/15. `run_pipeline.py` also cross-checks this after inference and marks
-the run as `error` if any expected ticker didn't end up in either
-`symbols_processed` or `symbols_failed`.
+# 2. Completed System Components
 
-Explicitly-scoped test calls (`symbols=["A","B"]`, used by existing unit
-tests) intentionally do **not** trigger universe enforcement — only the
-`symbols=None` production path does. Verified by
-`TestUniverseEnforcement` (2 new tests).
+The following major components have been implemented.
 
-## 5. Model environment compatibility — the real finding
+### Data Pipeline
 
-This was the most involved item. I inspected the actual pickled artifacts
-(not just assumed compatibility) and found the previous
-`requirements-inference.txt` pins were **wrong for the artifacts currently
-in the repo**:
+* PSE end-of-day data acquisition
+* Market-data extraction
+* Data cleaning
+* Data validation
+* Historical OHLCV updates
+* Duplicate prevention
+* Pipeline metadata
+* JSON artifact generation
 
-| Package | Old pin (broken) | What the artifacts actually need | Verified |
-|---|---|---|---|
-| pandas | 2.0.3 | **3.0.5** | ARIMA artifacts' internal pandas Index uses a pandas-3-only string dtype; pandas 2.x raises `NotImplementedError` unpickling it |
-| numpy | 1.24.4 | **1.26.4** | matches sklearn 1.9.0 / statsmodels 0.14.6's numpy floor |
-| scikit-learn | 1.3.2 | **1.9.0** | every `models/lag_regression/*.pkl` embeds `_sklearn_version: '1.9.0'` (checked all 15) |
-| scipy | 1.11.4 | **1.17.1** | resolved dependency of the above |
-| statsmodels | 0.14.0 | **0.14.6** | 0.14.1–0.14.5 raise `TypeError: deprecate_kwarg() missing 1 required positional argument` on import under pandas 3.x |
-| torch | 2.0.1 | **2.13.0** | LSTM `.pth` files use torch's standard zip/tensor format, backward-compatible; tested and loads cleanly |
-| joblib | 1.3.2 | **1.5.3** | resolved dependency |
+### Forecasting
 
-I could not install Python 3.11 in this sandbox (only 3.12 is available;
-apt has no `python3.11` package here) — so **this was verified on Python
-3.12, not the `.python-version`-pinned 3.11**. All three model types
-(LASSO/sklearn, ARIMA/statsmodels, LSTM/torch) load successfully and
-produce predictions for all 15 tickers under 3.12 with the versions above.
-I'd recommend a quick confirmation run on an actual 3.11 runner (e.g. the
-GitHub Actions job itself, which uses `.python-version`) before fully
-trusting this in production, though nothing in what I found is
-Python-3.12-specific — the incompatibilities were all pandas/scikit-learn/
-statsmodels version-skew, not interpreter-version skew.
+* Lag-Informed Regression
+* ARIMA
+* LSTM
+* Naive previous-close baseline
+* Next-session closing-price forecasting
+* Backtesting
 
-`requirements-inference.txt` has been rewritten with these versions and a
-comment explaining exactly why the old pins were wrong (so nobody
-"fixes" it back by accident).
+### Model Evaluation
 
-**Not addressed (out of the 9-item scope, but worth flagging):**
-`requirements-pipeline.txt` (used by the — currently nonexistent in this
-upload — weekly Heavy Training workflow) still has *unpinned* deps. If
-Heavy Training runs again with unpinned deps, it will very likely produce
-artifacts on whatever the latest scikit-learn/statsmodels/pandas happen to
-be at that time, and this exact mismatch can recur. Pinning
-`requirements-pipeline.txt` to the same versions (so training and inference
-share one reproducible environment, as intended) would close that gap —
-happy to do this if you want it in scope.
+* RMSE
+* MAE
+* MASE
+* R²
+* Cross-model comparison
+* Statistical significance testing
+* Best-model selection
 
-## 6. Real local end-to-end test — done, not mocked
+### Dashboard
 
+* Main dashboard
+* Company list
+* Company detail pages
+* Interactive historical stock charts
+* Full historical OHLCV visualization
+* Forecast visualization
+* Backtesting visualization
+* Model-performance dashboard
+* Responsive UI
+* Pipeline-status information
+
+### Automation
+
+* Fast Pipeline
+* Heavy Training Pipeline
+* GitHub Actions
+* Cron-based execution
+* Generated-artifact commits
+* Vercel deployment
+
+These components are functional project infrastructure, but final project completion remains dependent on predictive-accuracy verification.
+
+---
+
+# 3. Predictive Accuracy Validation
+
+## 3.1 Purpose
+
+The predictive-accuracy system was created to independently verify that the forecasting system produces technically correct and statistically defensible results.
+
+The purpose is not simply to confirm that the dashboard displays forecasts.
+
+It verifies the complete computational path:
+
+```text
+Raw Data
+    ↓
+Data Loading
+    ↓
+Data Preprocessing
+    ↓
+Feature Engineering
+    ↓
+Training
+    ↓
+Prediction
+    ↓
+Evaluation
+    ↓
+Statistical Testing
+    ↓
+Predictive Accuracy
 ```
-cd backend && python run_pipeline.py --no-train --no-download
+
+This provides an additional validation layer around the production forecasting implementation.
+
+---
+
+# 4. Predictive Accuracy Test Suite
+
+The predictive-accuracy evaluation suite is located under:
+
+```text
+backend/tests/predictive_accuracy/
 ```
-(`--no-download` because PSE EDGE isn't reachable from this sandbox's
-network egress allowlist — there was nothing new to download anyway since
-your raw data already runs through 2026-08-07.)
 
-Result:
+The suite was designed to reuse the existing project implementation rather than creating an independent replacement forecasting system.
+
+The evaluation suite reuses the existing:
+
+* Data loaders
+* Data-processing logic
+* Feature-engineering implementation
+* Model-training code
+* Forecasting models
+* Evaluation functionality
+
+This is important because the objective is to test the actual forecasting implementation used by the project.
+
+---
+
+# 5. Predictive Accuracy Test Coverage
+
+The predictive-accuracy suite covers the major computational stages of the forecasting system.
+
+### Data Processing
+
+Validation includes:
+
+* Input-data loading
+* Required fields
+* Data structure
+* Date handling
+* Numeric conversion
+* Missing-data behavior
+* Historical ordering
+* Dataset integrity
+
+### Feature Engineering
+
+Validation includes:
+
+* Feature generation
+* Feature availability
+* Lag construction
+* Technical indicators
+* Return calculations
+* Rolling features
+* Feature consistency
+
+### Model Computation
+
+Validation includes:
+
+* Model initialization
+* Training behavior
+* Prediction behavior
+* Output shape
+* Numerical validity
+* Reproducibility where applicable
+
+### Training Workflow
+
+Validation includes:
+
+* Training-data construction
+* Train/test separation
+* Feature preparation
+* Model fitting
+* Prediction generation
+* Evaluation workflow
+
+### Evaluation Metrics
+
+Validation includes:
+
+* RMSE
+* MAE
+* MASE
+* R²
+* Metric consistency
+* Numerical correctness
+
+### Statistical Testing
+
+Validation includes the project's cross-model statistical evaluation procedures.
+
+---
+
+# 6. Final Unseen-Test Evaluation
+
+A critical part of the predictive-accuracy framework is the **final unseen-test evaluation**.
+
+The purpose is to prevent the final accuracy assessment from being based on data that was already used during model development.
+
+The intended evaluation structure is:
+
+```text
+Historical Dataset
+       │
+       ├── Training Data
+       │
+       ├── Validation / Cross-Validation
+       │
+       └── Final Unseen Test Data
+                    │
+                    ▼
+             Final Accuracy
 ```
-15/15 ticker(s) have stale or missing cached forecasts vs. raw data: ALI, APX, BPI, GLO, ICT, JFC, MBT, MEG, MER, NIKL, PGOLD, SCC, SECB, SHLPH, SMPH
-Running daily inference...
-Daily inference: ok (15 OK, 0 failed)
-Status          : no_files
-Finished successfully.
+
+The final unseen-test period is reserved for evaluating generalization.
+
+This provides a more meaningful estimate of how the trained models perform on previously unseen observations.
+
+---
+
+# 7. Predictive Accuracy Verification Status
+
+The predictive-accuracy suite has reached the following verification state:
+
+```text
+Predictive Accuracy Test Suite
+        │
+        ├── Test implementation       COMPLETE
+        ├── Test coverage             COMPLETE
+        ├── Existing code reuse       COMPLETE
+        ├── Test execution            COMPLETE
+        └── Tests passing             63 / 63
 ```
-Confirmed:
-- 15/15 tickers succeeded, all three models (LASSO, ARIMA, LSTM) produced predictions for each
-- ARIMA loaded from the persisted `.pkl` and forecast without refitting (endog length matched raw rows exactly — 0 new observations to append this run; the `append(..., refit=False)` code path itself is exercised by `test_arima_inference_no_refit`/`test_arima_no_new_observations`, both passing)
-- No training occurred — model file mtimes are unchanged from before my run (still show the original zip's timestamps, not this run's)
-- `data_as_of = 2026-08-07`, `forecast_for = 2026-08-10` on all 15 caches — exactly as specified
-- Re-running immediately after correctly detected 0/15 stale and skipped inference entirely (0.06s), confirming the retry logic's idempotency
 
-## 7. Outputs regenerated — done
+### Current Result
 
-All 15 `prediction_cache/<TICKER>.json` now have `next_close.lag/arima/lstm`
-and a full `inference_metadata` block with the fields you specified
-(`data_as_of`, `forecast_for`, `inference_at`, `models_retrained: false`,
-`model_source: "weekly_persisted_artifacts"`). Existing `metrics`,
-`backtest30`, `backtest_by_model` were preserved untouched (verified —
-`infer_symbol()` only overwrites `next_close`/`inference_metadata`).
+**63/63 predictive-accuracy tests passing**
 
-Frontend artifacts regenerated via `python scripts/export_forecast_artifacts.py`:
-`companies.json`, `dashboard.json`, `metrics.json`, `latest.json`, and
-per-symbol `company/<SYMBOL>.json` / `history/<SYMBOL>.json` for all 15 —
-confirmed `forecastDate` is sourced from `forecast_for` (this was already
-correctly wired in `export_forecast_artifacts.py`, no change needed there).
+This establishes that the implemented validation suite itself is functioning correctly.
 
-## 8. Test suite — 35/35 passing
+However, passing the validation suite does not by itself mean that the entire ForecastPH project can be marked complete.
 
+The remaining requirement is to ensure that the predictive-accuracy validation is fully integrated with and confirmed against the final production codebase and model outputs.
+
+---
+
+# 8. Predictive Accuracy vs. Model Performance
+
+The project distinguishes between **model-performance reporting** and **predictive-accuracy verification**.
+
+### Model Performance
+
+The dashboard reports metrics such as:
+
+* RMSE
+* MAE
+* MASE
+* R²
+
+These describe model performance on the evaluation datasets.
+
+### Predictive Accuracy Validation
+
+The predictive-accuracy suite verifies that:
+
+* The calculations are implemented correctly.
+* The correct datasets are used.
+* Data preprocessing is correct.
+* Features are generated correctly.
+* Models are trained correctly.
+* Predictions are generated correctly.
+* Metrics are calculated correctly.
+* Unseen-test evaluation is performed correctly.
+* Cross-model statistical testing is implemented correctly.
+
+Therefore:
+
+```text
+Dashboard Metrics
+        +
+Predictive Accuracy Tests
+        +
+Final Unseen-Test Evaluation
+        =
+Complete Model Validation
 ```
-python -m pytest -q
-...................................
-35 passed in ~3s
+
+---
+
+# 9. Historical OHLCV Data
+
+Full historical OHLCV support has been implemented.
+
+OHLCV consists of:
+
+| Field  | Description    |
+| ------ | -------------- |
+| Date   | Trading date   |
+| Open   | Opening price  |
+| High   | Highest price  |
+| Low    | Lowest price   |
+| Close  | Closing price  |
+| Volume | Trading volume |
+
+Backend historical datasets are stored under:
+
+```text
+backend/data/raw/<TICKER>.csv
 ```
-27 pre-existing tests (unchanged, all still pass) + 8 new calendar tests +
-8 new retry/universe-enforcement tests (some overlap in counting — see
-below for the exact new files).
 
-New test files:
-- `backend/tests/test_pse_calendar.py` — 8 tests (2026 holiday corrections)
-- `backend/tests/test_run_pipeline_retry.py` — 8 tests (stale-cache
-  detection, current-cache skip, 15-ticker enforcement)
+Frontend historical artifacts are generated under:
 
-No existing test needed fixing — `test_run_daily_inference_batch` was
-already passing before my changes and continues to pass (it uses an
-explicit `symbols=` list, which correctly bypasses the new universe
-enforcement, as it's meant to for a targeted test run).
+```text
+frontend/public/forecasts/history/<TICKER>.json
+```
 
-## 9. Files changed
+The historical datasets support both forecasting and interactive visualization.
 
-- `.github/workflows/update_pipeline.yml` — **new**
-- `backend/scripts/validate_exports.py` — **new**
-- `backend/tests/test_pse_calendar.py` — **new**
-- `backend/tests/test_run_pipeline_retry.py` — **new**
-- `backend/run_pipeline.py` — retry-logic fix (`tickers_needing_inference`), universe cross-check
-- `backend/scripts/daily_inference.py` — 15-ticker universe enforcement
-- `backend/services/pse_calendar.py` — 2026 holiday corrections (incl. National Heroes Day)
-- `backend/requirements-inference.txt` — corrected version pins
+---
 
-## Remaining blockers / things worth your attention
+# 10. Interactive Stock Charts
 
-1. **Python 3.11 vs 3.12**: verified on 3.12 only (sandbox limitation), not
-   the `.python-version`-pinned 3.11. Low risk (the issues found were
-   library-version skew, not interpreter skew) but worth a real CI run to
-   confirm before fully trusting it.
-2. **PSE EDGE network access**: this sandbox can't reach
-   `documents.pse.com.ph`, so the download step of the real E2E test was
-   skipped (`--no-download`); only the ingestion-adjacent logic (merge,
-   validation, retry, inference) was exercised against real data. The
-   download code path itself (`services/pdf_pipeline/downloader.py`) was
-   untouched and out of scope.
-3. **`requirements-pipeline.txt` still unpinned** — see #5. If you want the
-   "one reproducible environment for weekly training and daily inference"
-   requirement fully closed, this needs pinning too, and (if
-   `.github/workflows/train_models.yml` doesn't exist either — it wasn't in
-   this upload) that workflow would need creating as well. That was outside
-   this task's explicit 9 items, so I left it alone, but flagging it since
-   it's the most likely way this exact bug recurs.
+Interactive historical stock charts have been implemented in the frontend.
+
+The charts are designed to allow users to inspect:
+
+* Historical price movement
+* OHLC information
+* Trading volume
+* Long-term price history
+* Individual company performance
+* Historical time ranges
+* Price behavior around forecasting periods
+
+The charts consume generated historical JSON artifacts rather than independently running the forecasting pipeline in the browser.
+
+---
+
+# 11. Forecasting Models
+
+The project evaluates multiple forecasting approaches:
+
+### Lag-Informed Regression
+
+Uses historical and engineered features to estimate next-session closing-price change.
+
+### ARIMA
+
+Provides a statistical time-series forecasting approach.
+
+### LSTM
+
+Provides a neural-network sequence forecasting approach.
+
+### Naive Previous-Close Baseline
+
+Provides a baseline for determining whether more complex models provide meaningful predictive improvement.
+
+---
+
+# 12. Forecast Target
+
+The primary forecasting target is next-session closing-price change:
+
+```text
+ΔClose(t+1) = Close(t+1) − Close(t)
+```
+
+The forecasted closing price is reconstructed as:
+
+```text
+Predicted Close(t+1)
+=
+Close(t) + Predicted ΔClose(t+1)
+```
+
+This formulation is used throughout the forecasting workflow.
+
+---
+
+# 13. Feature Engineering
+
+The forecasting system includes multiple price, return, technical, volatility, and volume features.
+
+Current feature categories include:
+
+* Lagged prices
+* Lagged returns
+* EMA 10
+* EMA 20
+* RSI 14
+* MACD
+* MACD signal
+* Bollinger Bands
+* Daily return
+* Rolling volatility
+* High-Low spread
+* Open-Close spread
+* Rolling return statistics
+* High-Low range percentage
+* Log volume
+* Rolling volume statistics
+
+The predictive-accuracy test suite also validates the feature-engineering workflow.
+
+---
+
+# 14. Model Evaluation
+
+The forecasting models are evaluated using:
+
+| Metric | Purpose                            |
+| ------ | ---------------------------------- |
+| RMSE   | Average squared-error magnitude    |
+| MAE    | Average absolute prediction error  |
+| MASE   | Error relative to a naive baseline |
+| R²     | Explained variance                 |
+
+The metrics are generated as structured artifacts for use by the dashboard and validation workflows.
+
+---
+
+# 15. Statistical Model Comparison
+
+The project includes cross-model statistical testing.
+
+The evaluation framework includes:
+
+* Diebold-Mariano testing
+* Harvey-Leybourne-Newbold correction
+* Friedman rank testing
+* Holm-adjusted Wilcoxon signed-rank tests
+* Best-model consistency analysis
+
+The objective is to determine whether differences between models are statistically meaningful rather than relying only on the lowest numerical error.
+
+---
+
+# 16. Backtesting
+
+Historical backtesting has been implemented.
+
+Backtesting allows the system to compare:
+
+```text
+Actual Historical Result
+          vs.
+Model Prediction
+```
+
+The resulting information is used for model-performance analysis and dashboard visualization.
+
+Backtesting is separate from the final unseen-test evaluation.
+
+---
+
+# 17. Frontend
+
+The Next.js frontend provides:
+
+* Dashboard
+* Company List
+* Company Details
+* Interactive historical charts
+* OHLCV visualization
+* Forecast results
+* Backtesting visualization
+* Model Performance
+* Search and navigation
+* Pipeline status
+* Educational information
+* Responsive UI
+
+The frontend is read-only with respect to the forecasting engine.
+
+It consumes generated JSON artifacts.
+
+---
+
+# 18. Frontend Data Contract
+
+The main generated artifacts are:
+
+```text
+frontend/public/forecasts/
+├── dashboard.json
+├── latest.json
+├── metrics.json
+├── companies.json
+├── company/
+│   └── <SYMBOL>.json
+└── history/
+    └── <SYMBOL>.json
+```
+
+### `dashboard.json`
+
+Dashboard-level summary data.
+
+### `latest.json`
+
+Latest pipeline and freshness information.
+
+### `metrics.json`
+
+Model-performance metrics.
+
+### `companies.json`
+
+Tracked-company metadata.
+
+### `company/<SYMBOL>.json`
+
+Company-specific forecasts and evaluation data.
+
+### `history/<SYMBOL>.json`
+
+Full historical OHLCV data.
+
+---
+
+# 19. Automated Fast Pipeline
+
+The Fast Pipeline is responsible for routine market-data updates without model retraining.
+
+Execution path:
+
+```text
+PSE EOD Data
+    ↓
+Download
+    ↓
+Extraction
+    ↓
+Cleaning
+    ↓
+Validation
+    ↓
+OHLCV Update
+    ↓
+Artifact Export
+    ↓
+Git Commit
+    ↓
+Vercel Deployment
+```
+
+The no-training execution mode is:
+
+```bash
+python backend/run_pipeline.py --no-train
+```
+
+---
+
+# 20. Heavy Training Pipeline
+
+The Heavy Training workflow performs model retraining and comprehensive evaluation.
+
+Execution path:
+
+```text
+Latest OHLCV
+    ↓
+Feature Engineering
+    ↓
+Model Training
+    ↓
+Evaluation
+    ↓
+Statistical Testing
+    ↓
+Best Model Selection
+    ↓
+Forecast Generation
+    ↓
+Artifact Export
+    ↓
+Git Commit
+    ↓
+Vercel Deployment
+```
+
+This workflow is intentionally separated from the routine Fast Pipeline.
+
+---
+
+# 21. GitHub Actions
+
+The repository contains:
+
+```text
+.github/workflows/
+├── update_pipeline.yml
+└── train_models.yml
+```
+
+The workflows automate:
+
+* Market-data updates
+* Model training
+* Forecast generation
+* Statistical evaluation
+* Artifact export
+* Repository updates
+
+---
+
+# 22. Deployment
+
+The frontend is designed for Vercel deployment.
+
+Primary configuration:
+
+```text
+Framework: Next.js
+Root Directory: frontend/
+```
+
+The deployment flow is:
+
+```text
+GitHub
+   ↓
+Generated Artifacts
+   ↓
+Vercel Build
+   ↓
+Next.js Dashboard
+```
+
+Live dashboard:
+
+https://pse-stock-price-forecast.vercel.app/
+
+---
+
+# 23. Repository Structure
+
+```text
+pse-stock-price-forecast/
+│
+├── .github/
+│   └── workflows/
+│       ├── update_pipeline.yml
+│       └── train_models.yml
+│
+├── backend/
+│   ├── data/
+│   ├── models/
+│   ├── prediction_cache/
+│   ├── services/
+│   ├── scripts/
+│   ├── tests/
+│   │   └── predictive_accuracy/
+│   ├── best_models.json
+│   ├── latest_processed.json
+│   ├── statistical_tests.json
+│   ├── run_pipeline.py
+│   ├── requirements-fast.txt
+│   └── requirements-pipeline.txt
+│
+├── frontend/
+│   ├── public/
+│   │   └── forecasts/
+│   │       ├── dashboard.json
+│   │       ├── latest.json
+│   │       ├── metrics.json
+│   │       ├── companies.json
+│   │       ├── company/
+│   │       └── history/
+│   │
+│   ├── src/
+│   ├── package.json
+│   ├── next.config.js
+│   ├── tailwind.config.ts
+│   └── tsconfig.json
+│
+├── README.md
+├── COMPLETION_REPORT.md
+└── .gitignore
+```
+
+---
+
+# 24. Verification Status
+
+| Component                                                          | Status            |
+| ------------------------------------------------------------------ | ----------------- |
+| PSE data ingestion                                                 | Completed         |
+| Data cleaning                                                      | Completed         |
+| Data validation                                                    | Completed         |
+| Historical OHLCV storage                                           | Completed         |
+| Historical OHLCV frontend artifacts                                | Completed         |
+| Feature engineering                                                | Completed         |
+| Lag-Informed Regression                                            | Completed         |
+| ARIMA                                                              | Completed         |
+| LSTM                                                               | Completed         |
+| Naive baseline                                                     | Completed         |
+| Forecast generation                                                | Completed         |
+| RMSE                                                               | Completed         |
+| MAE                                                                | Completed         |
+| MASE                                                               | Completed         |
+| R²                                                                 | Completed         |
+| Backtesting                                                        | Completed         |
+| Cross-model statistical testing                                    | Completed         |
+| Best-model selection                                               | Completed         |
+| Interactive stock charts                                           | Completed         |
+| Model Performance dashboard                                        | Completed         |
+| UI enhancements                                                    | Completed         |
+| Fast Pipeline                                                      | Completed         |
+| Heavy Training Pipeline                                            | Completed         |
+| GitHub Actions                                                     | Completed         |
+| Vercel deployment architecture                                     | Completed         |
+| Predictive-accuracy test suite                                     | Completed         |
+| Predictive-accuracy test execution                                 | **63/63 passing** |
+| Final unseen-test predictive accuracy integration                  | **In Progress**   |
+| Final predictive-accuracy confirmation against production codebase | **In Progress**   |
+| Overall project completion                                         | **In Progress**   |
+
+---
+
+# 25. Remaining Completion Requirements
+
+The project should not be marked fully complete until the following items are confirmed:
+
+### 1. Predictive Accuracy Integration
+
+Confirm that:
+
+```text
+backend/tests/predictive_accuracy/
+```
+
+is integrated with the final production repository and tests the exact forecasting implementation used by the application.
+
+### 2. Final Unseen-Test Evaluation
+
+Run the final predictive-accuracy evaluation against the designated unseen-test period.
+
+### 3. Accuracy Results Confirmation
+
+Confirm the final:
+
+* RMSE
+* MAE
+* MASE
+* R²
+* Model rankings
+* Statistical comparisons
+
+for the final unseen-test data.
+
+### 4. Artifact Synchronization
+
+Ensure that the final validated model-performance and predictive-accuracy results are correctly reflected in the generated frontend artifacts.
+
+### 5. Dashboard Verification
+
+Confirm that the Model Performance page displays the validated results rather than stale or independently calculated values.
+
+### 6. End-to-End Verification
+
+Verify the complete workflow:
+
+```text
+Market Data
+    ↓
+OHLCV
+    ↓
+Features
+    ↓
+Training
+    ↓
+Prediction
+    ↓
+Predictive Accuracy
+    ↓
+Statistical Testing
+    ↓
+JSON Artifacts
+    ↓
+Dashboard
+    ↓
+Vercel
+```
+
+---
+
+# 26. Definition of Final Completion
+
+ForecastPH should be considered **fully completed** only when all of the following are true:
+
+```text
+[✓] Data pipeline operational
+[✓] Historical OHLCV operational
+[✓] Forecasting models operational
+[✓] Model evaluation operational
+[✓] Statistical testing operational
+[✓] Interactive charts operational
+[✓] Dashboard UI operational
+[✓] Fast Pipeline operational
+[✓] Heavy Training operational
+[✓] Vercel deployment operational
+[✓] Predictive-accuracy test suite implemented
+[✓] Predictive-accuracy suite passes 63/63 tests
+[ ] Final unseen-test accuracy confirmed
+[ ] Predictive-accuracy results integrated into final production artifacts
+[ ] Final Model Performance dashboard verified against validated results
+[ ] End-to-end final verification completed
+```
+
+Therefore, the correct current project state is:
+
+# **IN PROGRESS**
+
+The predictive-accuracy validation framework is substantially complete and has passed **63/63 tests**, but the overall ForecastPH project should remain open until the final unseen-test accuracy and production integration are confirmed.
+
+---
+
+# 27. Final Architecture
+
+The target completed architecture is:
+
+```text
+                  PSE EOD MARKET DATA
+                           │
+                           ▼
+                 ┌───────────────────┐
+                 │ Data Pipeline     │
+                 │ Cleaning          │
+                 │ Validation        │
+                 │ OHLCV Updates     │
+                 └─────────┬─────────┘
+                           │
+                           ▼
+                 ┌───────────────────┐
+                 │ Feature           │
+                 │ Engineering       │
+                 └─────────┬─────────┘
+                           │
+                           ▼
+              ┌────────────────────────────┐
+              │ Forecasting Models         │
+              │                            │
+              │ Regression                 │
+              │ ARIMA                      │
+              │ LSTM                       │
+              │ Naive Baseline             │
+              └─────────────┬──────────────┘
+                            │
+                            ▼
+              ┌────────────────────────────┐
+              │ Model Evaluation           │
+              │                            │
+              │ RMSE / MAE / MASE / R²    │
+              │ Backtesting                │
+              │ Statistical Tests          │
+              └─────────────┬──────────────┘
+                            │
+                            ▼
+              ┌────────────────────────────┐
+              │ Predictive Accuracy        │
+              │ Validation Suite            │
+              │                            │
+              │ 63/63 Tests Passing        │
+              │ Final Unseen Test          │
+              └─────────────┬──────────────┘
+                            │
+                            ▼
+              ┌────────────────────────────┐
+              │ JSON Artifact Export       │
+              └─────────────┬──────────────┘
+                            │
+                            ▼
+              ┌────────────────────────────┐
+              │ Next.js Dashboard           │
+              │                            │
+              │ Historical OHLCV            │
+              │ Interactive Charts          │
+              │ Forecasts                   │
+              │ Backtesting                 │
+              │ Model Performance           │
+              └─────────────┬──────────────┘
+                            │
+                            ▼
+                          Vercel
+```
+
+---
+
+# 28. Conclusion
+
+ForecastPH has reached a mature implementation stage with the core forecasting platform, automated pipelines, historical OHLCV data, interactive stock charts, model evaluation, statistical testing, dashboard UI, and deployment architecture implemented.
+
+The dedicated predictive-accuracy validation suite is also implemented and has passed:
+
+**63/63 tests**
+
+However, this result should not be interpreted as final project completion.
+
+The remaining work is specifically focused on validating the final unseen-test predictive accuracy and confirming that the predictive-accuracy results are fully integrated with the production forecasting codebase, generated artifacts, and Model Performance dashboard.
+
+Until those steps are completed, the authoritative project status is:
+
+**IN PROGRESS — Predictive Accuracy Integration and Final Verification**
