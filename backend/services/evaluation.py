@@ -32,6 +32,12 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 log = logging.getLogger(__name__)
 
+# Matches TEST_FRACTION in services/forecasting/arima_model.py and
+# services/forecasting/lag_regression.py — there is no shared split
+# helper to import (see note below), so this is kept numerically
+# identical to those rather than introducing a divergent split.
+TEST_FRACTION = 0.15
+
 
 def _naive_mae(y_reference: np.ndarray) -> float:
     """The mean absolute error of a naive one-step (yesterday's value)
@@ -75,11 +81,32 @@ def compute_metrics(y_true, y_pred, y_train=None) -> dict:
 
 
 def evaluate_naive(df: pd.DataFrame) -> dict:
-    """Baseline: predict tomorrow's close = today's close."""
+    """Baseline: walk-forward one-step naive forecast (predict tomorrow's
+    close = today's close), evaluated on the same held-out 15% test
+    window used by the other models (see ``TEST_FRACTION`` in
+    services/forecasting/arima_model.py and lag_regression.py).
+
+    The first test-set prediction is the last *training* observation;
+    every prediction after that is the previous *actual* test-set value
+    (not the model's own prior prediction) — a true one-step-ahead naive
+    forecast, not a shifted copy of the full series. ``y_train`` is
+    passed to ``compute_metrics`` so MASE is scaled by the in-sample
+    (training-period) naive MAE, per Hyndman & Koehler, matching how the
+    other models are scored.
+    """
     close = df["Close"].values
-    y_true = close[1:]
-    y_pred = close[:-1]
-    return compute_metrics(y_true, y_pred)
+    n = len(close)
+    n_test = max(1, int(round(n * TEST_FRACTION)))
+    train_series = close[: n - n_test]
+    test_series = close[n - n_test :]
+
+    log.info("Naive baseline: %d train rows, %d test rows", len(train_series), len(test_series))
+
+    y_pred = np.concatenate([[train_series[-1]], test_series[:-1]])
+    metrics = compute_metrics(test_series, y_pred, y_train=train_series)
+
+    log.info("Naive baseline evaluation complete.")
+    return metrics
 
 
 def build_comparison_table(metrics_by_model: dict[str, dict], labels: dict[str, str] | None = None) -> pd.DataFrame:
