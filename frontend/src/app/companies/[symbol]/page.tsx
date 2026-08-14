@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import HistoryChart from "@/components/charts/HistoryChart";
+import NextDayPredictionChart from "@/components/charts/NextDayPredictionChart";
 import PredictionChart from "@/components/charts/PredictionChart";
 import ErrorChart from "@/components/charts/ErrorChart";
 import ChangeBadge from "@/components/ChangeBadge";
@@ -34,131 +35,127 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
     r2: "--",
   };
 
-  const maseNum =
-    typeof selectedMetrics.mase === "number"
-      ? selectedMetrics.mase
-      : parseFloat(String(selectedMetrics.mase));
-
-  let baselineStatus = "Worse Than Naive";
-  let baselineBadgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/30";
-
-  if (!Number.isNaN(maseNum)) {
-    if (maseNum < 1.0) {
-      baselineStatus = "Beats Naive";
-      baselineBadgeClass = "bg-green-500/10 text-green-400 border-green-500/30";
-    } else if (maseNum === 1.0) {
-      baselineStatus = "Approximately Equal to Naive";
-      baselineBadgeClass = "bg-slate-700/40 text-slate-300 border-slate-600/40";
-    }
-  }
+  const maseVal = parseFloat(String(selectedMetrics.mase));
+  const beatsNaive = !isNaN(maseVal) && maseVal < 1.0;
 
   return (
     <div className="space-y-8">
-      {/* 1. Header with Breadcrumb, Company Info, and Dates */}
-      <div>
-        <Link href="/companies" className="text-sm text-brand-400 hover:text-brand-300">
-          ← Back to Company List
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-4 mt-2">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-white">{company.symbol}</h1>
-              <span className="text-xs px-2.5 py-1 rounded-md bg-dark-bg border border-dark-border text-slate-300 font-medium">
-                {company.sector}
-              </span>
-            </div>
-            <p className="text-slate-400 mt-1">{company.name}</p>
+      {/* 1. Header & Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Link
+            href="/companies"
+            className="text-xs font-semibold text-brand-400 hover:text-brand-300 transition-colors uppercase tracking-wider mb-1 inline-block"
+          >
+            ← Back to Companies
+          </Link>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-white tracking-tight">{company.symbol}</h1>
+            <span className="text-xs px-2.5 py-1 rounded-md bg-dark-bg border border-dark-border text-slate-300 font-medium">
+              {company.sector}
+            </span>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
-            <ChangeBadge pctChange={company.pctChange} />
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              {company.dataAsOf && <span>Data as of: {formatDate(company.dataAsOf)}</span>}
-              {company.dataAsOf && company.forecastDate && <span>&middot;</span>}
-              {company.forecastDate && (
-                <span className="text-brand-300">
-                  Forecast for: {formatDate(company.forecastDate)}
-                </span>
-              )}
+          <p className="text-sm text-slate-400 mt-0.5">{company.name}</p>
+        </div>
+
+        {/* Date context */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 bg-dark-card border border-dark-border px-3.5 py-2 rounded-xl">
+          {company.dataAsOf && (
+            <div>
+              <span className="text-slate-500">Data as of: </span>
+              <strong className="text-slate-300 font-medium">{formatDate(company.dataAsOf)}</strong>
             </div>
-          </div>
+          )}
+          {company.dataAsOf && company.forecastDate && <span>&middot;</span>}
+          {company.forecastDate && (
+            <div>
+              <span className="text-slate-500">Forecast for: </span>
+              <strong className="text-brand-300 font-semibold">
+                {formatDate(company.forecastDate)}
+              </strong>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 2. Headline StatCards */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* 2. Top Stats Grid */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Previous Close" value={formatPeso(company.previousClose)} />
         <StatCard
           label="Forecasted Close"
           value={formatPeso(company.predictedClose)}
-          accent="text-brand-400"
-          sublabel={
-            company.forecastDate ? `For ${formatDate(company.forecastDate)}` : undefined
-          }
-        />
-        <StatCard
-          label="Predicted Change"
-          value={`${company.pesoChange >= 0 ? "+" : ""}${formatPeso(company.pesoChange)}`}
-          accent={company.pesoChange >= 0 ? "text-green-400" : "text-red-400"}
-          sublabel={formatPct(company.pctChange)}
-        />
-        <StatCard
-          label="Selected Model"
-          value={company.model}
-          sublabel="Lowest test-set RMSE"
           accent="text-white"
         />
+        <div className="bg-dark-card border border-dark-border rounded-xl p-5 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">Expected Change</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-white">{formatPeso(company.pesoChange)}</span>
+            <ChangeBadge pctChange={company.pctChange} />
+          </div>
+        </div>
+        <div className="bg-dark-card border border-dark-border rounded-xl p-5 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Selected Model</p>
+          <p className="text-base font-bold text-white truncate" title={company.model}>
+            {company.model}
+          </p>
+          <p className="text-[11px] text-brand-400 mt-0.5">Lowest test-set RMSE</p>
+        </div>
       </section>
 
-      {/* 3. Selected Model Summary & Baseline Status */}
+      {/* 3. Selected Model Summary Panel */}
       <section className="bg-dark-card border border-dark-border rounded-xl p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-dark-border/60">
           <div>
-            <h2 className="text-base font-semibold text-white">Selected Model Summary</h2>
+            <h2 className="text-lg font-semibold text-white">
+              Selected Model Summary: {company.model}
+            </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Selected model is the model with the lowest test-set RMSE for {company.symbol}.
+              Metrics calculated strictly for this company&apos;s out-of-sample test split.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Baseline Comparison:</span>
             <span
-              className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border ${baselineBadgeClass}`}
+              className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${
+                beatsNaive
+                  ? "bg-green-500/10 text-green-400 border-green-500/30"
+                  : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+              }`}
             >
-              {baselineStatus}
+              {beatsNaive ? "✓ Beats Naive Baseline (MASE < 1.0)" : "⚠ Worse Than Naive (MASE ≥ 1.0)"}
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-dark-bg border border-dark-border rounded-lg p-3.5">
-            <p className="text-xs text-slate-400 mb-1">Test RMSE</p>
-            <p className="text-lg font-semibold text-white font-mono">
-              {formatNum(selectedMetrics.rmse)}
+            <p className="text-xs text-slate-400 mb-0.5">Test RMSE</p>
+            <p className="text-lg font-bold text-white font-mono">
+              {formatNum(selectedMetrics.rmse, 4)}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Primary selection metric (₱)</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Scale-dependent error</p>
           </div>
-
           <div className="bg-dark-bg border border-dark-border rounded-lg p-3.5">
-            <p className="text-xs text-slate-400 mb-1">Test MAE</p>
-            <p className="text-lg font-semibold text-white font-mono">
-              {formatNum(selectedMetrics.mae)}
+            <p className="text-xs text-slate-400 mb-0.5">Test MAE</p>
+            <p className="text-lg font-bold text-white font-mono">
+              {formatNum(selectedMetrics.mae, 4)}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Mean absolute error (₱)</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Mean absolute error</p>
           </div>
-
           <div className="bg-dark-bg border border-dark-border rounded-lg p-3.5">
-            <p className="text-xs text-slate-400 mb-1">MASE</p>
-            <p className="text-lg font-semibold text-white font-mono">
-              {formatNum(selectedMetrics.mase)}
+            <p className="text-xs text-slate-400 mb-0.5">MASE</p>
+            <p
+              className={`text-lg font-bold font-mono ${beatsNaive ? "text-green-400" : "text-amber-400"}`}
+            >
+              {formatNum(selectedMetrics.mase, 4)}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">&lt; 1.0 beats naive baseline</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">&lt; 1.0 beats naive</p>
           </div>
-
           <div className="bg-dark-bg border border-dark-border rounded-lg p-3.5">
-            <p className="text-xs text-slate-400 mb-1">Test R²</p>
-            <p className="text-lg font-semibold text-white font-mono">
-              {formatNum(selectedMetrics.r2)}
+            <p className="text-xs text-slate-400 mb-0.5">Goodness-of-Fit (R²)</p>
+            <p className="text-lg font-bold text-white font-mono">
+              {formatNum(selectedMetrics.r2, 4)}
             </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Explained price variance</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Test set variance explained</p>
           </div>
         </div>
 
@@ -176,28 +173,53 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
         <HistoryChart data={company.ohlcv} />
       </section>
 
-      {/* 5. Backtest: Predicted vs. Actual */}
+      {/* 5. Next-Day Prediction */}
+      <section className="bg-dark-card border border-dark-border rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-white mb-1">Next-Day Prediction</h2>
+        <p className="text-sm text-slate-400 mb-4">
+          Latest actual close with model predictions for the next trading session.
+        </p>
+        <NextDayPredictionChart
+          ohlcv={company.ohlcv}
+          previousClose={company.previousClose}
+          nextClose={company.nextClose}
+          forecastDate={company.forecastDate}
+          dataAsOf={company.dataAsOf}
+        />
+      </section>
+
+      {/* 6. Backtest: Predicted vs. Actual */}
       <section className="bg-dark-card border border-dark-border rounded-xl p-6">
         <h2 className="text-lg font-semibold text-white mb-1">
-          Backtest: Predicted vs. Actual (last 60 sessions)
+          Backtest: Predicted vs. Actual (Last 60 Sessions)
         </h2>
         <p className="text-sm text-slate-400 mb-4">
           Historical backtest comparing each model&apos;s predictions with the actual closing price.
         </p>
-        <PredictionChart actual={company.backtestActual} byModel={company.backtestByModel} />
+        <PredictionChart
+          dates={company.backtestDates}
+          actual={company.backtestActual}
+          byModel={company.backtestByModel}
+          selectedModel={company.model}
+        />
       </section>
 
-      {/* 6. Forecast Error Over Time */}
+      {/* 7. Forecast Error Over Time */}
       <section className="bg-dark-card border border-dark-border rounded-xl p-6">
         <h2 className="text-lg font-semibold text-white mb-1">Forecast Error Over Time</h2>
         <p className="text-sm text-slate-400 mb-4">
-          Forecast error over the backtest window, calculated as predicted close minus actual close
-          (₱).
+          Forecast error over the 60-session backtest window, calculated as predicted close minus
+          actual close (₱).
         </p>
-        <ErrorChart actual={company.backtestActual} byModel={company.backtestByModel} />
+        <ErrorChart
+          dates={company.backtestDates}
+          actual={company.backtestActual}
+          byModel={company.backtestByModel}
+          selectedModel={company.model}
+        />
       </section>
 
-      {/* 7. Model Performance Table */}
+      {/* 8. Model Performance Table */}
       <section className="bg-dark-card border border-dark-border rounded-xl p-6 overflow-x-auto">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-white mb-1">

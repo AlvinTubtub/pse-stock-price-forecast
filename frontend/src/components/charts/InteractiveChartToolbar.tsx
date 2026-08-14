@@ -25,14 +25,15 @@ export default function InteractiveChartToolbar({
 }: InteractiveChartToolbarProps) {
   return (
     <div
-      className={`inline-flex items-center gap-0.5 bg-[#182030]/90 backdrop-blur-md border border-slate-700/60 rounded-xl p-1 shadow-lg ${className}`}
+      className={`inline-flex items-center gap-1 bg-dark-card/90 backdrop-blur-md border border-dark-border rounded-xl p-1 shadow-md ${className}`}
     >
       {/* 1. Zoom In (+) */}
       <button
         type="button"
         onClick={onZoomIn}
         title="Zoom In (+)"
-        className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
+        aria-label="Zoom In"
+        className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-dark-bg/60 rounded-lg transition-colors cursor-pointer"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m8-7.5H4" />
@@ -44,7 +45,8 @@ export default function InteractiveChartToolbar({
         type="button"
         onClick={onZoomOut}
         title="Zoom Out (−)"
-        className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
+        aria-label="Zoom Out"
+        className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-dark-bg/60 rounded-lg transition-colors cursor-pointer"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12h-15" />
@@ -56,10 +58,11 @@ export default function InteractiveChartToolbar({
         type="button"
         onClick={onToggleBoxZoom}
         title="Box Zoom — Select a range to zoom"
+        aria-label="Box Zoom"
         className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
           isBoxZoomActive
-            ? "bg-[#1c304a] text-[#38bdf8] font-bold"
-            : "text-slate-300 hover:text-white hover:bg-slate-700/50"
+            ? "bg-brand-500/20 text-brand-400 font-bold border border-brand-500/40"
+            : "text-slate-300 hover:text-white hover:bg-dark-bg/60"
         }`}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -76,10 +79,11 @@ export default function InteractiveChartToolbar({
         type="button"
         onClick={onTogglePanMode}
         title="Pan — Drag chart left/right"
+        aria-label="Pan Mode"
         className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
           isPanModeActive
-            ? "bg-[#1c304a] text-[#38bdf8] font-bold"
-            : "text-slate-300 hover:text-white hover:bg-slate-700/50"
+            ? "bg-brand-500/20 text-brand-400 font-bold border border-brand-500/40"
+            : "text-slate-300 hover:text-white hover:bg-dark-bg/60"
         }`}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -96,7 +100,8 @@ export default function InteractiveChartToolbar({
         type="button"
         onClick={onResetView}
         title="Reset View (↺)"
-        className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors cursor-pointer"
+        aria-label="Reset View"
+        className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white hover:bg-dark-bg/60 rounded-lg transition-colors cursor-pointer"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path

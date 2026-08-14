@@ -44,6 +44,7 @@ export interface CompanyDetail {
   metrics: Record<string, ModelMetric>;
   nextClose: Record<string, number>;
   ohlcv: OhlcvPoint[];
+  backtestDates?: string[];
   backtestActual: number[];
   backtestByModel: Record<string, number[]>;
   forecastDate?: string;

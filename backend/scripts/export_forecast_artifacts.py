@@ -193,12 +193,21 @@ def main() -> None:
 
         history = ohlcv_records(df)
 
+        full_dates = [
+            row.Date.strftime("%Y-%m-%d") if hasattr(row.Date, "strftime") else str(row.Date)
+            for row in df.itertuples()
+        ]
+        backtest_dates_60 = full_dates[-60:] if len(full_dates) >= 60 else full_dates
+
         full_close = [round(float(c), 2) for c in df["Close"]]
         backtest_actual_60 = full_close[-60:] if len(full_close) >= 60 else full_close
         backtest_by_model_60 = {
             m_name: (m_series[-60:] if isinstance(m_series, list) and len(m_series) >= 60 else m_series)
             for m_name, m_series in backtest_by_model.items()
         }
+        if "Naive baseline" not in backtest_by_model_60 and "Naive Baseline" not in backtest_by_model_60:
+            naive_60 = full_close[-61:-1] if len(full_close) >= 61 else full_close
+            backtest_by_model_60["Naive baseline"] = naive_60
 
         # Determine forecast date from inference metadata if available
         forecast_date = _get_forecast_date(cache, latest_processed)
@@ -218,6 +227,7 @@ def main() -> None:
             "metrics": metrics,
             "nextClose": next_close,
             "ohlcv": history,
+            "backtestDates": backtest_dates_60,
             "backtestActual": backtest_actual_60,
             "backtestByModel": backtest_by_model_60,
             "forecastDate": forecast_date,
