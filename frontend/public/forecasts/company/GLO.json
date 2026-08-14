@@ -2,9 +2,9 @@
   "symbol": "GLO",
   "name": "Globe Telecom, Inc.",
   "sector": "Services",
-  "previousClose": 1734.0,
-  "predictedClose": 1733.77,
-  "pesoChange": -0.23,
+  "previousClose": 1750.0,
+  "predictedClose": 1749.78,
+  "pesoChange": -0.22,
   "pctChange": -0.01,
   "direction": "bearish",
   "model": "ARIMA",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 1733.89,
-    "arima": 1733.77,
-    "lstm": 2089.01
+    "lag": 1749.89,
+    "arima": 1749.78,
+    "lstm": 2097.64
   },
   "ohlcv": [
     {
@@ -12953,10 +12953,17 @@
       "low": 1730.0,
       "close": 1734.0,
       "volume": 100937525
+    },
+    {
+      "date": "2026-08-14",
+      "open": 1737.0,
+      "high": 1751.0,
+      "low": 1725.0,
+      "close": 1750.0,
+      "volume": 109278405
     }
   ],
   "backtestActual": [
-    1794.0,
     1770.0,
     1750.0,
     1740.0,
@@ -13015,7 +13022,8 @@
     1740.0,
     1757.0,
     1770.0,
-    1734.0
+    1734.0,
+    1750.0
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13205,7 +13213,7 @@
       2024.5889587402344
     ]
   },
-  "forecastDate": "2026-08-14",
-  "dataAsOf": "2026-08-13",
-  "inferenceAt": "2026-08-13T16:02:14+08:00"
+  "forecastDate": "2026-08-17",
+  "dataAsOf": "2026-08-14",
+  "inferenceAt": "2026-08-14T16:01:45+08:00"
 }
