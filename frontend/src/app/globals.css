@@ -2,28 +2,140 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-bg: #f8fafc;
+  --color-card: #ffffff;
+  --color-border: #e2e8f0;
+  --color-glass-bg: rgba(255, 255, 255, 0.85);
+  --color-glass-border: rgba(226, 232, 240, 0.8);
+}
+
+.dark {
+  --color-bg: #0f172a;
+  --color-card: #1e293b;
+  --color-border: #334155;
+  --color-glass-bg: rgba(30, 41, 59, 0.7);
+  --color-glass-border: rgba(255, 255, 255, 0.05);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--color-bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--color-border);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #94a3b8;
 }
 
 .glass {
-  background: rgba(30, 41, 59, 0.7);
+  background: var(--color-glass-bg);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-color: var(--color-glass-border);
 }
 
 body {
-  background-color: #0f172a;
+  background-color: var(--color-bg);
+  color: #334155;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.dark body {
+  color: #cbd5e1;
+}
+
+/* Light mode specific text & contrast adaptations */
+html:not(.dark) .text-white {
+  color: #0f172a;
+}
+html:not(.dark) .text-slate-200 {
+  color: #1e293b;
+}
+html:not(.dark) .text-slate-300 {
+  color: #334155;
+}
+html:not(.dark) .text-slate-400 {
+  color: #64748b;
+}
+html:not(.dark) .text-slate-500 {
+  color: #64748b;
+}
+
+/* Ensure white text on solid colored buttons & badges */
+html:not(.dark) .bg-brand-600,
+html:not(.dark) .bg-brand-500,
+html:not(.dark) .bg-brand-600 .text-white,
+html:not(.dark) .bg-brand-500 .text-white,
+html:not(.dark) .bg-green-600,
+html:not(.dark) .bg-red-600 {
+  color: #ffffff !important;
+}
+
+html:not(.dark) .bg-white\/5 {
+  background-color: rgba(15, 23, 42, 0.04);
+}
+html:not(.dark) .hover\:bg-white\/5:hover {
+  background-color: rgba(15, 23, 42, 0.04);
+}
+
+html:not(.dark) .bg-brand-500\/10 {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+html:not(.dark) .bg-brand-500\/5 {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+html:not(.dark) .bg-brand-900\/50 {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}
+html:not(.dark) .text-brand-100 {
+  color: #1e3a8a;
+}
+html:not(.dark) .text-brand-300 {
+  color: #1d4ed8;
+}
+html:not(.dark) .text-brand-300\/80 {
+  color: #2563eb;
+}
+
+html:not(.dark) .bg-dark-bg\/80,
+html:not(.dark) .bg-dark-bg\/60,
+html:not(.dark) .bg-dark-bg\/40 {
+  background-color: #f1f5f9;
+}
+html:not(.dark) .border-dark-border\/60,
+html:not(.dark) .border-dark-border\/50,
+html:not(.dark) .border-dark-border\/40 {
+  border-color: #e2e8f0;
+}
+
+/* Light mode Recharts styling */
+html:not(.dark) .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 8px !important;
+}
+html:not(.dark) .recharts-tooltip-label {
+  color: #0f172a !important;
+}
+html:not(.dark) .recharts-tooltip-item {
+  color: #334155 !important;
+}
+html:not(.dark) .recharts-cartesian-grid line {
+  stroke: #e2e8f0 !important;
+}
+html:not(.dark) .recharts-text,
+html:not(.dark) .recharts-label {
+  fill: #64748b !important;
+}
+html:not(.dark) .recharts-legend-item-text {
+  color: #334155 !important;
 }

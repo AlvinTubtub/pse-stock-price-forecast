@@ -18,7 +18,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const [companies, latest] = await Promise.all([getCompanies(), getLatest()]);
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var theme = localStorage.getItem('theme');
+                if (theme === 'light') {
+                  document.documentElement.classList.remove('dark');
+                } else {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
+      </head>
       <body className={`${inter.variable} bg-dark-bg text-slate-300 font-sans antialiased overflow-x-hidden min-h-screen flex flex-col`}>
         <Navbar companies={companies} />
         <EducationalBanner latest={latest} />

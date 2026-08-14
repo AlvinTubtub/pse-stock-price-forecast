@@ -20,19 +20,46 @@ export function formatNum(value: number | string, digits = 4): string {
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "--";
   try {
+    // Avoid UTC timezone shifts on date-only YYYY-MM-DD strings
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const [y, m, d] = iso.split("-").map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+    }
     const d = new Date(iso);
-    return d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+    return d.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "Asia/Manila",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+export function formatDateTimePht(iso: string | null | undefined): string {
+  if (!iso) return "--";
+  try {
+    const d = new Date(iso);
+    const dateStr = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "Asia/Manila",
+    });
+    const timeStr = d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Manila",
+    });
+    return `${dateStr}, ${timeStr} PHT`;
   } catch {
     return iso;
   }
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "--";
-  try {
-    const d = new Date(iso);
-    return `${d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" })} ${d.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })} UTC`;
-  } catch {
-    return iso;
-  }
+  return formatDateTimePht(iso);
 }

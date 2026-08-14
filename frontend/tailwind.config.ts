@@ -19,9 +19,9 @@ const config: Config = {
           950: "#172554",
         },
         dark: {
-          bg: "#0f172a",
-          card: "#1e293b",
-          border: "#334155",
+          bg: "var(--color-bg)",
+          card: "var(--color-card)",
+          border: "var(--color-border)",
         },
       },
     },

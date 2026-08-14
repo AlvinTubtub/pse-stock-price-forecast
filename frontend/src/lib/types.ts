@@ -9,7 +9,8 @@ export interface CompanySummary {
   pctChange: number;
   direction: Direction;
   bestModel: string;
-  confidence: number;
+  confidence?: number;
+  forecastDate?: string;
 }
 
 export interface OhlcvPoint {
@@ -26,6 +27,7 @@ export interface ModelMetric {
   mae: string | number;
   mase: string | number;
   r2: string | number;
+  ljung_box_pvalue?: string | number;
 }
 
 export interface CompanyDetail {
@@ -38,12 +40,15 @@ export interface CompanyDetail {
   pctChange: number;
   direction: Direction;
   model: string;
-  confidence: number;
+  confidence?: number;
   metrics: Record<string, ModelMetric>;
   nextClose: Record<string, number>;
   ohlcv: OhlcvPoint[];
   backtestActual: number[];
   backtestByModel: Record<string, number[]>;
+  forecastDate?: string;
+  dataAsOf?: string | null;
+  inferenceAt?: string | null;
 }
 
 export interface DashboardData {
