@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-14T16:01:47.554182+08:00",
-  "forecastDate": "2026-08-17",
+  "generatedAt": "2026-08-16T11:51:22.481764+08:00",
+  "forecastDate": "2026-08-14",
   "lastRunAt": "2026-08-14T08:01:43+00:00",
   "status": "ok",
   "totalCompanies": 15,
@@ -28,32 +28,32 @@
     }
   ],
   "marketSummary": {
-    "gainers": 6,
-    "losers": 6,
-    "unchanged": 3
+    "gainers": 4,
+    "losers": 7,
+    "unchanged": 4
   },
   "topGainer": {
-    "symbol": "NIKL",
-    "name": "Nickel Asia Corporation",
-    "sector": "Mining and Oil",
-    "latestClose": 4.0,
-    "predictedClose": 4.02,
-    "pctChange": 0.5,
+    "symbol": "SMPH",
+    "name": "SM Prime Holdings, Inc.",
+    "sector": "Property",
+    "latestClose": 18.28,
+    "predictedClose": 18.34,
+    "pctChange": 0.33,
     "direction": "bullish",
-    "bestModel": "LSTM",
+    "bestModel": "ARIMA",
     "confidence": 95.3,
-    "forecastDate": "2026-08-17"
+    "forecastDate": "2026-08-14"
   },
   "topLoser": {
-    "symbol": "MER",
-    "name": "Manila Electric Company",
+    "symbol": "SHLPH",
+    "name": "Pilipinas Shell Petroleum Corp.",
     "sector": "Industrial",
-    "latestClose": 490.0,
-    "predictedClose": 485.6,
-    "pctChange": -0.9,
+    "latestClose": 8.4,
+    "predictedClose": 8.36,
+    "pctChange": -0.48,
     "direction": "bearish",
-    "bestModel": "Lag-Informed Regression",
-    "confidence": 91.3,
-    "forecastDate": "2026-08-17"
+    "bestModel": "ARIMA",
+    "confidence": 97.8,
+    "forecastDate": "2026-08-14"
   }
 }
