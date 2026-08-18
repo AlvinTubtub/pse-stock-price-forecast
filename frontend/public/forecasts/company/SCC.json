@@ -2,10 +2,10 @@
   "symbol": "SCC",
   "name": "Semirara Mining and Power Corp.",
   "sector": "Mining and Oil",
-  "previousClose": 18.44,
-  "predictedClose": 18.44,
-  "pesoChange": 0.0,
-  "pctChange": 0.0,
+  "previousClose": 18.7,
+  "predictedClose": 18.71,
+  "pesoChange": 0.01,
+  "pctChange": 0.05,
   "direction": "bullish",
   "model": "ARIMA",
   "confidence": 96.6,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 18.44,
-    "arima": 18.44,
-    "lstm": 18.55
+    "lag": 18.7,
+    "arima": 18.71,
+    "lstm": 18.81
   },
   "ohlcv": [
     {
@@ -12969,10 +12969,17 @@
       "low": 18.3,
       "close": 18.44,
       "volume": 25574154
+    },
+    {
+      "date": "2026-08-18",
+      "open": 18.44,
+      "high": 18.7,
+      "low": 18.3,
+      "close": 18.7,
+      "volume": 29043276
     }
   ],
   "backtestDates": [
-    "2026-05-22",
     "2026-05-25",
     "2026-05-26",
     "2026-05-28",
@@ -13031,10 +13038,10 @@
     "2026-08-12",
     "2026-08-13",
     "2026-08-14",
-    "2026-08-17"
+    "2026-08-17",
+    "2026-08-18"
   ],
   "backtestActual": [
-    26.25,
     26.0,
     25.8,
     25.75,
@@ -13093,7 +13100,8 @@
     18.44,
     18.42,
     18.44,
-    18.44
+    18.44,
+    18.7
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13283,7 +13291,6 @@
       18.644384667277336
     ],
     "Naive baseline": [
-      25.7,
       26.25,
       26.0,
       25.8,
@@ -13342,10 +13349,11 @@
       18.04,
       18.44,
       18.42,
+      18.44,
       18.44
     ]
   },
-  "forecastDate": "2026-08-18",
-  "dataAsOf": "2026-08-17",
-  "inferenceAt": "2026-08-17T22:17:36+08:00"
+  "forecastDate": "2026-08-19",
+  "dataAsOf": "2026-08-18",
+  "inferenceAt": "2026-08-18T16:02:21+08:00"
 }

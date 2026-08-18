@@ -1,7 +1,7 @@
 {
-  "last_run_at": "2026-08-17T14:17:34+00:00",
+  "last_run_at": "2026-08-18T08:02:18+00:00",
   "status": "ok",
-  "duration_seconds": 4.78,
+  "duration_seconds": 1.24,
   "pdf_count": 1,
   "record_count": 15,
   "symbols_updated": [
@@ -22,6 +22,6 @@
     "SMPH"
   ],
   "best_models_updated": 0,
-  "triggered_by": "workflow_dispatch",
+  "triggered_by": "repository_dispatch",
   "error": null
 }
