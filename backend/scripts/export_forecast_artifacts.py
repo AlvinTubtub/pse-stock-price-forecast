@@ -31,12 +31,17 @@ from __future__ import annotations
 
 import json
 import statistics
+import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from services.pse_calendar import get_calendar
 REPO_ROOT = BASE_DIR.parent  # pse-stock-price-forecast-dashboard/
 DATA_DIR = BASE_DIR / "data" / "raw"
 CACHE_DIR = BASE_DIR / "prediction_cache"
@@ -118,25 +123,26 @@ def best_model_id(metrics: dict) -> str:
 
 
 def _get_forecast_date(cache: dict, latest_processed: dict) -> str:
-    """Determine the forecast target date.
+    """Determine the forecast target date using the authoritative PSE calendar.
 
     Priority:
       1. inference_metadata.forecast_for from daily inference (most accurate)
-      2. inference_metadata.data_as_of + 1 day (fallback)
-      3. latest_processed.last_run_at date (legacy fallback)
+      2. get_calendar().next_trading_day(data_as_of) (calendar-aware fallback)
+      3. get_calendar().next_trading_day(last_run_at date or today) (legacy calendar-aware fallback)
     """
     meta = cache.get("inference_metadata", {})
     if meta.get("forecast_for"):
         return meta["forecast_for"]
+    calendar = get_calendar()
     if meta.get("data_as_of"):
-        from datetime import timedelta
         d = pd.to_datetime(meta["data_as_of"]).date()
-        return (d + timedelta(days=1)).isoformat()
+        return calendar.next_trading_day(d).isoformat()
     # Legacy fallback
     last_run = latest_processed.get("last_run_at")
     if last_run:
-        return last_run.split("T")[0]
-    return datetime.now(PHT).strftime("%Y-%m-%d")
+        d = pd.to_datetime(last_run.split("T")[0]).date()
+        return calendar.next_trading_day(d).isoformat()
+    return calendar.next_trading_day(datetime.now(PHT).date()).isoformat()
 
 
 def main() -> None:

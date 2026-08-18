@@ -6,11 +6,12 @@ name: Fast Pipeline (data + inference, no training)
 #
 # This workflow NEVER trains models.
 # It:
-#   1. Ingests the latest PSE EOD data
-#   2. Runs daily inference using persisted weekly models
-#   3. Exports frontend JSON artifacts
-#   4. Validates the exported artifacts
-#   5. Commits and pushes updated artifacts
+#   1. Checks the PSE trading calendar (skips if weekend or Philippine holiday)
+#   2. Ingests the latest PSE EOD data
+#   3. Runs daily inference using persisted weekly models
+#   4. Exports frontend JSON artifacts
+#   5. Validates the exported artifacts
+#   6. Commits and pushes updated artifacts
 #
 # Weekly model retraining is handled separately.
 
@@ -47,22 +48,32 @@ jobs:
           pip install -r requirements-fast.txt
           pip install -r requirements-inference.txt
 
+      - name: Check PSE Trading Calendar
+        id: check_calendar
+        working-directory: backend
+        run: |
+          python scripts/check_pse_trading_day.py
+
       - name: Run pipeline (ingestion) and Run daily inference (no training)
+        if: steps.check_calendar.outputs.is_trading_day == 'true'
         working-directory: backend
         run: |
           python run_pipeline.py --no-train
 
       - name: Export frontend JSON artifacts
+        if: steps.check_calendar.outputs.is_trading_day == 'true'
         working-directory: backend
         run: |
           python scripts/export_forecast_artifacts.py
 
       - name: Validate exported artifacts
+        if: steps.check_calendar.outputs.is_trading_day == 'true'
         working-directory: backend
         run: |
           python scripts/validate_exports.py
 
       - name: Commit and push changed artifacts
+        if: steps.check_calendar.outputs.is_trading_day == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

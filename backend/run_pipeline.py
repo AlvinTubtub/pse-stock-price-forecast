@@ -34,6 +34,7 @@ import pandas as pd
 
 from services.pdf_pipeline import run_pipeline
 from services.pdf_pipeline.config import RAW_DIR, TARGET_COMPANIES
+from services.pse_calendar import get_calendar
 
 PHT = timezone(timedelta(hours=8))  # Philippine Time (UTC+8, no DST)
 
@@ -153,6 +154,10 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--start-date", type=_parse_date, default=None, help="YYYY-MM-DD, defaults to the day after the newest data on file.")
     parser.add_argument("--end-date", type=_parse_date, default=None, help="YYYY-MM-DD, defaults to today.")
+    parser.add_argument(
+        "--ignore-calendar", dest="ignore_calendar", action="store_true", default=False,
+        help="Bypass the PSE trading calendar check (force-run on weekends or holidays).",
+    )
     parser.set_defaults(download=True, train_models=True, run_inference=True)
     return parser.parse_args()
 
@@ -160,6 +165,25 @@ def _parse_args() -> argparse.Namespace:
 def main() -> int:
     args = _parse_args()
     started = time.monotonic()
+
+    today_pht = datetime.now(PHT).date()
+    calendar = get_calendar()
+
+    # Guard: on non-trading days (weekends & PSE holidays), skip daily update if no explicit date range was requested
+    if not args.start_date and not args.end_date and not args.ignore_calendar:
+        if not calendar.is_trading_day(today_pht):
+            reason = calendar.get_holiday_reason(today_pht) or "Non-Trading Day"
+            next_session = calendar.next_trading_day(today_pht)
+            print("=" * 60)
+            print("PSE Trading Calendar Check")
+            print(f"Date: {today_pht}")
+            print("PSE Status: CLOSED")
+            print(f"Reason: {reason}")
+            print("Action: SKIP daily trading-data update")
+            print(f"Next PSE Trading Session: {next_session}")
+            print("=" * 60)
+            print("Finished successfully (holiday/non-trading day skip).")
+            return 0
 
     print("=" * 60)
     print("Starting pipeline...")
