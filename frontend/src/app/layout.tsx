@@ -7,6 +7,8 @@ import Footer from "@/components/Footer";
 import MobileNav from "@/components/MobileNav";
 import { getCompanies, getLatest } from "@/lib/data";
 
+import AIChatbot from "@/components/AIChatbot";
+
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
@@ -41,6 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20 md:mb-8">
           {children}
         </main>
+        <AIChatbot />
         <MobileNav />
         <Footer />
       </body>

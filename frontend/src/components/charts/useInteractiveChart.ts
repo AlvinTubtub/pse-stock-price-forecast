@@ -7,14 +7,25 @@ export interface UseInteractiveChartOptions<T> {
   xKey: keyof T;
 }
 
+interface ViewportRange {
+  startIndex: number;
+  endIndex: number;
+}
+
+const MIN_POINTS = 10;
+
 export function useInteractiveChart<T extends Record<string, any>>({
   data,
   xKey,
 }: UseInteractiveChartOptions<T>) {
   const totalCount = data.length;
 
-  const [startIndex, setStartIndex] = useState<number>(0);
-  const [endIndex, setEndIndex] = useState<number>(Math.max(0, totalCount - 1));
+  // Single consolidated state object for viewport range (prevents desynchronization)
+  const [range, setRange] = useState<ViewportRange>(() => ({
+    startIndex: 0,
+    endIndex: Math.max(0, totalCount - 1),
+  }));
+
   const [isBoxZoomActive, setIsBoxZoomActive] = useState<boolean>(false);
   const [isPanModeActive, setIsPanModeActive] = useState<boolean>(false);
   const [refAreaLeft, setRefAreaLeft] = useState<string | number | null>(null);
@@ -24,12 +35,14 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync index bounds if data changes
+  // Sync index bounds whenever the base data changes
   useEffect(() => {
-    if (data.length > 0) {
-      setStartIndex(0);
-      setEndIndex(data.length - 1);
-    }
+    setRange({
+      startIndex: 0,
+      endIndex: Math.max(0, data.length - 1),
+    });
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
   }, [data]);
 
   const findIndexByLabel = useCallback(
@@ -41,8 +54,10 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
   const resetView = useCallback(() => {
     if (totalCount === 0) return;
-    setStartIndex(0);
-    setEndIndex(totalCount - 1);
+    setRange({
+      startIndex: 0,
+      endIndex: Math.max(0, totalCount - 1),
+    });
     setRefAreaLeft(null);
     setRefAreaRight(null);
     setIsBoxZoomActive(false);
@@ -51,21 +66,34 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
   const zoomIn = useCallback(
     (factor = 0.2) => {
-      if (totalCount === 0) return;
-      setStartIndex((prevStart) => {
-        let currentEnd = totalCount - 1;
-        setEndIndex((prevEnd) => {
-          currentEnd = prevEnd;
-          return prevEnd;
-        });
+      if (totalCount <= MIN_POINTS) return;
 
-        const len = currentEnd - prevStart;
-        if (len <= 5) return prevStart;
-        const change = Math.max(1, Math.floor(len * factor));
-        const newStart = Math.min(currentEnd - 5, prevStart + Math.floor(change / 2));
-        const newEnd = Math.max(newStart + 5, currentEnd - Math.ceil(change / 2));
-        setEndIndex(newEnd);
-        return newStart;
+      setRange((prev) => {
+        const currentSpan = prev.endIndex - prev.startIndex + 1;
+        if (currentSpan <= MIN_POINTS) return prev;
+
+        const delta = Math.max(1, Math.floor(currentSpan * factor));
+        const targetSpan = Math.max(MIN_POINTS, currentSpan - delta);
+        const center = (prev.startIndex + prev.endIndex) / 2;
+        const half = (targetSpan - 1) / 2;
+
+        let newStart = Math.round(center - half);
+        let newEnd = newStart + targetSpan - 1;
+
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = Math.min(totalCount - 1, newStart + targetSpan - 1);
+        }
+        if (newEnd >= totalCount) {
+          newEnd = totalCount - 1;
+          newStart = Math.max(0, newEnd - targetSpan + 1);
+        }
+
+        if (newStart < 0) newStart = 0;
+        if (newEnd >= totalCount) newEnd = totalCount - 1;
+        if (newStart > newEnd) newStart = newEnd;
+
+        return { startIndex: newStart, endIndex: newEnd };
       });
     },
     [totalCount]
@@ -74,30 +102,35 @@ export function useInteractiveChart<T extends Record<string, any>>({
   const zoomOut = useCallback(
     (factor = 0.2) => {
       if (totalCount === 0) return;
-      setStartIndex((prevStart) => {
-        let currentEnd = totalCount - 1;
-        setEndIndex((prevEnd) => {
-          currentEnd = prevEnd;
-          return prevEnd;
-        });
 
-        const len = currentEnd - prevStart;
-        if (len >= totalCount - 1) {
-          setEndIndex(totalCount - 1);
-          return 0;
-        }
-        const change = Math.max(1, Math.floor(len * factor));
-        let newStart = Math.max(0, prevStart - Math.floor(change / 2));
-        let newEnd = Math.min(totalCount - 1, currentEnd + Math.ceil(change / 2));
-
-        if (newStart === 0) {
-          newEnd = Math.min(totalCount - 1, newStart + len + change);
-        } else if (newEnd === totalCount - 1) {
-          newStart = Math.max(0, newEnd - (len + change));
+      setRange((prev) => {
+        const currentSpan = prev.endIndex - prev.startIndex + 1;
+        if (prev.startIndex === 0 && prev.endIndex === totalCount - 1) {
+          return prev;
         }
 
-        setEndIndex(newEnd);
-        return newStart;
+        const delta = Math.max(1, Math.floor(currentSpan * factor));
+        const targetSpan = Math.min(totalCount, currentSpan + delta);
+        const center = (prev.startIndex + prev.endIndex) / 2;
+        const half = (targetSpan - 1) / 2;
+
+        let newStart = Math.round(center - half);
+        let newEnd = newStart + targetSpan - 1;
+
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = Math.min(totalCount - 1, newStart + targetSpan - 1);
+        }
+        if (newEnd >= totalCount) {
+          newEnd = totalCount - 1;
+          newStart = Math.max(0, newEnd - targetSpan + 1);
+        }
+
+        if (newStart < 0) newStart = 0;
+        if (newEnd >= totalCount) newEnd = totalCount - 1;
+        if (newStart > newEnd) newStart = newEnd;
+
+        return { startIndex: newStart, endIndex: newEnd };
       });
     },
     [totalCount]
@@ -171,27 +204,20 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
         if (startIdx >= 0 && currIdx >= 0 && startIdx !== currIdx) {
           const delta = currIdx - startIdx;
-          setStartIndex((prevStart) => {
-            let currentEnd = totalCount - 1;
-            setEndIndex((prevEnd) => {
-              currentEnd = prevEnd;
-              return prevEnd;
-            });
-
-            const len = currentEnd - prevStart;
-            let newStart = prevStart - delta;
-            let newEnd = newStart + len;
+          setRange((prev) => {
+            const span = prev.endIndex - prev.startIndex;
+            let newStart = prev.startIndex - delta;
+            let newEnd = newStart + span;
 
             if (newStart < 0) {
               newStart = 0;
-              newEnd = len;
+              newEnd = Math.min(totalCount - 1, newStart + span);
             } else if (newEnd >= totalCount) {
               newEnd = totalCount - 1;
-              newStart = Math.max(0, newEnd - len);
+              newStart = Math.max(0, newEnd - span);
             }
 
-            setEndIndex(newEnd);
-            return newStart;
+            return { startIndex: newStart, endIndex: newEnd };
           });
 
           setDragStartLabel(label);
@@ -210,30 +236,32 @@ export function useInteractiveChart<T extends Record<string, any>>({
         const idx1 = findIndexByLabel(refAreaLeft);
         const idx2 = findIndexByLabel(refAreaRight);
         if (idx1 >= 0 && idx2 >= 0) {
-          const newStart = Math.min(idx1, idx2);
-          const newEnd = Math.max(idx1, idx2);
-          if (newEnd - newStart >= 2) {
-            setStartIndex(newStart);
-            setEndIndex(newEnd);
+          const s = Math.min(idx1, idx2);
+          const e = Math.max(idx1, idx2);
+          if (e - s >= 2) {
+            setRange({
+              startIndex: Math.max(0, s),
+              endIndex: Math.min(totalCount - 1, e),
+            });
           }
         }
       }
       setRefAreaLeft(null);
       setRefAreaRight(null);
     }
-  }, [isBoxZoomActive, refAreaLeft, refAreaRight, findIndexByLabel]);
+  }, [isBoxZoomActive, refAreaLeft, refAreaRight, findIndexByLabel, totalCount]);
 
   const visibleData = useMemo(() => {
     if (data.length === 0) return [];
-    const s = Math.max(0, Math.min(startIndex, data.length - 1));
-    const e = Math.max(s, Math.min(endIndex, data.length - 1));
+    const s = Math.max(0, Math.min(range.startIndex, data.length - 1));
+    const e = Math.max(s, Math.min(range.endIndex, data.length - 1));
     return data.slice(s, e + 1);
-  }, [data, startIndex, endIndex]);
+  }, [data, range.startIndex, range.endIndex]);
 
   return {
     visibleData,
-    startIndex,
-    endIndex,
+    startIndex: range.startIndex,
+    endIndex: range.endIndex,
     totalCount,
     visibleCount: visibleData.length,
     containerRef,
