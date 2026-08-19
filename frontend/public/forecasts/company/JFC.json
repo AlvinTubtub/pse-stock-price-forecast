@@ -2,8 +2,8 @@
   "symbol": "JFC",
   "name": "Jollibee Foods Corporation",
   "sector": "Industrial",
-  "previousClose": 155.0,
-  "predictedClose": 154.97,
+  "previousClose": 154.8,
+  "predictedClose": 154.77,
   "pesoChange": -0.03,
   "pctChange": -0.02,
   "direction": "bearish",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 154.97,
-    "arima": 155.37,
-    "lstm": 184.92
+    "lag": 154.77,
+    "arima": 155.17,
+    "lstm": 176.99
   },
   "ohlcv": [
     {
@@ -12977,10 +12977,17 @@
       "low": 154.0,
       "close": 155.0,
       "volume": 145609092
+    },
+    {
+      "date": "2026-08-19",
+      "open": 155.0,
+      "high": 158.0,
+      "low": 153.2,
+      "close": 154.8,
+      "volume": 95229758
     }
   ],
   "backtestDates": [
-    "2026-05-25",
     "2026-05-26",
     "2026-05-28",
     "2026-05-29",
@@ -13039,10 +13046,10 @@
     "2026-08-13",
     "2026-08-14",
     "2026-08-17",
-    "2026-08-18"
+    "2026-08-18",
+    "2026-08-19"
   ],
   "backtestActual": [
-    138.0,
     136.5,
     135.2,
     126.9,
@@ -13101,7 +13108,8 @@
     153.9,
     155.0,
     159.5,
-    155.0
+    155.0,
+    154.8
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13291,7 +13299,6 @@
       176.41722297668457
     ],
     "Naive baseline": [
-      136.5,
       138.0,
       136.5,
       135.2,
@@ -13350,10 +13357,11 @@
       154.2,
       153.9,
       155.0,
-      159.5
+      159.5,
+      155.0
     ]
   },
-  "forecastDate": "2026-08-19",
-  "dataAsOf": "2026-08-18",
-  "inferenceAt": "2026-08-18T16:02:21+08:00"
+  "forecastDate": "2026-08-20",
+  "dataAsOf": "2026-08-19",
+  "inferenceAt": "2026-08-19T16:01:49+08:00"
 }
