@@ -1,1458 +1,959 @@
-# ForecastPH — PSE Stock Price Forecast Dashboard
+````markdown
+# ForecastPH — Completion Report
 
-# Completion Report
+## 1. Project Overview
 
-**Project:** ForecastPH — PSE Stock Price Forecast Dashboard
-**Repository:** `AlvinTubtub/pse-stock-price-forecast`
-**Frontend:** Next.js
-**Backend:** Python
-**Deployment:** Vercel
-**Automation:** GitHub Actions + Cron-job.org
-**Market:** Philippine Stock Exchange (PSE)
-**Current Status:** **IN PROGRESS — Final Production Integration and End-to-End Verification**
+**Project:** ForecastPH — PSE Stock Price Forecast Dashboard  
+**Repository:** https://github.com/AlvinTubtub/pse-stock-price-forecast.git  
+**Live Dashboard:** https://pse-stock-price-forecast.vercel.app/
 
----
+ForecastPH is an educational Philippine Stock Exchange (PSE) next-session stock-price forecasting dashboard. It combines a Python-based forecasting and evaluation pipeline with a Next.js frontend deployed through Vercel.
 
-# 1. Project Status
+The system tracks 15 PSE-listed companies across five sectors and compares:
 
-ForecastPH is an integrated PSE stock-data, forecasting, model-evaluation, predictive-accuracy, statistical-analysis, and interactive-dashboard system.
+- Lag-Informed Regression
+- ARIMA
+- LSTM
+- Naive previous-close baseline
 
-The project currently includes:
-
-* Automated PSE end-of-day data processing
-* Historical OHLCV data
-* Feature engineering
-* Multiple forecasting models
-* Model evaluation
-* Cross-model statistical testing
-* Final unseen-test predictive-accuracy evaluation
-* Leakage detection
-* Walk-forward final-test prediction
-* Predictive-accuracy metrics
-* Bootstrap confidence intervals
-* Interactive historical stock charts
-* Forecast and backtesting visualization
-* Model Performance dashboard
-* Automated Fast Pipeline
-* Automated Heavy Training Pipeline
-* GitHub Actions
-* Vercel deployment
-* A dedicated predictive-accuracy test suite
-
-The predictive-accuracy evaluation has now been expanded substantially and has produced actual final unseen-test results for all 15 supported PSE tickers.
-
-The project is **not yet marked fully complete** because final production integration and end-to-end verification still need to be confirmed.
+The forecasting target is next-session closing price, reconstructed from predicted next-session price change (ΔClose).
 
 ---
 
-# 2. Latest Repository Update
-
-The latest major predictive-accuracy update is:
-
-**Commit:** `bdb41a9`
-**Commit message:** `Update predictive accuracy statistical analysis`
-
-This update added:
-
-* Predictive-accuracy evaluation configuration
-* Final unseen-test splitting
-* Leakage checks
-* Predictive metrics
-* Model runners
-* Statistical-testing implementation
-* Evaluation runner
-* Evaluation results
-* Model comparison results
-* Predictive-accuracy tests
-* Predictive-accuracy documentation
-
-The commit contains **22 changed files and 5,029 added lines**.
-
-The predictive-accuracy implementation is located at:
+# 2. Final System Architecture
 
 ```text
-backend/tests/predictive_accuracy/
-```
-
-The repository now contains:
-
-```text
-backend/tests/predictive_accuracy/
-├── README.md
-├── __init__.py
-├── config.py
-├── leakage_checks.py
-├── metrics.py
-├── run_evaluation.py
-├── runners.py
-├── splits.py
-├── statistical_tests.py
-├── results/
-│   ├── evaluation_summary.md
-│   ├── metrics.csv
-│   ├── metrics.json
-│   ├── model_comparison.csv
-│   └── statistical_tests.json
-└── tests/
-    ├── __init__.py
-    ├── _helpers.py
-    ├── test_integration.py
-    ├── test_leakage_checks.py
-    ├── test_metrics.py
-    ├── test_naive_baseline.py
-    ├── test_splits.py
-    └── test_statistical_tests.py
-```
-
-This structure is now present in the repository.
-
----
-
-# 3. Predictive Accuracy Evaluation
-
-## 3.1 Purpose
-
-The predictive-accuracy suite was created to determine how well each forecasting model generalizes to data that was not available during model training, tuning, scaling, or model selection.
-
-It evaluates:
-
-* Lag-Informed Regression/LASSO
-* ARIMA
-* LSTM
-* Naive previous-close baseline
-
-The suite is additive.
-
-It does not replace the production forecasting implementation.
-
-It reuses the existing:
-
-* Data loading
-* Feature engineering
-* Forecasting models
-* Model-training functions
-* Evaluation functions
-* Statistical-testing functions
-
-The suite therefore evaluates the actual forecasting implementation used by ForecastPH rather than constructing a separate experimental model.
+                         PSE EOD DISCLOSURES
+                                │
+                                ▼
+                    ┌────────────────────────┐
+                    │    Python Backend      │
+                    │                        │
+                    │ PDF Download           │
+                    │ PDF Extraction          │
+                    │ Data Cleaning           │
+                    │ Data Validation         │
+                    │ OHLCV Updates           │
+                    └───────────┬────────────┘
+                                │
+                                ▼
+                    ┌────────────────────────┐
+                    │   Model Training       │
+                    │                        │
+                    │ Lag Regression          │
+                    │ ARIMA                  │
+                    │ LSTM                   │
+                    │ Naive Baseline         │
+                    └───────────┬────────────┘
+                                │
+                                ▼
+                    ┌────────────────────────┐
+                    │   Model Evaluation     │
+                    │                        │
+                    │ RMSE / MAE / MASE / R²│
+                    │ Statistical Testing    │
+                    │ Best Model Selection   │
+                    └───────────┬────────────┘
+                                │
+                                ▼
+                ┌────────────────────────────────┐
+                │ Forecast Artifact Export        │
+                │ frontend/public/forecasts/     │
+                └───────────────┬────────────────┘
+                                │
+                                ▼
+                    ┌────────────────────────┐
+                    │     Next.js Frontend   │
+                    │                        │
+                    │ Home Dashboard         │
+                    │ Company List           │
+                    │ Company Details        │
+                    │ Historical OHLCV        │
+                    │ Next-Day Prediction    │
+                    │ Backtest                │
+                    │ Forecast Error         │
+                    │ Model Performance       │
+                    │ Learn / About           │
+                    │ AI Assistant            │
+                    └───────────┬────────────┘
+                                │
+                 ┌──────────────┴──────────────┐
+                 │                             │
+                 ▼                             ▼
+             Vercel                         Gemini API
+                                              │
+                                              ▼
+                                      PSE Forecast Assistant
+````
 
 ---
 
-# 4. Final Unseen-Test Methodology
+# 3. Forecasting Models
 
-The final predictive-accuracy evaluation uses a chronological split.
-
-```text
-┌──────────────────────────────────────────────────────┐
-│                  TRAIN + VALIDATION                   │
-│                                                      │
-│ Used for model training, tuning, scaling and         │
-│ model selection                                      │
-└──────────────────────────────┬───────────────────────┘
-                               │
-                               │ strict chronological boundary
-                               ▼
-┌──────────────────────────────────────────────────────┐
-│                    FINAL TEST                         │
-│                                                      │
-│ Never available during training, tuning, scaling,    │
-│ or model selection                                   │
-└──────────────────────────────────────────────────────┘
-```
-
-The default configuration uses:
-
-**Final-test fraction: 15%**
-
-**Random seed: 42**
-
-The split is configurable and can also use an explicit date range.
-
-The final-test observations are withheld before model training begins.
-
-This prevents the final test period from influencing fitted model parameters.
-
----
-
-# 5. Frozen-Model Evaluation
-
-After each model is trained, its fitted artifact is treated as frozen.
-
-The evaluation process does not refit the model on final-test observations.
-
-This applies to:
-
-* LASSO coefficients
-* Selected features
-* Feature scalers
-* ARIMA/SARIMAX parameters
-* LSTM weights
-* LSTM input/output scalers
-
-The final-test process may use realized historical market values that occurred before the prediction date.
-
-This is intentional.
-
-It represents normal walk-forward forecasting.
-
-For example:
-
-```text
-Actual Close on Day 1
-        ↓
-Used to predict Day 2
-
-Actual Close on Day 2
-        ↓
-Used to predict Day 3
-
-Actual Close on Day 3
-        ↓
-Used to predict Day 4
-```
-
-The model itself remains frozen.
-
----
-
-# 6. Leakage Controls
-
-The predictive-accuracy framework contains explicit leakage checks.
-
-The following checks are implemented:
-
-| Leakage Check                              | Purpose                                                         |
-| ------------------------------------------ | --------------------------------------------------------------- |
-| `assert_no_date_overlap`                   | Ensures training/validation and final-test dates do not overlap |
-| `assert_fit_input_excludes_dates`          | Ensures final-test dates are not passed into model training     |
-| `assert_model_selection_before_final_test` | Ensures model selection occurs before final-test evaluation     |
-| `assert_scaler_fit_row_count`              | Ensures scalers were not fitted on final-test observations      |
-| `assert_no_future_values_in_features`      | Prevents future observations from entering model input windows  |
-| `assert_naive_uses_prior_close_only`       | Ensures the naive model uses only the prior close               |
-| `assert_identical_test_dates`              | Ensures models are evaluated on identical final-test dates      |
-
-Each leakage check raises a specific error and aborts the evaluation if the condition fails.
-
-This makes leakage a hard failure rather than a warning.
-
----
-
-# 7. Supported Predictive-Accuracy Metrics
-
-The final evaluation includes the project's standard forecasting metrics:
-
-* RMSE
-* MAE
-* MASE
-* R²
-
-It also adds predictive-accuracy-specific measures.
-
-### Directional Accuracy
-
-Measures how often the predicted market direction matches the actual direction.
-
-The direction is classified relative to the previous actual closing price.
-
-### Mean Directional Error
-
-Measures systematic directional bias.
-
-The direction values are:
-
-```text
--1 = downward
- 0 = flat
-+1 = upward
-```
-
-A mean directional error near zero indicates less systematic bullish or bearish directional bias.
-
-### Hit Rate vs. Naive
-
-Measures the fraction of final-test observations where a model's absolute error is less than or equal to the naive baseline's error for the same date.
-
-### Prediction Error Statistics
-
-The suite records:
-
-* Mean signed error
-* Error standard deviation
-* Minimum error
-* Maximum error
-* Median absolute error
-
-### Confidence Intervals
-
-The suite calculates 95% bootstrap confidence intervals for:
-
-* RMSE
-* MAE
-
-The default bootstrap configuration uses:
-
-**2,000 resamples**
-
-Confidence intervals are omitted when there are insufficient final-test observations rather than being fabricated.
-
-These metrics and methodology are documented in the predictive-accuracy suite.
-
----
-
-# 8. Final Unseen-Test Evaluation Coverage
-
-The current evaluation covers:
-
-**15 PSE tickers**
-
-```text
-ALI
-APX
-BPI
-GLO
-ICT
-JFC
-MBT
-MEG
-MER
-NIKL
-PGOLD
-SCC
-SECB
-SHLPH
-SMPH
-```
-
-Every supported model is evaluated against the same final-test period for each ticker.
-
-This provides consistent cross-model comparison.
-
-The generated evaluation summary confirms all 15 tickers were evaluated using the 15% final-test fraction and seed 42.
-
----
-
-# 9. Final Predictive-Accuracy Results
-
-The latest generated evaluation results show the following aggregate ranking by mean RMSE across the 15 tickers:
-
-| Rank | Model                           | Mean RMSE | Selection Frequency | Mean RMSE Improvement vs. Naive |
-| ---: | ------------------------------- | --------: | ------------------: | ------------------------------: |
-|    1 | ARIMA                           |    4.3895 |                 40% |                          +0.20% |
-|    2 | Naive Baseline                  |    4.4131 |                   — |                               — |
-|    3 | Lag-Informed Regression (LASSO) |    7.8471 |                 47% |                         -19.41% |
-|    4 | LSTM                            |   14.7503 |                 13% |                         -85.94% |
-
-These are the current final unseen-test aggregate results committed to the repository.
-
----
-
-# 10. Interpretation of Aggregate Results
-
-The final unseen-test results provide several important findings.
-
-### ARIMA
-
-ARIMA has the lowest aggregate mean RMSE:
-
-**4.3895**
-
-It beats the naive baseline on:
-
-**9 of 15 tickers**
-
-or:
-
-**60% of tickers**
-
-Its mean RMSE improvement versus the naive baseline is:
-
-**+0.20%**
-
-Therefore, ARIMA is the strongest model by aggregate mean RMSE, but its advantage over the naive baseline is small.
-
-### Naive Baseline
-
-The naive previous-close baseline has:
-
-**4.4131 mean RMSE**
-
-This is extremely close to ARIMA.
-
-This is an important result because it establishes a strong benchmark for determining whether model complexity provides meaningful predictive improvement.
-
-### Lag-Informed Regression / LASSO
-
-Lag-Informed Regression has:
-
-**7.8471 mean RMSE**
-
-It is selected as the lowest-RMSE model on:
-
-**7 of 15 tickers**
-
-or:
-
-**46.67%**
-
-However, its aggregate mean RMSE is substantially higher than both ARIMA and the naive baseline.
-
-### LSTM
-
-LSTM has:
-
-**14.7503 mean RMSE**
-
-It is selected as the lowest-RMSE model on:
-
-**2 of 15 tickers**
-
-or:
-
-**13.33%**
-
-Its aggregate RMSE is substantially higher than the other approaches in the current final-test evaluation.
-
-These results are descriptive of the current final unseen-test period and should not be interpreted as a universal ranking of these model classes.
-
----
-
-# 11. Statistical Significance Analysis
-
-The latest predictive-accuracy update added a complete statistical-analysis layer.
-
-The analysis uses:
-
-* Diebold-Mariano testing
-* Harvey-Leybourne-Newbold correction
-* Holm correction
-* Friedman testing
-* Pairwise Wilcoxon signed-rank testing
-* Best-model consistency analysis
-
-The statistical tests are calculated from the frozen final-test predictions.
-
-The evaluation reuses the statistical-testing implementations already used by the production model-selection system.
-
-This avoids maintaining separate statistical-testing implementations that could produce inconsistent results.
-
----
-
-# 12. Friedman Test
-
-For the three tuned forecasting models:
-
-```text
-Statistic = 10.1333
-p-value   = 0.006303
-n         = 15 tickers
-```
-
-The result is statistically significant at the 0.05 level.
-
-Therefore, the final-test results provide evidence that the three tuned models do not have identical performance distributions across the evaluated tickers.
-
-When the naive baseline is also included:
-
-```text
-Statistic = 15.3446
-p-value   = 0.001545
-n         = 15 tickers
-```
-
-This also indicates a statistically significant difference across the model set.
-
-The values are taken from the committed `statistical_tests.json` result.
-
----
-
-# 13. Wilcoxon-Holm Post-Hoc Analysis
-
-The pairwise post-hoc results are:
-
-| Comparison              | Holm-adjusted p-value | Result          |
-| ----------------------- | --------------------: | --------------- |
-| ARIMA vs LSTM           |              0.000916 | Significant     |
-| Lag Regression vs LSTM  |              0.030151 | Significant     |
-| Lag Regression vs ARIMA |              0.488709 | Not significant |
-
-At the 0.05 level:
-
-* ARIMA differs significantly from LSTM.
-* Lag Regression differs significantly from LSTM.
-* Lag Regression and ARIMA do not show a statistically significant difference in this post-hoc test.
-
-These results are important because the aggregate RMSE ranking alone could otherwise suggest a stronger ARIMA-vs-LASSO difference than the statistical test supports.
-
----
-
-# 14. Diebold-Mariano Testing
-
-The evaluation also performs pairwise Diebold-Mariano tests for model errors.
-
-The analysis is performed:
-
-* Per ticker
-* For model pairs
-* Including the naive baseline
-* With Holm correction
-
-The latest statistical-analysis artifact contains the complete pairwise results for all evaluated tickers.
-
-Examples from the current result set show statistically significant ARIMA-vs-LSTM and Lag-Regression-vs-LSTM differences for some tickers, while other model comparisons are not statistically significant.
-
-The results therefore support a ticker-specific interpretation rather than assuming one model universally dominates.
-
----
-
-# 15. Model Selection Frequency
-
-The final-test best-model counts are:
-
-| Model                   | Tickers Selected | Frequency |
-| ----------------------- | ---------------: | --------: |
-| Lag-Informed Regression |                7 |    46.67% |
-| ARIMA                   |                6 |    40.00% |
-| LSTM                    |                2 |    13.33% |
-
-This means Lag-Informed Regression wins the most individual ticker RMSE comparisons, even though ARIMA has the best aggregate mean RMSE.
-
-This distinction is important.
-
-```text
-Most ticker-level wins
-        ≠
-Best aggregate mean RMSE
-```
-
-The current results demonstrate why model selection should be reported using both aggregate metrics and per-ticker results.
-
-The committed statistical results confirm the 7/6/2 model-selection distribution.
-
----
-
-# 16. Best-Model Consistency
-
-The current best-model consistency check reports:
-
-```text
-Lag Regression lowest RMSE:
-7 / 15 tickers
-
-Required threshold:
-8 / 15 tickers
-
-Result:
-PASS = False
-```
-
-Therefore, no single tuned model currently satisfies the configured dominance threshold.
-
-This is an important validation result.
-
-The system should not claim that one model universally dominates across the complete PSE ticker universe.
-
----
-
-# 17. Naive Baseline Comparison
-
-The naive baseline is an essential component of the evaluation.
-
-The current final-test results show:
-
-### ARIMA
-
-```text
-Tickers beating naive: 9 / 15
-Fraction: 60%
-Mean RMSE improvement: +0.20%
-```
+The project compares the following forecasting approaches:
 
 ### Lag-Informed Regression
 
-```text
-Tickers beating naive: 6 / 15
-Fraction: 40%
-Mean RMSE improvement: -19.41%
-```
+Uses engineered lagged and technical features to model next-session ΔClose.
+
+### ARIMA
+
+A statistical time-series model used for next-session forecasting.
 
 ### LSTM
 
-```text
-Tickers beating naive: 1 / 15
-Fraction: 6.67%
-Mean RMSE improvement: -85.94%
-```
+A recurrent neural-network model for sequential time-series forecasting.
 
-This indicates that ARIMA provides only a modest aggregate advantage over the naive benchmark in the current unseen-test period.
+### Naive Baseline
 
-The results also show that the more complex models do not automatically outperform a simple baseline.
+Uses the previous closing price as the benchmark forecast.
 
----
-
-# 18. Predictive-Accuracy Test Suite
-
-The predictive-accuracy suite contains tests covering:
-
-### Integration
-
-* Existing production forecasting functions
-* End-to-end evaluation workflow
-* Model execution
-
-### Leakage
-
-* Temporal separation
-* Training-data isolation
-* Model-selection isolation
-* Scaler isolation
-* Future-feature prevention
-* Naive-baseline correctness
-* Identical final-test dates
-
-### Metrics
-
-* RMSE
-* MAE
-* MASE
-* R²
-* Directional accuracy
-* Mean directional error
-* Hit rate
-* Error statistics
-* Confidence intervals
-
-### Statistical Tests
-
-* Diebold-Mariano
-* Friedman
-* Wilcoxon
-* Holm correction
-* Best-model consistency
-
-The repository's predictive-accuracy directory contains dedicated automated tests for these areas.
-
----
-
-# 19. Predictive-Accuracy Test Result
-
-The predictive-accuracy test suite previously reached:
-
-**63/63 tests passing**
-
-The test suite itself is therefore implemented and passing.
-
-The current evaluation artifacts add a second layer beyond unit/integration testing:
+Forecast reconstruction:
 
 ```text
-Automated Tests
-      +
-Final Unseen-Test Evaluation
-      +
-Leakage Checks
-      +
-Statistical Analysis
-      =
-Predictive-Accuracy Validation
+ΔClose(t+1) = Close(t+1) − Close(t)
+
+Predicted Close(t+1)
+    = Close(t) + Predicted ΔClose(t+1)
 ```
 
-The 63/63 result confirms the validation code is functioning.
-
-The generated evaluation results provide empirical model-performance evidence on unseen data.
+The Naive baseline is used as the benchmark for scale-free comparison.
 
 ---
 
-# 20. Historical OHLCV Data
+# 4. Model Evaluation
 
-Full historical OHLCV data is implemented.
+The forecasting models are evaluated using:
 
-Each ticker contains:
+| Metric | Purpose                                                                                |
+| ------ | -------------------------------------------------------------------------------------- |
+| RMSE   | Measures overall magnitude of prediction errors, penalizing larger errors more heavily |
+| MAE    | Measures average absolute prediction error                                             |
+| MASE   | Compares model error against the naive baseline                                        |
+| R²     | Measures explained variance on the evaluation/test set                                 |
 
-* Date
+MASE interpretation:
+
+```text
+MASE < 1.0  → better than Naive baseline
+MASE = 1.0  → approximately equal to Naive baseline
+MASE > 1.0  → worse than Naive baseline
+```
+
+R² is treated as a supplementary evaluation metric and is **not** interpreted as forecast confidence or probability.
+
+The system also performs statistical testing, including:
+
+* Friedman rank testing
+* Holm-adjusted Wilcoxon signed-rank tests
+* Diebold-Mariano testing
+* Harvey-Leybourne-Newbold correction
+* Best-model consistency analysis
+
+---
+
+# 5. Supported Companies
+
+The final dashboard tracks 15 PSE-listed companies:
+
+```text
+ALI   Ayala Land, Inc.
+APX   Apex Mining Co., Inc.
+BPI   Bank of the Philippine Islands
+GLO   Globe Telecom, Inc.
+ICT   Intl. Container Terminal Services
+JFC   Jollibee Foods Corporation
+MBT   Metropolitan Bank & Trust Co.
+MEG   Megaworld Corporation
+MER   Manila Electric Company
+NIKL  Nickel Asia Corporation
+PGOLD Puregold Price Club, Inc.
+SCC   Semirara Mining and Power Corp.
+SECB  Security Bank Corporation
+SHLPH Pilipinas Shell Petroleum Corp.
+SMPH  SM Prime Holdings, Inc.
+```
+
+Five represented sectors:
+
+* Financials
+* Industrial
+* Property
+* Services
+* Mining and Oil
+
+---
+
+# 6. Historical OHLCV Visualization
+
+The Company Details page includes a stakeholder-approved **line-based Historical OHLCV chart**.
+
+The chart displays:
+
 * Open
 * High
 * Low
 * Close
 * Volume
 
-Backend data:
+It supports:
 
-```text
-backend/data/raw/<TICKER>.csv
-```
-
-Frontend artifacts:
-
-```text
-frontend/public/forecasts/history/<TICKER>.json
-```
-
-The historical datasets support:
-
-* Forecasting
-* Backtesting
-* Historical visualization
-* Interactive charts
-* Predictive-accuracy evaluation
-
----
-
-# 21. Interactive Stock Charts
-
-The dashboard includes interactive historical stock charts.
-
-The charts support:
-
-* Historical price movement
-* OHLC visualization
-* Volume visualization
-* Time-range exploration
-* Hover information
-* Company-specific history
+* Historical date-range selection
+* Start date selection
+* End date selection
+* Day/month/year selection
+* 1 Month quick range
+* 3 Months quick range
+* 6 Months quick range
+* 1 Year quick range
+* Update Chart
+* Zoom In
+* Zoom Out
+* Pan
+* Box Zoom
+* Reset
 * Responsive rendering
+* Dark Mode / Light Mode
 
-The charts consume generated historical artifacts rather than directly running the Python forecasting engine.
+The selected date range controls the base historical dataset, while zoom/pan operate within the selected range.
+
+The chart remains a **line graph by stakeholder requirement**.
 
 ---
 
-# 22. Forecasting Models
+# 7. Historical Chart Interaction Fix
 
-The production forecasting system currently evaluates:
+The interactive chart state management was corrected to prevent the previously observed Zoom In (+) / Zoom Out (-) corruption.
 
-### Lag-Informed Regression / LASSO
+The chart viewport now maintains a consistent start/end range and prevents:
 
-A feature-based forecasting model using lagged and engineered market information.
+* Invalid indexes
+* Empty chart states
+* Start index exceeding end index
+* Ranges exceeding dataset bounds
+* Incorrect reset behavior
 
-### ARIMA
+Reset now restores the currently selected historical date range rather than unexpectedly returning to the entire dataset.
 
-A statistical time-series model.
+---
 
-### LSTM
+# 8. Next-Day Prediction Chart
 
-A neural-network sequence model.
+A dedicated **Next-Day Prediction** chart was added below Historical OHLCV.
 
-### Naive Baseline
+The chart shows:
 
-A previous-close benchmark:
+* Actual Close as one continuous historical line
+* ARIMA next-session prediction
+* Lag-Informed Regression next-session prediction
+* LSTM next-session prediction
+
+The three model forecasts are displayed as separate dashed segments originating from the latest actual close and ending at the next PSE trading session.
+
+The chart does **not** display historical model predictions across the entire historical series.
+
+---
+
+# 9. Backtest Chart
+
+The **Backtest: Predicted vs. Actual (Last 60 Sessions)** chart was improved to use actual trading-session dates rather than generic Day 1–Day 60 labels.
+
+The chart includes:
+
+* Actual
+* ARIMA
+* Lag-Informed Regression
+* LSTM
+* Naive Baseline
+
+The selected/best model is visually emphasized.
+
+The Naive baseline is visually distinguished from forecasting models.
+
+The chart retains interactive zoom, pan, and reset behavior.
+
+---
+
+# 10. Forecast Error Chart
+
+The **Forecast Error Over Time** chart uses:
 
 ```text
-Tomorrow = Today
+Forecast Error = Predicted Price − Actual Price
 ```
 
-The naive baseline is included in the predictive-accuracy evaluation to provide a meaningful benchmark for model complexity.
-
----
-
-# 23. Forecast Target
-
-The production forecasting target is next-session closing-price change:
+Interpretation:
 
 ```text
-ΔClose(t+1)
-=
-Close(t+1) − Close(t)
+Positive error → overprediction
+Negative error → underprediction
+Zero           → perfect prediction
 ```
 
-The predicted closing price is reconstructed as:
+The chart includes a clear zero reference line and uses actual backtest trading-session dates.
+
+The selected model is visually emphasized and the Naive baseline is visually distinguished.
+
+---
+
+# 11. Philippine Trading Calendar
+
+The system now contains a centralized PSE trading calendar:
 
 ```text
-Predicted Close(t+1)
-=
-Close(t) + Predicted ΔClose(t+1)
+backend/services/pse_calendar.py
 ```
 
-This target formulation is shared by the forecasting and evaluation workflows where applicable.
+The calendar handles:
+
+* Weekends
+* Philippine holidays
+* Special non-working holidays
+* PSE non-trading dates represented by the repository
+
+The system specifically recognizes:
+
+```text
+Friday, August 21, 2026
+Ninoy Aquino Day
+PSE CLOSED
+```
+
+The next valid trading session is:
+
+```text
+Monday, August 24, 2026
+```
+
+The calendar is used as the single source of truth for next-session determination.
 
 ---
 
-# 24. Feature Engineering
+# 12. Automated Holiday Protection
 
-The production feature-engineering system includes:
+A dedicated calendar check was added:
 
-* Lagged prices
-* Lagged returns
-* EMA 10
-* EMA 20
-* RSI 14
-* MACD
-* MACD signal
-* Bollinger Bands
-* Daily return
-* Rolling volatility
-* High-Low spread
-* Open-Close spread
-* Rolling return statistics
-* High-Low range percentage
-* Log volume
-* Rolling volume statistics
+```text
+backend/scripts/check_pse_trading_day.py
+```
 
-The predictive-accuracy suite reuses the production feature-engineering implementation.
+The GitHub Actions Fast Pipeline now checks the PSE calendar before performing the normal data update.
+
+On a PSE holiday:
+
+```text
+PSE CLOSED
+    ↓
+Skip data ingestion
+    ↓
+Skip daily inference
+    ↓
+Skip forecast artifact export
+    ↓
+Skip validation
+    ↓
+Skip generated-data commit
+    ↓
+Exit successfully
+```
+
+The holiday condition is treated as a normal operational state rather than a pipeline failure.
+
+Example:
+
+```text
+PSE Trading Calendar Check
+Date: 2026-08-21
+PSE Status: CLOSED
+Reason: Ninoy Aquino Day
+Action: SKIP daily trading-data update
+Next PSE Trading Session: 2026-08-24
+```
 
 ---
 
-# 25. Production Model Evaluation
+# 13. Forecast-Date Fallback Protection
 
-The production forecasting pipeline evaluates models using:
+The forecast artifact exporter was corrected so that its fallback date logic uses the PSE calendar.
 
+The system no longer relies on:
+
+```text
+data_as_of + 1 calendar day
+```
+
+when determining the next forecast date.
+
+Instead it uses the next valid PSE trading session.
+
+This prevents the system from incorrectly targeting:
+
+* weekends
+* Philippine holidays
+* other configured PSE non-trading dates
+
+---
+
+# 14. Philippine Time (PHT)
+
+All user-facing operational timestamps use Philippine Time:
+
+```text
+Asia/Manila
+UTC+8
+```
+
+The dashboard displays:
+
+```text
+PHT
+```
+
+instead of UTC for user-facing timestamps.
+
+Forecast dates are handled as trading dates and are not incorrectly shifted by timezone conversion.
+
+---
+
+# 15. Home Dashboard Corrections
+
+The Home page was updated to present the project accurately.
+
+The hero section uses:
+
+```text
+Cross-Sector Next-Day Stock Price Forecasting
+```
+
+with the description:
+
+```text
+Explore historical Philippine stock market data, compare machine learning and statistical models, and understand next-day price prediction techniques.
+```
+
+The following hero actions were removed:
+
+* Explore Forecasts
+* Upload & Predict
+* Learn About Forecasting
+
+The previous Pipeline Status section was replaced with:
+
+```text
+Data Source
+
+Official PSE Daily Quotations Reports
+```
+
+The page also includes an educational forecast disclaimer.
+
+Forecast summaries are presented as model-generated estimates and are not presented as investment recommendations.
+
+---
+
+# 16. Dark Mode / Light Mode
+
+A global Dark Mode / Light Mode theme toggle was added to the navigation/header.
+
+Features:
+
+* Dark Mode
+* Light Mode
+* Theme persistence
+* Responsive behavior
+* Keyboard accessibility
+* Theme-aware charts and controls
+
+The existing dark dashboard appearance is preserved as the primary visual design.
+
+---
+
+# 17. AI Chatbot — PSE Forecast Assistant
+
+A floating AI chatbot was added to the lower-right of the dashboard:
+
+```text
+PSE Forecast Assistant
+```
+
+The assistant is designed for educational explanations of:
+
+* Forecasts
+* ARIMA
+* LSTM
+* Lag-Informed Regression
+* Naive baseline
 * RMSE
 * MAE
 * MASE
 * R²
+* Backtest charts
+* Forecast Error charts
+* Dashboard data
 
-The predictive-accuracy suite additionally evaluates:
+The assistant is context-aware.
 
-* Directional accuracy
-* Mean directional error
-* Hit rate vs. naive
-* Prediction-error statistics
-* Bootstrap confidence intervals
+### Company context
 
-This separates normal model-performance reporting from the more comprehensive final unseen-test validation.
-
----
-
-# 26. Backtesting
-
-Historical backtesting remains part of the production forecasting workflow.
-
-Backtesting compares:
+On:
 
 ```text
-Historical Actual
-       vs.
-Model Prediction
+/companies/[symbol]
 ```
 
-Backtesting should not be confused with the final unseen-test evaluation.
+the assistant can use company-specific generated forecast artifacts.
 
-The final unseen-test evaluation has a stricter purpose:
+### Market overview context
+
+The assistant can use:
+
+* dashboard.json
+* companies.json
+* latest.json
+
+### Model Performance context
+
+The assistant can use:
+
+* metrics.json
+* per-model metrics
+* median metrics
+* win rates
+* Naive comparisons
+* statistical test results
+
+---
+
+# 18. Gemini Integration
+
+The chatbot uses the Google Gemini API through the official:
 
 ```text
-Training / Validation
-       ↓
-Frozen Model
-       ↓
-Previously Unseen Test Data
-       ↓
-Final Predictive Accuracy
+@google/genai
+```
+
+SDK.
+
+Server-side integration:
+
+```text
+frontend/src/app/api/chat/route.ts
+```
+
+The API key is stored as:
+
+```text
+GEMINI_API_KEY
+```
+
+The key is intentionally server-side only.
+
+The project does not use:
+
+```text
+NEXT_PUBLIC_GEMINI_API_KEY
+```
+
+The local development environment uses:
+
+```text
+frontend/.env.local
+```
+
+while:
+
+```text
+frontend/.env.example
+```
+
+documents the required variable without storing the real secret.
+
+---
+
+# 19. Gemini Model Resilience
+
+The chatbot uses:
+
+```text
+Primary:
+gemini-3.5-flash-lite
+
+Fallback:
+gemini-3.5-flash
+```
+
+Resilience behavior:
+
+```text
+Primary request
+      ↓
+Transient 503 / UNAVAILABLE?
+      ↓
+Retry primary once
+      ↓
+Still unavailable?
+      ↓
+Fallback model
+      ↓
+User response
+```
+
+The system also handles unavailable-model errors without exposing raw Gemini errors to users.
+
+Sampling parameters deprecated by the Gemini 3.5 model family were removed.
+
+Final user-facing failure behavior uses a safe message such as:
+
+```text
+Gemini is temporarily busy. Please try again in a moment.
 ```
 
 ---
 
-# 27. Frontend
+# 20. AI Safety and Educational Guardrails
 
-The Next.js frontend provides:
+The PSE Forecast Assistant is explicitly educational.
 
-* Dashboard
-* Company List
-* Company Details
-* Historical stock charts
-* OHLCV visualization
-* Forecast results
-* Backtesting visualization
-* Model Performance
-* Search and navigation
-* Pipeline status
-* Responsive UI
-* Educational/project information
+It must not:
 
-The frontend consumes generated JSON artifacts.
+* Recommend buying a stock
+* Recommend selling a stock
+* Recommend holding a stock
+* Provide personalized investment advice
+* Claim that a forecast is guaranteed
+* Claim that a prediction is certain
+* Invent prices, metrics, or forecasts
 
-It does not:
+The assistant uses supplied dashboard JSON artifacts as its source of truth for company-specific information.
 
-* Train models
-* Run Python
-* Perform model fitting
-* Process PSE PDFs
-* Run predictive-accuracy evaluation
-* Directly access the forecasting engine
+It also correctly explains:
+
+```text
+MASE < 1.0 → better than Naive
+MASE = 1.0 → approximately equal to Naive
+MASE > 1.0 → worse than Naive
+```
+
+R² is not presented as confidence or probability.
 
 ---
 
-# 28. Frontend Data Contract
+# 21. Automated Data Pipeline
 
-The primary artifacts are:
+The Fast Pipeline is responsible for daily market-data updates and inference.
+
+Current operational flow:
+
+```text
+PSE EOD Reports
+      ↓
+Download
+      ↓
+Extract
+      ↓
+Clean
+      ↓
+Validate
+      ↓
+Update OHLCV
+      ↓
+Daily inference
+      ↓
+Export JSON artifacts
+      ↓
+Validate exports
+      ↓
+Commit changed artifacts
+      ↓
+Vercel redeployment
+```
+
+The Fast Pipeline does not retrain models.
+
+Weekly model training remains a separate workflow.
+
+---
+
+# 22. Automated Schedules
+
+### Daily Inference
+
+```text
+Monday:
+5:30 PM Philippine Time
+
+Tuesday–Friday:
+4:00 PM Philippine Time
+```
+
+The daily inference uses persisted weekly models and generates next-session forecasts from the latest validated OHLCV data.
+
+### Weekly Training
+
+```text
+Sunday:
+8:00 AM Philippine Time
+```
+
+The weekly training workflow retrains:
+
+* Lag-Informed Regression
+* ARIMA
+* LSTM
+
+and refreshes model evaluation and model-selection artifacts.
+
+---
+
+# 23. Data Integrity
+
+The pipeline includes safeguards for:
+
+* Duplicate data
+* OHLCV validation
+* Empty data
+* Artifact validation
+* Date-based updates
+* No-op runs
+* PSE holiday handling
+* Forecast-date validation
+* Generated artifact integrity
+
+Generated artifacts are committed only when actual changes exist.
+
+---
+
+# 24. Frontend Data Architecture
+
+The frontend is read-oriented.
+
+It consumes generated artifacts under:
 
 ```text
 frontend/public/forecasts/
-├── dashboard.json
-├── latest.json
-├── metrics.json
-├── companies.json
-├── company/
-│   └── <SYMBOL>.json
-└── history/
-    └── <SYMBOL>.json
 ```
 
-The predictive-accuracy evaluation results are separately maintained under:
+Including:
 
 ```text
-backend/tests/predictive_accuracy/results/
+dashboard.json
+latest.json
+metrics.json
+companies.json
+company/<SYMBOL>.json
+history/<SYMBOL>.json
 ```
 
-This separation prevents experimental validation artifacts from being silently confused with production dashboard artifacts.
+The frontend does not:
+
+* Train models
+* Run Python
+* Perform inference
+* Access a database
+* Process raw PSE PDFs
+* Modify forecast artifacts
+
+Generated data is produced by the backend pipeline and exported to the frontend data contract.
 
 ---
 
-# 29. Automated Fast Pipeline
+# 25. Security
 
-The Fast Pipeline processes routine PSE data updates without retraining the models.
+Security measures include:
 
-```text
-PSE EOD Data
-    ↓
-Download
-    ↓
-Extraction
-    ↓
-Cleaning
-    ↓
-Validation
-    ↓
-OHLCV Update
-    ↓
-Artifact Export
-    ↓
-Git Commit
-    ↓
-Vercel Deployment
-```
+* API keys stored as environment variables
+* Gemini API key restricted to server-side code
+* No `NEXT_PUBLIC_*` Gemini key
+* `.env.local` ignored by Git
+* `.env.example` provided for setup documentation
+* Sensitive environment variables configured in Vercel
+* AI responses restricted by educational guardrails
+* No investment recommendations
 
-Execution:
-
-```bash
-python backend/run_pipeline.py --no-train
-```
+Secrets must never be committed to GitHub.
 
 ---
 
-# 30. Heavy Training Pipeline
+# 26. Validation Results
 
-The Heavy Training workflow performs:
+The following validation has been completed during development:
 
-* Model retraining
-* Evaluation
-* Model selection
-* Statistical testing
-* Forecast generation
-* Artifact generation
+### Backend
 
 ```text
-Latest OHLCV
-    ↓
-Feature Engineering
-    ↓
-Model Training
-    ↓
-Model Evaluation
-    ↓
-Statistical Testing
-    ↓
-Best Model Selection
-    ↓
-Forecast Generation
-    ↓
-Artifact Export
-    ↓
-Git Commit
-    ↓
-Vercel Deployment
+PSE Calendar tests:
+21 tests passed
+
+Full backend test suite:
+111 tests passed
+0 failures
+0 errors
 ```
+
+### Frontend
+
+```text
+npx tsc --noEmit
+0 errors
+```
+
+### Production build
+
+```text
+npm run build
+Successful
+```
+
+The production frontend build includes the dynamic:
+
+```text
+/api/chat
+```
+
+route.
 
 ---
 
-# 31. Predictive Accuracy Evaluation Workflow
-
-The final unseen-test evaluation is separate from the routine production pipeline.
-
-Its workflow is:
-
-```text
-Historical OHLCV
-        ↓
-Chronological Split
-        ↓
-Train + Validation
-        │
-        ├── Model Training
-        ├── Feature Engineering
-        ├── Scaling
-        └── Model Selection
-        │
-        ▼
-     Freeze Models
-        │
-        ▼
-   Final Unseen Test
-        │
-        ├── Walk-Forward Prediction
-        ├── Leakage Checks
-        ├── RMSE
-        ├── MAE
-        ├── MASE
-        ├── R²
-        ├── Directional Accuracy
-        ├── Hit Rate
-        └── Error Statistics
-        │
-        ▼
-Statistical Analysis
-        │
-        ├── Diebold-Mariano
-        ├── Friedman
-        ├── Wilcoxon-Holm
-        └── Best-Model Consistency
-        │
-        ▼
-Evaluation Results
-```
-
----
-
-# 32. Predictive Accuracy Results Artifacts
-
-The final evaluation produces:
-
-```text
-backend/tests/predictive_accuracy/results/
-├── evaluation_summary.md
-├── metrics.csv
-├── metrics.json
-├── model_comparison.csv
-└── statistical_tests.json
-```
-
-The `evaluation_summary.md` contains the high-level final-test results.
-
-The `metrics.csv` and `metrics.json` contain per-ticker model metrics.
-
-The `model_comparison.csv` contains model-comparison results.
-
-The `statistical_tests.json` contains the detailed statistical-analysis output.
-
-These artifacts are committed to the repository.
-
----
-
-# 33. Current Verification Status
-
-| Component                                                             | Status      |
-| --------------------------------------------------------------------- | ----------- |
-| PSE data ingestion                                                    | Completed   |
-| Data cleaning                                                         | Completed   |
-| Data validation                                                       | Completed   |
-| Historical OHLCV storage                                              | Completed   |
-| Historical OHLCV frontend artifacts                                   | Completed   |
-| Feature engineering                                                   | Completed   |
-| Lag-Informed Regression / LASSO                                       | Completed   |
-| ARIMA                                                                 | Completed   |
-| LSTM                                                                  | Completed   |
-| Naive baseline                                                        | Completed   |
-| Forecast generation                                                   | Completed   |
-| RMSE                                                                  | Completed   |
-| MAE                                                                   | Completed   |
-| MASE                                                                  | Completed   |
-| R²                                                                    | Completed   |
-| Backtesting                                                           | Completed   |
-| Production statistical testing                                        | Completed   |
-| Best-model selection                                                  | Completed   |
-| Interactive stock charts                                              | Completed   |
-| Model Performance dashboard                                           | Completed   |
-| UI enhancements                                                       | Completed   |
-| Fast Pipeline                                                         | Completed   |
-| Heavy Training Pipeline                                               | Completed   |
-| GitHub Actions                                                        | Completed   |
-| Vercel deployment architecture                                        | Completed   |
-| Predictive-accuracy evaluation framework                              | Completed   |
-| Final unseen-test split                                               | Completed   |
-| Leakage checks                                                        | Completed   |
-| Predictive-accuracy metrics                                           | Completed   |
-| Statistical predictive-accuracy analysis                              | Completed   |
-| Final unseen-test results for 15 tickers                              | Completed   |
-| 63/63 predictive-accuracy tests                                       | Passing     |
-| Predictive-accuracy result artifacts                                  | Completed   |
-| Production dashboard integration of final predictive-accuracy results | In Progress |
-| Final end-to-end verification                                         | In Progress |
-| Overall project completion                                            | In Progress |
-
----
-
-# 34. What Has Changed Since the Previous Completion Report
-
-The previous report stated that the project was waiting for final unseen-test predictive-accuracy evaluation.
-
-That is no longer accurate.
-
-The repository now contains the completed evaluation framework and generated final-test results.
-
-The following items have moved from pending to completed:
-
-```text
-[✓] Final unseen-test evaluation framework
-[✓] Temporal final-test split
-[✓] Model freezing
-[✓] Leakage detection
-[✓] Predictive-accuracy metrics
-[✓] Bootstrap confidence intervals
-[✓] Statistical testing
-[✓] Model-comparison artifacts
-[✓] Final evaluation summary
-[✓] 15-ticker evaluation
-```
-
-The remaining work is now primarily:
-
-```text
-[ ] Integrate validated predictive-accuracy results into the production Model Performance presentation
-[ ] Confirm dashboard values correspond exactly to validated artifacts
-[ ] Complete final end-to-end production verification
-```
-
----
-
-# 35. Important Predictive-Accuracy Finding
-
-The latest evaluation demonstrates an important result:
-
-**The most complex model is not necessarily the most accurate model.**
-
-The current aggregate final-test ranking is:
-
-```text
-1. ARIMA                  RMSE 4.3895
-2. Naive baseline        RMSE 4.4131
-3. Lag Regression        RMSE 7.8471
-4. LSTM                   RMSE 14.7503
-```
-
-ARIMA has only a small aggregate improvement over the naive baseline.
-
-Therefore, the system should not claim that machine learning automatically provides superior forecasting accuracy.
-
-The predictive-accuracy evaluation instead provides evidence-based model comparison.
-
----
-
-# 36. Important Model-Selection Finding
-
-The current results also show a difference between aggregate and per-ticker model selection.
-
-```text
-Aggregate mean RMSE winner:
-ARIMA
-
-Most individual ticker wins:
-Lag-Informed Regression
-```
-
-The counts are:
-
-```text
-Lag Regression    7 / 15
-ARIMA             6 / 15
-LSTM              2 / 15
-```
-
-This supports the project's per-company model-selection architecture rather than assuming one model is universally optimal.
-
----
-
-# 37. Statistical-Analysis Finding
-
-The Friedman test indicates a significant difference across the tuned models:
-
-```text
-Friedman statistic = 10.1333
-p-value            = 0.006303
-```
-
-Including the naive baseline:
-
-```text
-Friedman statistic = 15.3446
-p-value            = 0.001545
-```
-
-However, the Holm-adjusted pairwise comparison between Lag Regression and ARIMA is not statistically significant:
-
-```text
-Holm-adjusted p = 0.488709
-```
-
-Therefore, the report should not claim that ARIMA is statistically proven superior to Lag Regression based solely on the current final-test evaluation.
-
-The strongest statistically supported differences in the current post-hoc analysis involve LSTM.
-
----
-
-# 38. Current Project Architecture
-
-The current target architecture is:
-
-```text
-                 PSE EOD MARKET DATA
-                          │
-                          ▼
-               ┌─────────────────────┐
-               │ Data Pipeline       │
-               │                     │
-               │ Download            │
-               │ Extraction          │
-               │ Cleaning            │
-               │ Validation          │
-               │ OHLCV Update        │
-               └──────────┬──────────┘
-                          │
-                          ▼
-               ┌─────────────────────┐
-               │ Feature Engineering │
-               └──────────┬──────────┘
-                          │
-                          ▼
-          ┌─────────────────────────────────┐
-          │ Forecasting Models              │
-          │                                 │
-          │ Lag Regression / LASSO          │
-          │ ARIMA                           │
-          │ LSTM                            │
-          │ Naive Baseline                  │
-          └───────────────┬─────────────────┘
-                          │
-                          ▼
-          ┌─────────────────────────────────┐
-          │ Production Evaluation           │
-          │                                 │
-          │ RMSE / MAE / MASE / R²         │
-          │ Backtesting                     │
-          │ Statistical Testing             │
-          │ Best Model Selection             │
-          └───────────────┬─────────────────┘
-                          │
-                          ▼
-          ┌─────────────────────────────────┐
-          │ Predictive Accuracy Validation   │
-          │                                 │
-          │ Temporal Holdout                │
-          │ Frozen Models                   │
-          │ Leakage Checks                  │
-          │ Directional Accuracy             │
-          │ Hit Rate                        │
-          │ Confidence Intervals            │
-          │ Final Unseen-Test Metrics       │
-          └───────────────┬─────────────────┘
-                          │
-                          ▼
-          ┌─────────────────────────────────┐
-          │ Statistical Accuracy Analysis    │
-          │                                 │
-          │ Diebold-Mariano                 │
-          │ Friedman                        │
-          │ Wilcoxon-Holm                  │
-          │ Best-Model Consistency          │
-          └───────────────┬─────────────────┘
-                          │
-                          ▼
-                JSON / CSV / MD Artifacts
-                          │
-                          ▼
-          ┌─────────────────────────────────┐
-          │ Next.js Dashboard               │
-          │                                 │
-          │ Historical OHLCV                │
-          │ Interactive Charts              │
-          │ Forecasts                       │
-          │ Backtesting                     │
-          │ Model Performance               │
-          └───────────────┬─────────────────┘
-                          │
-                          ▼
-                        Vercel
-```
-
----
-
-# 39. Remaining Completion Requirements
-
-The project should remain **IN PROGRESS** until these final steps are completed.
-
-## 39.1 Production Model Performance Integration
-
-The validated predictive-accuracy results should be clearly incorporated into the appropriate production-facing Model Performance presentation.
-
-The dashboard should distinguish:
-
-* Production model metrics
-* Final unseen-test predictive accuracy
-* Statistical significance results
-* Per-ticker model selection
-
-These should not be mixed together in a way that could cause users to interpret training/validation performance as final unseen-test accuracy.
-
----
-
-## 39.2 Artifact Verification
-
-Verify that the frontend consumes the intended validated artifacts.
-
-Confirm:
-
-```text
-Backend Results
-      ↓
-Generated Artifacts
-      ↓
-Frontend
-```
-
-No stale model-performance artifact should remain in the dashboard.
-
----
-
-## 39.3 End-to-End Verification
-
-The final verification should cover:
-
-```text
-Raw PSE Data
-      ↓
-Historical OHLCV
-      ↓
-Feature Engineering
-      ↓
-Model Training
-      ↓
-Model Selection
-      ↓
-Forecast
-      ↓
-Predictive Accuracy
-      ↓
-Statistical Testing
-      ↓
-Generated Artifacts
-      ↓
-Next.js Dashboard
-      ↓
-Vercel
-```
-
----
-
-# 40. Definition of Final Completion
-
-The project should be marked **COMPLETED** only after:
-
-```text
-[✓] PSE data pipeline operational
-[✓] Historical OHLCV operational
-[✓] Forecasting models operational
-[✓] Production model evaluation operational
-[✓] Statistical testing operational
-[✓] Interactive charts operational
-[✓] Dashboard UI operational
-[✓] Fast Pipeline operational
-[✓] Heavy Training operational
-[✓] Vercel deployment architecture operational
-
-[✓] Predictive-accuracy framework implemented
-[✓] Final unseen-test temporal split implemented
-[✓] Leakage checks implemented
-[✓] Frozen-model evaluation implemented
-[✓] Predictive-accuracy metrics implemented
-[✓] Bootstrap confidence intervals implemented
-[✓] Statistical predictive-accuracy analysis implemented
-[✓] Final unseen-test evaluation completed for 15 tickers
-[✓] Evaluation results committed
-[✓] Statistical results committed
-[✓] 63/63 predictive-accuracy tests passing
-
-[ ] Production Model Performance integration verified
-[ ] Final frontend artifact synchronization verified
-[ ] Final end-to-end production verification completed
-```
-
----
-
-# 41. Current Authoritative Status
-
-## IN PROGRESS
-
-The project has passed the major predictive-accuracy development milestone.
-
-The final unseen-test evaluation framework is implemented, the statistical analysis is implemented, the evaluation results are committed, and the predictive-accuracy test suite is passing.
-
-The latest final-test results cover all 15 supported PSE tickers and provide:
-
-* Model-level RMSE rankings
-* Per-ticker rankings
-* Naive-baseline comparisons
-* Directional-accuracy metrics
-* Error statistics
-* Confidence intervals
-* Diebold-Mariano comparisons
-* Friedman tests
-* Wilcoxon-Holm post-hoc tests
-* Best-model consistency analysis
-
-The current final-test aggregate result places ARIMA first by mean RMSE, narrowly ahead of the naive baseline, while Lag-Informed Regression has the highest number of individual ticker wins.
-
-The statistical analysis confirms significant differences across the model set but does not establish a statistically significant ARIMA-vs-Lag-Regression difference in the current Holm-adjusted post-hoc comparison.
-
-Therefore, the correct project state is:
-
-**Predictive-Accuracy Evaluation: COMPLETED**
-
-**Predictive-Accuracy Statistical Analysis: COMPLETED**
-
-**Predictive-Accuracy Test Suite: 63/63 PASSING**
-
-**Production Dashboard Integration: IN PROGRESS**
-
-**Overall Project: IN PROGRESS**
-
----
-
-# 42. Conclusion
-
-ForecastPH has progressed from a forecasting dashboard into a substantially validated analytical forecasting system.
-
-The repository now combines:
-
-* Automated PSE market-data ingestion
-* Full historical OHLCV data
-* Feature engineering
-* Multiple forecasting models
-* Production model evaluation
-* Backtesting
-* Interactive stock charts
-* Model selection
-* Statistical model comparison
-* Final unseen-test evaluation
-* Leakage detection
-* Directional-accuracy analysis
-* Naive-baseline comparison
-* Bootstrap confidence intervals
-* Diebold-Mariano testing
-* Friedman testing
-* Wilcoxon-Holm post-hoc testing
-* Automated pipelines
-* Next.js visualization
+# 27. Final Technology Stack
+
+### Backend
+
+* Python
+* Pandas
+* NumPy
+* scikit-learn
+* Statsmodels
+* TensorFlow/Keras
+* Joblib
+* Custom PSE PDF/data pipeline
+
+### Frontend
+
+* Next.js 14
+* React
+* TypeScript
+* Tailwind CSS
+* Recharts
+* Responsive UI
+
+### AI
+
+* Google Gemini API
+* `@google/genai`
+* Gemini 3.5 Flash-Lite
+* Gemini 3.5 Flash fallback
+
+### Automation
+
+* GitHub Actions
+* Cron-job.org trigger for weekday pipeline
 * Vercel deployment
+* PSE trading-calendar guard
 
-The latest predictive-accuracy implementation provides a reproducible evaluation of model generalization on data withheld from training and model selection.
+---
 
-The current evidence shows that:
+# 28. Deployment
 
-* ARIMA has the lowest aggregate final-test RMSE.
-* The naive baseline is extremely competitive.
-* Lag-Informed Regression wins the largest number of individual ticker comparisons.
-* LSTM performs substantially worse on the current aggregate final-test RMSE.
-* The tuned models have statistically different performance distributions.
-* ARIMA and Lag Regression are not statistically distinguishable in the current Holm-adjusted post-hoc comparison.
-* LSTM is significantly different from both ARIMA and Lag Regression in the current post-hoc analysis.
+The frontend is deployed to:
 
-These findings are now documented in committed evaluation artifacts rather than being treated as hypothetical future work.
+```text
+https://pse-stock-price-forecast.vercel.app/
+```
 
-The remaining work is limited to final production integration, dashboard synchronization, and end-to-end verification.
+Vercel configuration:
 
-**Current project status: IN PROGRESS — FINAL PRODUCTION INTEGRATION AND END-TO-END VERIFICATION**
+```text
+Framework:
+Next.js
+
+Root Directory:
+frontend/
+
+Environment Variable:
+GEMINI_API_KEY
+```
+
+The Gemini API key is configured as a Vercel sensitive environment variable for the required deployment environments.
+
+---
+
+# 29. Current Production Capabilities
+
+The completed ForecastPH system now provides:
+
+* Automated PSE data processing
+* PSE holiday-aware data updates
+* Automated daily inference
+* Weekly model training
+* Cross-model evaluation
+* Statistical significance testing
+* Interactive historical OHLCV exploration
+* Historical date-range selection
+* Working Zoom In / Zoom Out
+* Pan / Box Zoom / Reset
+* Next-Day Prediction visualization
+* Backtest visualization
+* Forecast Error visualization
+* Model Performance comparison
+* Dark Mode / Light Mode
+* Philippine Time display
+* Educational forecast disclaimer
+* PSE Forecast Assistant AI chatbot
+* Gemini retry/fallback resilience
+* Vercel production deployment
+
+---
+
+# 30. Limitations
+
+The system remains an educational forecasting application.
+
+Forecasts are generated from historical data and machine-learning/statistical models and do not guarantee future market outcomes.
+
+The AI assistant is intended for educational explanations and dashboard interpretation and is not a financial-advisory system.
+
+The PSE calendar is based on the holidays currently represented in the repository's maintained trading calendar and should be updated when official future PSE non-trading schedules change.
+
+Gemini API usage is subject to Google's active model and project rate limits.
+
+---
+
+# 31. Final Status
+
+**ForecastPH is operational and production-ready for its intended educational and academic use case.**
+
+Core components validated:
+
+```text
+✅ PSE data pipeline
+✅ PSE trading calendar
+✅ Holiday-aware automation
+✅ Daily inference
+✅ Weekly model training
+✅ Forecast generation
+✅ Model evaluation
+✅ Statistical testing
+✅ Historical OHLCV chart
+✅ Interactive chart controls
+✅ Next-Day Prediction chart
+✅ Backtest chart
+✅ Forecast Error chart
+✅ Model Performance page
+✅ Dark / Light Mode
+✅ Philippine Time
+✅ Gemini AI Assistant
+✅ Gemini fallback handling
+✅ Vercel deployment
+✅ TypeScript validation
+✅ Backend test suite
+✅ Production build
+```
+
+**Repository:**
+[https://github.com/AlvinTubtub/pse-stock-price-forecast.git](https://github.com/AlvinTubtub/pse-stock-price-forecast.git)
+
+**Live Dashboard:**
+[https://pse-stock-price-forecast.vercel.app/](https://pse-stock-price-forecast.vercel.app/)
+
+```
+```
