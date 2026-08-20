@@ -2,10 +2,10 @@
   "symbol": "SECB",
   "name": "Security Bank Corporation",
   "sector": "Financials",
-  "previousClose": 66.0,
-  "predictedClose": 65.99,
-  "pesoChange": -0.01,
-  "pctChange": -0.02,
+  "previousClose": 67.0,
+  "predictedClose": 66.93,
+  "pesoChange": -0.07,
+  "pctChange": -0.1,
   "direction": "bearish",
   "model": "ARIMA",
   "confidence": 90.1,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 65.94,
-    "arima": 65.99,
-    "lstm": 68.21
+    "lag": 66.94,
+    "arima": 66.93,
+    "lstm": 69.51
   },
   "ohlcv": [
     {
@@ -12985,10 +12985,17 @@
       "low": 65.85,
       "close": 66.0,
       "volume": 6533915
+    },
+    {
+      "date": "2026-08-20",
+      "open": 66.5,
+      "high": 67.0,
+      "low": 65.95,
+      "close": 67.0,
+      "volume": 8949075
     }
   ],
   "backtestDates": [
-    "2026-05-26",
     "2026-05-28",
     "2026-05-29",
     "2026-06-01",
@@ -13047,10 +13054,10 @@
     "2026-08-14",
     "2026-08-17",
     "2026-08-18",
-    "2026-08-19"
+    "2026-08-19",
+    "2026-08-20"
   ],
   "backtestActual": [
-    64.0,
     61.3,
     62.0,
     60.95,
@@ -13109,7 +13116,8 @@
     67.4,
     66.85,
     65.85,
-    66.0
+    66.0,
+    67.0
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13299,7 +13307,6 @@
       68.92935752868652
     ],
     "Naive baseline": [
-      65.5,
       64.0,
       61.3,
       62.0,
@@ -13358,10 +13365,11 @@
       68.0,
       67.4,
       66.85,
-      65.85
+      65.85,
+      66.0
     ]
   },
-  "forecastDate": "2026-08-20",
-  "dataAsOf": "2026-08-19",
-  "inferenceAt": "2026-08-19T16:01:49+08:00"
+  "forecastDate": "2026-08-24",
+  "dataAsOf": "2026-08-20",
+  "inferenceAt": "2026-08-20T16:02:09+08:00"
 }

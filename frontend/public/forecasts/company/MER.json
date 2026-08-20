@@ -2,10 +2,10 @@
   "symbol": "MER",
   "name": "Manila Electric Company",
   "sector": "Industrial",
-  "previousClose": 489.2,
-  "predictedClose": 489.09,
-  "pesoChange": -0.11,
-  "pctChange": -0.02,
+  "previousClose": 482.0,
+  "predictedClose": 481.14,
+  "pesoChange": -0.86,
+  "pctChange": -0.18,
   "direction": "bearish",
   "model": "Lag-Informed Regression",
   "confidence": 92.4,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 489.09,
-    "arima": 492.07,
-    "lstm": 460.12
+    "lag": 481.14,
+    "arima": 484.55,
+    "lstm": 444.79
   },
   "ohlcv": [
     {
@@ -12985,10 +12985,17 @@
       "low": 488.0,
       "close": 489.2,
       "volume": 107282988
+    },
+    {
+      "date": "2026-08-20",
+      "open": 490.0,
+      "high": 495.0,
+      "low": 481.4,
+      "close": 482.0,
+      "volume": 256351106
     }
   ],
   "backtestDates": [
-    "2026-05-26",
     "2026-05-28",
     "2026-05-29",
     "2026-06-01",
@@ -13047,10 +13054,10 @@
     "2026-08-14",
     "2026-08-17",
     "2026-08-18",
-    "2026-08-19"
+    "2026-08-19",
+    "2026-08-20"
   ],
   "backtestActual": [
-    600.0,
     599.0,
     570.5,
     575.0,
@@ -13109,7 +13116,8 @@
     490.0,
     500.0,
     502.5,
-    489.2
+    489.2,
+    482.0
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13299,7 +13307,6 @@
       456.60144424438477
     ],
     "Naive baseline": [
-      604.5,
       600.0,
       599.0,
       570.5,
@@ -13358,10 +13365,11 @@
       491.6,
       490.0,
       500.0,
-      502.5
+      502.5,
+      489.2
     ]
   },
-  "forecastDate": "2026-08-20",
-  "dataAsOf": "2026-08-19",
-  "inferenceAt": "2026-08-19T16:01:49+08:00"
+  "forecastDate": "2026-08-24",
+  "dataAsOf": "2026-08-20",
+  "inferenceAt": "2026-08-20T16:02:09+08:00"
 }
