@@ -43,12 +43,12 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
       {/* 1. Header & Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <Link
+          <a
             href="/companies"
             className="text-xs font-semibold text-brand-400 hover:text-brand-300 transition-colors uppercase tracking-wider mb-1 inline-block"
           >
             ← Back to Companies
-          </Link>
+          </a>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-white tracking-tight">{company.symbol}</h1>
             <span className="text-xs px-2.5 py-1 rounded-md bg-dark-bg border border-dark-border text-slate-300 font-medium">

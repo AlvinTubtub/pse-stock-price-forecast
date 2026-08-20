@@ -20,22 +20,22 @@ export function useInteractiveChart<T extends Record<string, any>>({
 }: UseInteractiveChartOptions<T>) {
   const totalCount = data.length;
 
-  // Single consolidated state object for viewport range (prevents desynchronization)
   const [range, setRange] = useState<ViewportRange>(() => ({
     startIndex: 0,
     endIndex: Math.max(0, totalCount - 1),
   }));
 
-  const [isBoxZoomActive, setIsBoxZoomActive] = useState<boolean>(false);
-  const [isPanModeActive, setIsPanModeActive] = useState<boolean>(false);
+  const [isBoxZoomActive, setIsBoxZoomActive] = useState(false);
+  const [isPanModeActive, setIsPanModeActive] = useState(false);
   const [refAreaLeft, setRefAreaLeft] = useState<string | number | null>(null);
   const [refAreaRight, setRefAreaRight] = useState<string | number | null>(null);
-  const [isMouseDown, setIsMouseDown] = useState<boolean>(false);
-  const [dragStartLabel, setDragStartLabel] = useState<string | number | null>(null);
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [dragStartLabel, setDragStartLabel] = useState<string | number | null>(
+    null
+  );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync index bounds whenever the base data changes
   useEffect(() => {
     setRange({
       startIndex: 0,
@@ -43,6 +43,8 @@ export function useInteractiveChart<T extends Record<string, any>>({
     });
     setRefAreaLeft(null);
     setRefAreaRight(null);
+    setIsMouseDown(false);
+    setDragStartLabel(null);
   }, [data]);
 
   const findIndexByLabel = useCallback(
@@ -54,14 +56,18 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
   const resetView = useCallback(() => {
     if (totalCount === 0) return;
+
     setRange({
       startIndex: 0,
       endIndex: Math.max(0, totalCount - 1),
     });
+
     setRefAreaLeft(null);
     setRefAreaRight(null);
     setIsBoxZoomActive(false);
     setIsPanModeActive(false);
+    setIsMouseDown(false);
+    setDragStartLabel(null);
   }, [totalCount]);
 
   const zoomIn = useCallback(
@@ -70,10 +76,14 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
       setRange((prev) => {
         const currentSpan = prev.endIndex - prev.startIndex + 1;
-        if (currentSpan <= MIN_POINTS) return prev;
+
+        if (currentSpan <= MIN_POINTS) {
+          return prev;
+        }
 
         const delta = Math.max(1, Math.floor(currentSpan * factor));
         const targetSpan = Math.max(MIN_POINTS, currentSpan - delta);
+
         const center = (prev.startIndex + prev.endIndex) / 2;
         const half = (targetSpan - 1) / 2;
 
@@ -82,18 +92,18 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
         if (newStart < 0) {
           newStart = 0;
-          newEnd = Math.min(totalCount - 1, newStart + targetSpan - 1);
+          newEnd = Math.min(totalCount - 1, targetSpan - 1);
         }
+
         if (newEnd >= totalCount) {
           newEnd = totalCount - 1;
-          newStart = Math.max(0, newEnd - targetSpan + 1);
+          newStart = Math.max(0, totalCount - targetSpan);
         }
 
-        if (newStart < 0) newStart = 0;
-        if (newEnd >= totalCount) newEnd = totalCount - 1;
-        if (newStart > newEnd) newStart = newEnd;
-
-        return { startIndex: newStart, endIndex: newEnd };
+        return {
+          startIndex: Math.max(0, newStart),
+          endIndex: Math.min(totalCount - 1, newEnd),
+        };
       });
     },
     [totalCount]
@@ -104,13 +114,14 @@ export function useInteractiveChart<T extends Record<string, any>>({
       if (totalCount === 0) return;
 
       setRange((prev) => {
-        const currentSpan = prev.endIndex - prev.startIndex + 1;
         if (prev.startIndex === 0 && prev.endIndex === totalCount - 1) {
           return prev;
         }
 
+        const currentSpan = prev.endIndex - prev.startIndex + 1;
         const delta = Math.max(1, Math.floor(currentSpan * factor));
         const targetSpan = Math.min(totalCount, currentSpan + delta);
+
         const center = (prev.startIndex + prev.endIndex) / 2;
         const half = (targetSpan - 1) / 2;
 
@@ -119,18 +130,18 @@ export function useInteractiveChart<T extends Record<string, any>>({
 
         if (newStart < 0) {
           newStart = 0;
-          newEnd = Math.min(totalCount - 1, newStart + targetSpan - 1);
+          newEnd = Math.min(totalCount - 1, targetSpan - 1);
         }
+
         if (newEnd >= totalCount) {
           newEnd = totalCount - 1;
-          newStart = Math.max(0, newEnd - targetSpan + 1);
+          newStart = Math.max(0, totalCount - targetSpan);
         }
 
-        if (newStart < 0) newStart = 0;
-        if (newEnd >= totalCount) newEnd = totalCount - 1;
-        if (newStart > newEnd) newStart = newEnd;
-
-        return { startIndex: newStart, endIndex: newEnd };
+        return {
+          startIndex: Math.max(0, newStart),
+          endIndex: Math.min(totalCount - 1, newEnd),
+        };
       });
     },
     [totalCount]
@@ -139,47 +150,47 @@ export function useInteractiveChart<T extends Record<string, any>>({
   const toggleBoxZoom = useCallback(() => {
     setIsBoxZoomActive((prev) => {
       const next = !prev;
-      if (next) setIsPanModeActive(false);
+
+      if (next) {
+        setIsPanModeActive(false);
+      }
+
       return next;
     });
+
     setRefAreaLeft(null);
     setRefAreaRight(null);
+    setIsMouseDown(false);
+    setDragStartLabel(null);
   }, []);
 
   const togglePanMode = useCallback(() => {
     setIsPanModeActive((prev) => {
       const next = !prev;
-      if (next) setIsBoxZoomActive(false);
+
+      if (next) {
+        setIsBoxZoomActive(false);
+      }
+
       return next;
     });
+
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+    setIsMouseDown(false);
+    setDragStartLabel(null);
   }, []);
 
-  // Native non-passive wheel listener for scroll wheel zooming
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (e.deltaY < 0) {
-        // Wheel UP = Zoom In
-        zoomIn(0.15);
-      } else if (e.deltaY > 0) {
-        // Wheel DOWN = Zoom Out
-        zoomOut(0.15);
-      }
-    };
-
-    el.addEventListener("wheel", handleWheel, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", handleWheel);
-    };
-  }, [zoomIn, zoomOut]);
-
-  // Drag handlers for mouse drag panning & box zoom selection
   const handleMouseDown = useCallback(
     (label: string | number) => {
-      if (!label) return;
+      if (
+        label === null ||
+        label === undefined ||
+        (!isBoxZoomActive && !isPanModeActive)
+      ) {
+        return;
+      }
+
       setIsMouseDown(true);
       setDragStartLabel(label);
 
@@ -188,74 +199,141 @@ export function useInteractiveChart<T extends Record<string, any>>({
         setRefAreaRight(label);
       }
     },
-    [isBoxZoomActive]
+    [isBoxZoomActive, isPanModeActive]
   );
 
   const handleMouseMove = useCallback(
     (label: string | number) => {
-      if (!isMouseDown || !label) return;
+      if (
+        !isMouseDown ||
+        label === null ||
+        label === undefined ||
+        dragStartLabel === null
+      ) {
+        return;
+      }
 
       if (isBoxZoomActive) {
         setRefAreaRight(label);
-      } else if (dragStartLabel !== null) {
-        // Drag to pan
-        const startIdx = findIndexByLabel(dragStartLabel);
-        const currIdx = findIndexByLabel(label);
-
-        if (startIdx >= 0 && currIdx >= 0 && startIdx !== currIdx) {
-          const delta = currIdx - startIdx;
-          setRange((prev) => {
-            const span = prev.endIndex - prev.startIndex;
-            let newStart = prev.startIndex - delta;
-            let newEnd = newStart + span;
-
-            if (newStart < 0) {
-              newStart = 0;
-              newEnd = Math.min(totalCount - 1, newStart + span);
-            } else if (newEnd >= totalCount) {
-              newEnd = totalCount - 1;
-              newStart = Math.max(0, newEnd - span);
-            }
-
-            return { startIndex: newStart, endIndex: newEnd };
-          });
-
-          setDragStartLabel(label);
-        }
+        return;
       }
+
+      if (!isPanModeActive) {
+        return;
+      }
+
+      const startIdx = findIndexByLabel(dragStartLabel);
+      const currentIdx = findIndexByLabel(label);
+
+      if (startIdx < 0 || currentIdx < 0 || startIdx === currentIdx) {
+        return;
+      }
+
+      const delta = currentIdx - startIdx;
+
+      setRange((prev) => {
+        const span = prev.endIndex - prev.startIndex;
+
+        let newStart = prev.startIndex - delta;
+        let newEnd = newStart + span;
+
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = Math.min(totalCount - 1, span);
+        } else if (newEnd >= totalCount) {
+          newEnd = totalCount - 1;
+          newStart = Math.max(0, newEnd - span);
+        }
+
+        return {
+          startIndex: newStart,
+          endIndex: newEnd,
+        };
+      });
+
+      setDragStartLabel(label);
     },
-    [isMouseDown, isBoxZoomActive, dragStartLabel, findIndexByLabel, totalCount]
+    [
+      isMouseDown,
+      isBoxZoomActive,
+      isPanModeActive,
+      dragStartLabel,
+      findIndexByLabel,
+      totalCount,
+    ]
   );
 
   const handleMouseUp = useCallback(() => {
     setIsMouseDown(false);
     setDragStartLabel(null);
 
-    if (isBoxZoomActive && refAreaLeft !== null && refAreaRight !== null) {
-      if (refAreaLeft !== refAreaRight) {
-        const idx1 = findIndexByLabel(refAreaLeft);
-        const idx2 = findIndexByLabel(refAreaRight);
-        if (idx1 >= 0 && idx2 >= 0) {
-          const s = Math.min(idx1, idx2);
-          const e = Math.max(idx1, idx2);
-          if (e - s >= 2) {
-            setRange({
-              startIndex: Math.max(0, s),
-              endIndex: Math.min(totalCount - 1, e),
-            });
-          }
-        }
-      }
+    if (
+      !isBoxZoomActive ||
+      refAreaLeft === null ||
+      refAreaRight === null ||
+      refAreaLeft === refAreaRight
+    ) {
       setRefAreaLeft(null);
       setRefAreaRight(null);
+      return;
     }
-  }, [isBoxZoomActive, refAreaLeft, refAreaRight, findIndexByLabel, totalCount]);
+
+    const idx1 = findIndexByLabel(refAreaLeft);
+    const idx2 = findIndexByLabel(refAreaRight);
+
+    if (idx1 >= 0 && idx2 >= 0) {
+      const start = Math.min(idx1, idx2);
+      const end = Math.max(idx1, idx2);
+
+      if (end - start >= 2) {
+        setRange({
+          startIndex: Math.max(0, start),
+          endIndex: Math.min(totalCount - 1, end),
+        });
+      }
+    }
+
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  }, [
+    isBoxZoomActive,
+    refAreaLeft,
+    refAreaRight,
+    findIndexByLabel,
+    totalCount,
+  ]);
+
+  // Prevent a stuck drag state when the pointer is released outside the chart.
+  useEffect(() => {
+    const handleWindowMouseUp = () => {
+      if (isMouseDown) {
+        handleMouseUp();
+      }
+    };
+
+    window.addEventListener("mouseup", handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+    };
+  }, [isMouseDown, handleMouseUp]);
 
   const visibleData = useMemo(() => {
-    if (data.length === 0) return [];
-    const s = Math.max(0, Math.min(range.startIndex, data.length - 1));
-    const e = Math.max(s, Math.min(range.endIndex, data.length - 1));
-    return data.slice(s, e + 1);
+    if (data.length === 0) {
+      return [];
+    }
+
+    const start = Math.max(
+      0,
+      Math.min(range.startIndex, data.length - 1)
+    );
+
+    const end = Math.max(
+      start,
+      Math.min(range.endIndex, data.length - 1)
+    );
+
+    return data.slice(start, end + 1);
   }, [data, range.startIndex, range.endIndex]);
 
   return {
