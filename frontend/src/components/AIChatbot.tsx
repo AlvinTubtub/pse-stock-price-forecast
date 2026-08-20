@@ -12,11 +12,11 @@ interface Message {
 }
 
 const STARTER_QUESTIONS = [
-  "What does MASE mean?",
-  "Why was this model selected?",
-  "Explain this forecast.",
-  "What does the Backtest chart show?",
-  "How does ARIMA differ from LSTM?",
+  "What does the forecasted price mean?",
+  "How accurate is this stock prediction?",
+  "What do RMSE, MAE, and R² mean?",
+  "Why was this model chosen?",
+  "What is the Backtest chart showing?",
 ];
 
 /**
