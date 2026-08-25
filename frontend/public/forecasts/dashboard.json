@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-23T12:18:03.450512+08:00",
-  "forecastDate": "2026-08-24",
-  "lastRunAt": "2026-08-20T08:02:07+00:00",
+  "generatedAt": "2026-08-25T16:01:57.811946+08:00",
+  "forecastDate": "2026-08-26",
+  "lastRunAt": "2026-08-25T08:01:52+00:00",
   "status": "ok",
   "totalCompanies": 15,
   "missingCompanies": [],
@@ -28,32 +28,32 @@
     }
   ],
   "marketSummary": {
-    "gainers": 5,
-    "losers": 8,
-    "unchanged": 2
+    "gainers": 3,
+    "losers": 9,
+    "unchanged": 3
   },
   "topGainer": {
-    "symbol": "SHLPH",
-    "name": "Pilipinas Shell Petroleum Corp.",
+    "symbol": "JFC",
+    "name": "Jollibee Foods Corporation",
     "sector": "Industrial",
-    "latestClose": 8.42,
-    "predictedClose": 8.44,
-    "pctChange": 0.24,
+    "latestClose": 160.7,
+    "predictedClose": 161.04,
+    "pctChange": 0.21,
     "direction": "bullish",
     "bestModel": "ARIMA",
-    "confidence": 97.8,
-    "forecastDate": "2026-08-24"
+    "confidence": 98.3,
+    "forecastDate": "2026-08-26"
   },
   "topLoser": {
     "symbol": "APX",
     "name": "Apex Mining Co., Inc.",
     "sector": "Mining and Oil",
-    "latestClose": 15.58,
-    "predictedClose": 15.48,
-    "pctChange": -0.64,
+    "latestClose": 16.18,
+    "predictedClose": 16.08,
+    "pctChange": -0.62,
     "direction": "bearish",
     "bestModel": "LSTM",
     "confidence": 96.5,
-    "forecastDate": "2026-08-24"
+    "forecastDate": "2026-08-26"
   }
 }

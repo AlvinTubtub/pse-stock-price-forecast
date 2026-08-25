@@ -2,11 +2,11 @@
   "symbol": "BPI",
   "name": "Bank of the Philippine Islands",
   "sector": "Financials",
-  "previousClose": 107.3,
-  "predictedClose": 107.22,
-  "pesoChange": -0.08,
-  "pctChange": -0.07,
-  "direction": "bearish",
+  "previousClose": 105.5,
+  "predictedClose": 105.67,
+  "pesoChange": 0.17,
+  "pctChange": 0.16,
+  "direction": "bullish",
   "model": "Lag-Informed Regression",
   "confidence": 93.9,
   "metrics": {
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 107.22,
-    "arima": 107.27,
-    "lstm": 106.07
+    "lag": 105.67,
+    "arima": 105.69,
+    "lstm": 105.87
   },
   "ohlcv": [
     {
@@ -12993,11 +12993,25 @@
       "low": 105.8,
       "close": 107.3,
       "volume": 96565112
+    },
+    {
+      "date": "2026-08-24",
+      "open": 107.3,
+      "high": 107.8,
+      "low": 106.0,
+      "close": 106.1,
+      "volume": 220627124
+    },
+    {
+      "date": "2026-08-25",
+      "open": 106.2,
+      "high": 106.5,
+      "low": 105.3,
+      "close": 105.5,
+      "volume": 48880738
     }
   ],
   "backtestDates": [
-    "2026-05-28",
-    "2026-05-29",
     "2026-06-01",
     "2026-06-02",
     "2026-06-03",
@@ -13055,11 +13069,11 @@
     "2026-08-17",
     "2026-08-18",
     "2026-08-19",
-    "2026-08-20"
+    "2026-08-20",
+    "2026-08-24",
+    "2026-08-25"
   ],
   "backtestActual": [
-    90.35,
-    93.9,
     93.5,
     93.0,
     92.85,
@@ -13117,7 +13131,9 @@
     106.9,
     107.5,
     107.4,
-    107.3
+    107.3,
+    106.1,
+    105.5
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13307,8 +13323,6 @@
       107.3443640768528
     ],
     "Naive baseline": [
-      92.0,
-      90.35,
       93.9,
       93.5,
       93.0,
@@ -13366,10 +13380,12 @@
       104.0,
       106.9,
       107.5,
-      107.4
+      107.4,
+      107.3,
+      106.1
     ]
   },
-  "forecastDate": "2026-08-24",
-  "dataAsOf": null,
-  "inferenceAt": null
+  "forecastDate": "2026-08-26",
+  "dataAsOf": "2026-08-25",
+  "inferenceAt": "2026-08-25T16:01:55+08:00"
 }

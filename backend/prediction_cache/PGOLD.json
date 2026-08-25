@@ -27,9 +27,9 @@
     }
   },
   "next_close": {
-    "lag": 40.1,
-    "arima": 40.11,
-    "lstm": 40.63
+    "lag": 40.75,
+    "arima": 40.72,
+    "lstm": 41.18
   },
   "backtest30": [
     39.30109580463368,
@@ -4916,5 +4916,12 @@
       41.335946917533875,
       40.891361236572266
     ]
+  },
+  "inference_metadata": {
+    "data_as_of": "2026-08-25",
+    "forecast_for": "2026-08-26",
+    "inference_at": "2026-08-25T16:01:55+08:00",
+    "models_retrained": false,
+    "model_source": "weekly_persisted_artifacts"
   }
 }
