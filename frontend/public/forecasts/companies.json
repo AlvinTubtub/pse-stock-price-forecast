@@ -3,157 +3,157 @@
     "symbol": "SECB",
     "name": "Security Bank Corporation",
     "sector": "Financials",
-    "latestClose": 66.95,
-    "predictedClose": 66.89,
+    "latestClose": 66.2,
+    "predictedClose": 66.14,
     "pctChange": -0.09,
     "direction": "bearish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 90.4,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "BPI",
     "name": "Bank of the Philippine Islands",
     "sector": "Financials",
-    "latestClose": 105.5,
-    "predictedClose": 105.67,
-    "pctChange": 0.16,
+    "latestClose": 105.0,
+    "predictedClose": 105.11,
+    "pctChange": 0.1,
     "direction": "bullish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 93.9,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "MBT",
     "name": "Metropolitan Bank & Trust Co.",
     "sector": "Financials",
-    "latestClose": 67.65,
-    "predictedClose": 67.7,
-    "pctChange": 0.07,
+    "latestClose": 67.55,
+    "predictedClose": 67.61,
+    "pctChange": 0.09,
     "direction": "bullish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 86.6,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "MER",
     "name": "Manila Electric Company",
     "sector": "Industrial",
-    "latestClose": 479.0,
-    "predictedClose": 476.81,
-    "pctChange": -0.46,
+    "latestClose": 482.0,
+    "predictedClose": 479.29,
+    "pctChange": -0.56,
     "direction": "bearish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 92.9,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "JFC",
     "name": "Jollibee Foods Corporation",
     "sector": "Industrial",
-    "latestClose": 160.7,
-    "predictedClose": 161.04,
-    "pctChange": 0.21,
+    "latestClose": 161.2,
+    "predictedClose": 161.53,
+    "pctChange": 0.2,
     "direction": "bullish",
     "bestModel": "ARIMA",
     "confidence": 98.3,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "SHLPH",
     "name": "Pilipinas Shell Petroleum Corp.",
     "sector": "Industrial",
-    "latestClose": 8.31,
-    "predictedClose": 8.3,
-    "pctChange": -0.12,
+    "latestClose": 8.13,
+    "predictedClose": 8.11,
+    "pctChange": -0.25,
     "direction": "bearish",
     "bestModel": "ARIMA",
     "confidence": 97.8,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "MEG",
     "name": "Megaworld Corporation",
     "sector": "Property",
-    "latestClose": 2.29,
-    "predictedClose": 2.29,
+    "latestClose": 2.3,
+    "predictedClose": 2.3,
     "pctChange": 0.0,
     "direction": "bullish",
     "bestModel": "LSTM",
     "confidence": 92.0,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "ALI",
     "name": "Ayala Land, Inc.",
     "sector": "Property",
-    "latestClose": 15.8,
-    "predictedClose": 15.78,
+    "latestClose": 15.4,
+    "predictedClose": 15.38,
     "pctChange": -0.13,
     "direction": "bearish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 98.6,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "SMPH",
     "name": "SM Prime Holdings, Inc.",
     "sector": "Property",
     "latestClose": 18.1,
-    "predictedClose": 18.1,
-    "pctChange": 0.0,
-    "direction": "bullish",
+    "predictedClose": 18.09,
+    "pctChange": -0.06,
+    "direction": "bearish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 95.4,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "GLO",
     "name": "Globe Telecom, Inc.",
     "sector": "Services",
-    "latestClose": 1682.0,
-    "predictedClose": 1681.9,
+    "latestClose": 1670.0,
+    "predictedClose": 1669.9,
     "pctChange": -0.01,
     "direction": "bearish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 94.4,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "PGOLD",
     "name": "Puregold Price Club, Inc.",
     "sector": "Services",
-    "latestClose": 40.75,
-    "predictedClose": 40.72,
-    "pctChange": -0.07,
-    "direction": "bearish",
+    "latestClose": 40.0,
+    "predictedClose": 40.05,
+    "pctChange": 0.12,
+    "direction": "bullish",
     "bestModel": "ARIMA",
     "confidence": 89.9,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "ICT",
     "name": "Intl. Container Terminal Services",
     "sector": "Services",
-    "latestClose": 949.0,
-    "predictedClose": 948.76,
-    "pctChange": -0.03,
-    "direction": "bearish",
+    "latestClose": 920.5,
+    "predictedClose": 921.4,
+    "pctChange": 0.1,
+    "direction": "bullish",
     "bestModel": "LSTM",
     "confidence": 98.9,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "APX",
     "name": "Apex Mining Co., Inc.",
     "sector": "Mining and Oil",
-    "latestClose": 16.18,
-    "predictedClose": 16.08,
-    "pctChange": -0.62,
+    "latestClose": 16.0,
+    "predictedClose": 15.91,
+    "pctChange": -0.56,
     "direction": "bearish",
     "bestModel": "LSTM",
     "confidence": 96.5,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "NIKL",
@@ -165,18 +165,18 @@
     "direction": "bullish",
     "bestModel": "ARIMA",
     "confidence": 95.0,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   },
   {
     "symbol": "SCC",
     "name": "Semirara Mining and Power Corp.",
     "sector": "Mining and Oil",
-    "latestClose": 18.4,
-    "predictedClose": 18.39,
-    "pctChange": -0.05,
-    "direction": "bearish",
+    "latestClose": 18.6,
+    "predictedClose": 18.61,
+    "pctChange": 0.05,
+    "direction": "bullish",
     "bestModel": "ARIMA",
     "confidence": 96.9,
-    "forecastDate": "2026-08-26"
+    "forecastDate": "2026-08-27"
   }
 ]

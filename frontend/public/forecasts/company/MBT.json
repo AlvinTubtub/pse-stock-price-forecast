@@ -2,10 +2,10 @@
   "symbol": "MBT",
   "name": "Metropolitan Bank & Trust Co.",
   "sector": "Financials",
-  "previousClose": 67.65,
-  "predictedClose": 67.7,
-  "pesoChange": 0.05,
-  "pctChange": 0.07,
+  "previousClose": 67.55,
+  "predictedClose": 67.61,
+  "pesoChange": 0.06,
+  "pctChange": 0.09,
   "direction": "bullish",
   "model": "Lag-Informed Regression",
   "confidence": 86.6,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 67.7,
-    "arima": 67.66,
-    "lstm": 66.9
+    "lag": 67.61,
+    "arima": 67.57,
+    "lstm": 67.28
   },
   "ohlcv": [
     {
@@ -13009,10 +13009,17 @@
       "low": 67.1,
       "close": 67.65,
       "volume": 157543702
+    },
+    {
+      "date": "2026-08-26",
+      "open": 67.65,
+      "high": 67.9,
+      "low": 67.45,
+      "close": 67.55,
+      "volume": 80055594
     }
   ],
   "backtestDates": [
-    "2026-06-01",
     "2026-06-02",
     "2026-06-03",
     "2026-06-04",
@@ -13071,10 +13078,10 @@
     "2026-08-19",
     "2026-08-20",
     "2026-08-24",
-    "2026-08-25"
+    "2026-08-25",
+    "2026-08-26"
   ],
   "backtestActual": [
-    63.5,
     64.75,
     63.0,
     63.8,
@@ -13133,7 +13140,8 @@
     67.45,
     67.7,
     67.7,
-    67.65
+    67.65,
+    67.55
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13324,7 +13332,6 @@
     ],
     "Naive baseline": [
       63.5,
-      63.5,
       64.75,
       63.0,
       63.8,
@@ -13382,10 +13389,11 @@
       68.8,
       67.45,
       67.7,
-      67.7
+      67.7,
+      67.65
     ]
   },
-  "forecastDate": "2026-08-26",
-  "dataAsOf": "2026-08-25",
-  "inferenceAt": "2026-08-25T16:01:55+08:00"
+  "forecastDate": "2026-08-27",
+  "dataAsOf": "2026-08-26",
+  "inferenceAt": "2026-08-26T16:02:00+08:00"
 }

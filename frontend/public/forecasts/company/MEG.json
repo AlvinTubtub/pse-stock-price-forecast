@@ -2,8 +2,8 @@
   "symbol": "MEG",
   "name": "Megaworld Corporation",
   "sector": "Property",
-  "previousClose": 2.29,
-  "predictedClose": 2.29,
+  "previousClose": 2.3,
+  "predictedClose": 2.3,
   "pesoChange": 0.0,
   "pctChange": 0.0,
   "direction": "bullish",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 2.29,
-    "arima": 2.29,
-    "lstm": 2.29
+    "lag": 2.3,
+    "arima": 2.3,
+    "lstm": 2.3
   },
   "ohlcv": [
     {
@@ -13009,10 +13009,17 @@
       "low": 2.28,
       "close": 2.29,
       "volume": 6101430
+    },
+    {
+      "date": "2026-08-26",
+      "open": 2.27,
+      "high": 2.31,
+      "low": 2.2,
+      "close": 2.3,
+      "volume": 47113750
     }
   ],
   "backtestDates": [
-    "2026-06-01",
     "2026-06-02",
     "2026-06-03",
     "2026-06-04",
@@ -13071,10 +13078,10 @@
     "2026-08-19",
     "2026-08-20",
     "2026-08-24",
-    "2026-08-25"
+    "2026-08-25",
+    "2026-08-26"
   ],
   "backtestActual": [
-    2.05,
     2.06,
     2.05,
     2.03,
@@ -13133,7 +13140,8 @@
     2.34,
     2.37,
     2.35,
-    2.29
+    2.29,
+    2.3
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13323,7 +13331,6 @@
       2.2798697233229177
     ],
     "Naive baseline": [
-      2.08,
       2.05,
       2.06,
       2.05,
@@ -13382,10 +13389,11 @@
       2.28,
       2.34,
       2.37,
-      2.35
+      2.35,
+      2.29
     ]
   },
-  "forecastDate": "2026-08-26",
-  "dataAsOf": "2026-08-25",
-  "inferenceAt": "2026-08-25T16:01:55+08:00"
+  "forecastDate": "2026-08-27",
+  "dataAsOf": "2026-08-26",
+  "inferenceAt": "2026-08-26T16:02:00+08:00"
 }
