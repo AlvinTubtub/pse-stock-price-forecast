@@ -2,10 +2,10 @@
   "symbol": "SHLPH",
   "name": "Pilipinas Shell Petroleum Corp.",
   "sector": "Industrial",
-  "previousClose": 8.13,
-  "predictedClose": 8.11,
-  "pesoChange": -0.02,
-  "pctChange": -0.25,
+  "previousClose": 8.0,
+  "predictedClose": 7.99,
+  "pesoChange": -0.01,
+  "pctChange": -0.12,
   "direction": "bearish",
   "model": "ARIMA",
   "confidence": 97.8,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 8.12,
-    "arima": 8.11,
-    "lstm": 8.32
+    "lag": 7.99,
+    "arima": 7.99,
+    "lstm": 8.31
   },
   "ohlcv": [
     {
@@ -13017,10 +13017,17 @@
       "low": 8.11,
       "close": 8.13,
       "volume": 2489691
+    },
+    {
+      "date": "2026-08-27",
+      "open": 8.14,
+      "high": 8.28,
+      "low": 8.0,
+      "close": 8.0,
+      "volume": 4892140
     }
   ],
   "backtestDates": [
-    "2026-06-02",
     "2026-06-03",
     "2026-06-04",
     "2026-06-05",
@@ -13079,10 +13086,10 @@
     "2026-08-20",
     "2026-08-24",
     "2026-08-25",
-    "2026-08-26"
+    "2026-08-26",
+    "2026-08-27"
   ],
   "backtestActual": [
-    8.88,
     8.66,
     8.66,
     8.88,
@@ -13141,7 +13148,8 @@
     8.42,
     8.21,
     8.31,
-    8.13
+    8.13,
+    8.0
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13331,7 +13339,6 @@
       9.176544547080994
     ],
     "Naive baseline": [
-      8.36,
       8.88,
       8.66,
       8.66,
@@ -13390,10 +13397,11 @@
       8.44,
       8.42,
       8.21,
-      8.31
+      8.31,
+      8.13
     ]
   },
-  "forecastDate": "2026-08-27",
-  "dataAsOf": "2026-08-26",
-  "inferenceAt": "2026-08-26T16:02:00+08:00"
+  "forecastDate": "2026-08-28",
+  "dataAsOf": "2026-08-27",
+  "inferenceAt": "2026-08-27T16:01:52+08:00"
 }
