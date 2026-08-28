@@ -1,294 +1,499 @@
-Cross-Sector Next-Day Stock Price Forecasting
-Research-oriented stock forecasting and decision-support platform for selected Philippine Stock Exchange (PSE) companies.
-The system compares three forecasting approaches:
-- Lag-Informed Regression
-- ARIMA
-- LSTM
-A Naive baseline is also evaluated as a benchmark.
-ForecastPH is designed to support the capstone study:
-Cross-Sector Next-Day Stock Price Forecasting of Selected PSE-Listed Companies: A Comparative Study of Lag-Informed Regression, ARIMA, and LSTM
-The platform combines a Python forecasting backend, a Next.js frontend, automated data-processing workflows, model evaluation, statistical testing, deployment-oriented forecasting, and an administrative interface.
-Current Status
-The forecasting and evaluation methodology has been audited and corrected.
-The corrected implementation is now merged into main.
-Major methodology corrections include:
-- Common hold-out target dates across all models
-- Genuine out-of-sample evaluation
-- No future-data leakage or backfilling
-- Walk-forward one-step forecasting
-- Proper development and hold-out separation
-- Expanding-window cross-validation
-- Fold-specific preprocessing
-- Fold-specific PACF lag selection
-- Training-only scaling
-- Correct LSTM validation and refitting procedure
-- Original-price-scale LSTM model selection
-- Date-aligned Naive baseline
-- Naive-first Diebold-Mariano testing
-- Holm multiple-testing correction
-- Moving-block bootstrap robustness testing
-- Friedman and conditional Wilcoxon testing
-- Full-precision backend metrics
-- Formal research artifact separation from deployment artifacts
-- ARIMA fixed-parameter state updating using append(..., refit=False)
-- Formal ARIMA candidate completeness checks
-- Hold-out residual diagnostics
-- Correct RSI zero-gain / zero-loss handling
-- Univariate ΔClose LSTM methodology
-- Reproducible seeds and provenance tracking
-The finalized 15-company formal evaluation was successfully completed using the audited implementation.
-Companies Covered
-ForecastPH currently evaluates 15 selected PSE-listed companies across five sectors.
-Sector	Companies
-Financials	BPI, MBT, SECB
-Industrial	MER, JFC, SHLPH
-Property	MEG, ALI, SMPH
-Services	GLO, PGOLD, ICT
-Mining & Oil	APX, NIKL, SCC
+# ForecastPH
 
+**Cross-Sector Next-Day Stock Price Forecasting of Selected PSE-Listed Companies Using Lag-Informed Regression, ARIMA, and LSTM**
 
-Forecasting Models
-1. Lag-Informed Regression
-The regression pipeline uses lag-informed predictors selected using training data only.
-Key safeguards include:
-- PACF calculated from training-period daily returns
-- PACF recalculated within each cross-validation fold
-- Fold-specific StandardScaler
-- No scaling leakage from validation or hold-out observations
-- Chronological expanding-window validation
-- Genuine out-of-sample evaluation
-The deployment and formal evaluation implementations preserve chronological forecasting behavior.
-2. ARIMA
-ARIMA uses bounded candidate selection and walk-forward forecasting.
-The corrected formal procedure includes:
-- Candidate grid bounded to:
-  - p <= 3
-  - d <= 2
-  - q <= 3
-- ADF-informed differencing priority
-- Candidate must successfully complete all required folds with finite predictions
-- Candidate convergence metadata recorded separately
-- No out-of-range formal fallback order
-- Final model trained on the complete development period
-- Hold-out forecasts generated one step at a time
-During walk-forward hold-out evaluation, the observed value is appended using:
+ForecastPH is a full-stack stock forecasting and research platform for selected companies listed on the Philippine Stock Exchange (PSE). It compares three forecasting approaches—**Lag-Informed Regression**, **ARIMA**, and **LSTM**—using a leakage-controlled, chronological, out-of-sample evaluation methodology.
+
+The system provides next-trading-session forecasts, model evaluation metrics, interactive historical charts, 60-session backtests, forecast-error visualization, model comparison, an AI-assisted explanation layer, and an administrative management interface.
+
+The repository contains both the **forecasting backend** and the **Next.js frontend** used for the deployed ForecastPH dashboard.
+
+---
+
+## Table of Contents
+
+- [Project Overview](#project-overview)
+- [Research Objective](#research-objective)
+- [Tracked Companies](#tracked-companies)
+- [Forecasting Models](#forecasting-models)
+- [Corrected Research Methodology](#corrected-research-methodology)
+- [Model Evaluation](#model-evaluation)
+- [Statistical Testing](#statistical-testing)
+- [Backtest Methodology](#backtest-methodology)
+- [Formal Research vs Deployment](#formal-research-vs-deployment)
+- [System Architecture](#system-architecture)
+- [Frontend Features](#frontend-features)
+- [Admin Features](#admin-features)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Running the Backend](#running-the-backend)
+- [Running the Frontend](#running-the-frontend)
+- [Testing](#testing)
+- [Forecast Artifact Generation](#forecast-artifact-generation)
+- [Deployment Workflow](#deployment-workflow)
+- [Scheduled Model Lifecycle](#scheduled-model-lifecycle)
+- [Vercel Deployment](#vercel-deployment)
+- [Important Methodology Notes](#important-methodology-notes)
+- [Research Interpretation](#research-interpretation)
+- [Technology Stack](#technology-stack)
+- [Disclaimer](#disclaimer)
+
+---
+
+## Project Overview
+
+ForecastPH is designed to support beginner and intermediate users who want to understand how different forecasting models behave across multiple sectors of the Philippine stock market.
+
+The system separates computationally intensive forecasting from frontend delivery:
+
+```text
+PSE Market Data
+      │
+      ▼
+Data Processing / Feature Engineering
+      │
+      ├── Lag-Informed Regression
+      ├── ARIMA
+      └── LSTM
+      │
+      ▼
+Evaluation / Model Selection
+      │
+      ▼
+Deployment Forecast Artifacts
+      │
+      ▼
+frontend/public/forecasts/
+      │
+      ▼
+Next.js Dashboard
+      │
+      ▼
+Vercel
+```
+
+The frontend primarily consumes generated forecast artifacts rather than executing model training inside Vercel.
+
+---
+
+## Research Objective
+
+The project evaluates whether different forecasting approaches provide different levels of next-day closing-price forecasting accuracy across selected PSE-listed companies and sectors.
+
+The three principal forecasting models are:
+
+1. **Lag-Informed Regression**
+2. **ARIMA**
+3. **Long Short-Term Memory (LSTM)**
+
+A **Naive Baseline** is also included as a benchmark.
+
+The primary forecasting target is:
+
+```text
+Next trading session closing price
+```
+
+The project does not assume that one model must be superior for every company.
+
+---
+
+## Tracked Companies
+
+ForecastPH currently covers **15 PSE-listed companies across five sectors**.
+
+| Sector | Companies |
+|---|---|
+| Financials | BPI, MBT, SECB |
+| Industrial | MER, JFC, SHLPH |
+| Property | MEG, ALI, SMPH |
+| Services | GLO, PGOLD, ICT |
+| Mining & Oil | APX, NIKL, SCC |
+
+Total:
+
+```text
+15 companies
+5 sectors
+3 principal forecasting models
+1 naive benchmark
+```
+
+---
+
+## Forecasting Models
+
+### Lag-Informed Regression
+
+The regression pipeline uses lag-based features derived from historical observations.
+
+The corrected methodology includes:
+
+- chronological training and validation;
+- PACF applied to training-period daily returns;
+- fold-specific PACF during rolling validation;
+- feature selection without future leakage;
+- `StandardScaler` fitted independently inside each rolling fold;
+- no future information used in preprocessing;
+- genuine out-of-sample prediction generation.
+
+The model is designed to provide a comparatively interpretable statistical forecasting approach.
+
+---
+
+### ARIMA
+
+ForecastPH uses AutoRegressive Integrated Moving Average models for univariate time-series forecasting.
+
+The corrected ARIMA methodology includes:
+
+- bounded ARIMA candidate search;
+- chronological expanding-window validation;
+- candidate completeness across validation folds;
+- finite prediction validation;
+- ADF-supported differencing prioritization;
+- hold-out evaluation on unseen observations;
+- convergence metadata recording;
+- Ljung-Box diagnostics on formal hold-out forecast errors.
+
+For walk-forward forecasting, the deployed implementation uses:
+
+```python
 append(actual, refit=False)
-This updates the ARIMA model state without re-estimating coefficients at every forecast origin.
-The methodology therefore represents:
-One-step-ahead walk-forward forecasting with fixed estimated ARIMA parameters and sequential state updating.
+```
 
-3. LSTM
-The formal LSTM implementation predicts daily price changes rather than raw closing prices.
-Target:
-ΔClose_t = Close_t - Close_(t-1)
-The predicted change is reconstructed into price form:
-Predicted Close_t = Close_(t-1) + Predicted ΔClose_t
-The corrected LSTM methodology includes:
-- Univariate ΔClose input
-- Min-Max scaling fitted on training data only
-- 5-fold expanding-window cross-validation
-- Validation data never used for early-stopping training
-- Early stopping uses an internal tail from the fold-training portion
-- Maximum 200 epochs
-- Early stopping patience of 10
-- Random seed 42
-- Fresh final model refit after hyperparameter selection
-- Hold-out period remains untouched during model selection
+This updates the ARIMA model state using newly observed values while preserving the estimated coefficients.
+
+Therefore, the methodology should be described as:
+
+> One-step-ahead walk-forward forecasting with fixed estimated ARIMA parameters. At each forecast origin, the newly observed value updates the model state without re-estimating the ARIMA coefficients.
+
+---
+
+### LSTM
+
+The formal LSTM implementation predicts **daily changes in closing price**, rather than directly fitting raw closing-price levels.
+
+Key methodology:
+
+- univariate `ΔClose` target;
+- Min-Max scaling fitted using training data only;
+- five-fold expanding-window cross-validation;
+- fold-specific scaling;
+- early stopping based only on an internal tail of the fold-training data;
+- validation folds remain untouched by early stopping;
+- original-price reconstruction before evaluation;
+- hyperparameter selection using mean reconstructed-price RMSE;
+- fresh final model refit after hyperparameter selection;
+- frozen hold-out evaluation.
+
 Hyperparameter grid:
-Parameter	Values
-Lookback	5, 10, 20, 30
-Hidden units	25, 50, 100
-Learning rate	0.01, 0.001
-Batch size	16, 32
 
+| Parameter | Values |
+|---|---|
+| Lookback | 5, 10, 20, 30 |
+| Hidden units | 25, 50, 100 |
+| Learning rate | 0.01, 0.001 |
+| Batch size | 16, 32 |
 
-This produces 48 candidate configurations.
-With 5 cross-validation folds:
-48 configurations × 5 folds = 240 CV fits per company
-A fresh final LSTM is then trained using the selected configuration.
-The winning configuration is selected using mean reconstructed-price RMSE across validation folds rather than scaled validation loss.
-Data Splitting
-The corrected formal evaluation uses a chronological split.
-Development period: 85%
-Hold-out period: 15%
-The development period is used for:
-- Hyperparameter selection
-- Cross-validation
-- PACF selection
-- Scaling
-- Model fitting decisions
-The hold-out period is reserved strictly for final out-of-sample evaluation.
-All models are evaluated on the same target dates.
-No model is allowed to use:
-- Future observations
-- Hold-out information during tuning
-- Backfilled future values
-- Array truncation to artificially align results
-Alignment is performed explicitly by target date.
-Walk-Forward Evaluation
-ForecastPH uses one-step-ahead chronological forecasting.
-Conceptually:
-Training / development history
-        ↓
-Forecast next trading session
-        ↓
-Observe actual closing price
-        ↓
-Update model state/history
-        ↓
-Forecast following trading session
-This produces genuine out-of-sample predictions suitable for evaluating next-day forecasting performance.
-Evaluation Metrics
-ForecastPH evaluates:
-- RMSE
-- MAE
-- MASE
-- R²
-RMSE
-Root Mean Squared Error:
-RMSE = sqrt(mean((Actual - Predicted)^2))
-Lower values indicate smaller forecast errors.
-MAE
-Mean Absolute Error:
-MAE = mean(abs(Actual - Predicted))
-Lower values are better.
-MASE
-Mean Absolute Scaled Error compares a model against the Naive benchmark.
-MASE < 1 → model outperforms Naive on average
-MASE = 1 → approximately equal to Naive
-MASE > 1 → worse than Naive
-A common company-level scaling denominator is calculated from the development-period Naive forecast error.
-R²
-R² is included as a supplementary goodness-of-fit metric.
-It is not interpreted as a forecast probability or forecast confidence score.
-Naive Baseline
-ForecastPH includes a one-step Naive benchmark:
-Forecast_t = Actual_(t-1)
-The Naive model is treated as a full evaluation model rather than only as a MASE denominator.
-It participates in:
-- Common target-date alignment
-- RMSE
-- MAE
-- MASE
-- R²
-- Diebold-Mariano testing
-- Across-company Friedman analysis
-Statistical Evaluation
-ForecastPH uses a hierarchical statistical-testing framework.
-Stage 1 — Principal Models vs Naive
-Each principal model is first compared against the Naive benchmark using the Diebold-Mariano test.
-Principal models:
-- Lag-Informed Regression
-- ARIMA
-- LSTM
-Primary loss:
-Squared forecast error
-Robustness loss:
-Absolute forecast error
-Multiple comparisons are controlled using Holm correction.
-Only models that significantly outperform Naive in the favorable direction are eligible for principal pairwise testing.
-Diebold-Mariano Test
-The implementation includes:
-- Newey-West HAC variance
-- Harvey-Leybourne-Newbold correction
-- Holm-adjusted significance testing
-- Date-aligned forecast errors
-The primary analysis uses squared-error loss.
-Absolute-error DM tests are retained as robustness evidence.
-Moving-Block Bootstrap
-ForecastPH includes moving-block bootstrap robustness analysis.
-Configuration:
-Replications: 5000
-Random seed: 42
-The block bootstrap preserves short-range temporal dependence better than independent resampling.
-Across-Company Statistical Testing
-Across the 15 companies, ForecastPH compares unrounded MASE values for:
-- Lag-Informed Regression
-- ARIMA
-- LSTM
-- Naive
-The workflow is:
-Friedman test
-        ↓
-Fixed-seed permutation robustness test
-        ↓
-If significant:
-    Holm-adjusted Wilcoxon pairwise tests
-Wilcoxon post-hoc testing is not performed if the omnibus test is not significant.
-Final Formal 15-Company Evaluation
-The definitive formal run was:
-FORMAL_15COMP_20260828_01
-The run covered all 15 companies.
-Each company contained:
-243 hold-out trading sessions
-4 evaluated models
-972 prediction rows per company
-Models:
+Total configurations:
+
+```text
+4 × 3 × 2 × 2 = 48
+```
+
+With five validation folds:
+
+```text
+48 × 5 = 240 cross-validation fits per company
+```
+
+A fresh final LSTM is then fitted after hyperparameter selection.
+
+Maximum epochs:
+
+```text
+200
+```
+
+Early-stopping patience:
+
+```text
+10
+```
+
+Random seed:
+
+```text
+42
+```
+
+---
+
+## Corrected Research Methodology
+
+ForecastPH separates:
+
+```text
+development data
+```
+
+from:
+
+```text
+formal hold-out data
+```
+
+using chronological splitting.
+
+The formal methodology uses approximately:
+
+```text
+85% development
+15% hold-out
+```
+
+No random train/test shuffling is used.
+
+The final audited formal evaluation uses **target-date alignment**, ensuring that all forecasting models are evaluated against the same observations.
+
+For each company:
+
+```text
 Lag-Informed Regression
 ARIMA
 LSTM
-Naive
-All companies used the same chronological development/hold-out structure.
-The final hold-out period covered:
-2025-09-01 → 2026-08-27
-Final Principal-Model RMSE Winners
-The lowest-RMSE principal model by company produced:
-ARIMA                  6 companies
-Lag-Informed Regression 5 companies
-LSTM                   4 companies
-No principal model reached the predefined consistency threshold of:
-8 out of 15 companies
-Therefore, the study did not identify one universally dominant forecasting model across the complete company sample.
-Across-Company Final Statistical Result
-The final Friedman test on company-level MASE values produced:
-Friedman statistic ≈ 0.44
-p-value ≈ 0.932
-Permutation robustness result:
-Permutation p-value ≈ 0.944
-Permutations = 10000
-Seed = 42
-The omnibus result was not statistically significant.
-Therefore:
-Wilcoxon post-hoc tests were not executed.
-The final evidence does not support claiming that one forecasting method is statistically superior across all 15 companies.
-Interpretation of Forecast Accuracy
-The corrected methodology improves the validity and reliability of the forecasting experiment.
-It reduces methodological problems such as:
-- Data leakage
-- Inconsistent model dates
-- Improper validation
-- Scaling leakage
-- Incorrect LSTM model selection
-- Misaligned baseline comparison
-- Invalid statistical comparisons
-However, methodological correction does not guarantee that every future forecast will have a lower numerical error.
-The appropriate interpretation is:
-The corrected implementation provides a more reliable and reproducible estimate of true out-of-sample forecasting performance.
+Naive Baseline
+```
 
-Forecast accuracy still depends on:
-- Company-specific price behavior
-- Market volatility
-- Structural changes
-- Unexpected economic events
-- Company disclosures
-- Political and macroeconomic shocks
-- Liquidity
-- Non-stationarity
-Residual Diagnostics
-Formal evaluation includes diagnostic information such as:
-- Ljung-Box testing
-- Shapiro-Wilk testing
-- ARCH / volatility diagnostics
-- Regression residual autocorrelation
-- LSTM training and stopping information
-- Naive skill indicators
-- ARIMA convergence metadata
-For ARIMA, Ljung-Box diagnostics are evaluated using formal hold-out forecast errors.
-Formal vs Deployment Artifacts
-ForecastPH separates research evidence from production forecasting artifacts.
-Formal Research Artifacts
-Formal evaluation outputs are immutable once finalized.
-Structure:
+must share the same formal hold-out target dates.
+
+This prevents misleading comparisons caused by evaluating models on different subsets of the test period.
+
+---
+
+## Model Evaluation
+
+ForecastPH reports the following forecasting metrics.
+
+### RMSE
+
+Root Mean Squared Error:
+
+```text
+Lower = better
+```
+
+RMSE gives greater weight to relatively large forecast errors.
+
+---
+
+### MAE
+
+Mean Absolute Error:
+
+```text
+Lower = better
+```
+
+MAE represents the average absolute difference between predicted and actual closing prices.
+
+---
+
+### MASE
+
+Mean Absolute Scaled Error compares model forecast error with a naive benchmark.
+
+Interpretation:
+
+```text
+MASE < 1  → better than naive benchmark
+MASE = 1  → approximately equal to naive
+MASE > 1  → worse than naive benchmark
+```
+
+A common development-period naive MAE denominator is used per company so models remain comparable.
+
+---
+
+### R²
+
+R² is provided as a supplementary goodness-of-fit measure.
+
+It must **not** be interpreted as forecast confidence or prediction probability.
+
+---
+
+## Statistical Testing
+
+ForecastPH includes formal statistical testing in addition to descriptive error metrics.
+
+### Level 1: Model vs Naive Baseline
+
+Each principal model is tested against the naive benchmark.
+
+Primary loss:
+
+```text
+Squared forecast error
+```
+
+Robustness loss:
+
+```text
+Absolute forecast error
+```
+
+Testing includes:
+
+- Diebold-Mariano testing;
+- Newey-West HAC variance;
+- Harvey-Leybourne-Newbold correction;
+- Holm multiple-comparison correction.
+
+Only models that significantly outperform the Naive Baseline in the predefined favorable direction can proceed to the principal pairwise comparison stage.
+
+---
+
+### Level 2: Principal Model Comparison
+
+Pairwise principal-model comparisons are performed only when at least two models pass the Naive gate for a company.
+
+This prevents declaring one sophisticated model superior to another when neither can establish evidence of improvement over the baseline.
+
+---
+
+### Moving-Block Bootstrap
+
+ForecastPH also applies moving-block bootstrap procedures to preserve temporal dependence.
+
+Configuration:
+
+```text
+Bootstrap repetitions: 5000
+Random seed: 42
+```
+
+---
+
+### Across-Company Comparison
+
+Unrounded company-level MASE values are used for overall model comparison.
+
+Models included:
+
+```text
+Lag-Informed Regression
+ARIMA
+LSTM
+Naive Baseline
+```
+
+The analysis uses:
+
+1. Friedman rank test;
+2. fixed-seed permutation robustness testing;
+3. Wilcoxon post-hoc testing only when the overall test is significant;
+4. Holm correction for multiple comparisons.
+
+This avoids unnecessary post-hoc inference when the global null hypothesis is not rejected.
+
+---
+
+## Backtest Methodology
+
+The dashboard contains:
+
+### Backtest: Predicted vs. Actual — Last 60 Sessions
+
+The chart must display genuine historical out-of-sample forecasts rather than reconstructed or artificially shifted values.
+
+Correct data flow:
+
+```text
+chronological historical observations
+        │
+        ▼
+genuine OOS / walk-forward forecasts
+        │
+        ▼
+target-date alignment
+        │
+        ▼
+common sessions across models
+        │
+        ▼
+latest 60 common trading sessions
+        │
+        ▼
+frontend JSON
+        │
+        ▼
+Vercel chart
+```
+
+The frontend consumes:
+
+```text
+backtestDates
+backtestActual
+backtestByModel
+```
+
+from:
+
+```text
+frontend/public/forecasts/company/<SYMBOL>.json
+```
+
+These fields should be generated automatically by the backend artifact exporter.
+
+They should **not be maintained through manual JSON editing**.
+
+---
+
+### Forecast Error Over Time
+
+Forecast Error Over Time must use the exact same aligned observations used by the 60-session backtest.
+
+The error definition is:
+
+```text
+Forecast Error = Predicted Close − Actual Close
+```
+
+Therefore:
+
+```text
+positive error → model predicted above actual
+negative error → model predicted below actual
+zero error     → exact prediction
+```
+
+Both charts must share:
+
+- identical dates;
+- identical actual closing prices;
+- identical model prediction arrays;
+- identical out-of-sample methodology.
+
+---
+
+## Formal Research vs Deployment
+
+ForecastPH deliberately separates immutable research evidence from operational forecasting.
+
+### Formal Research Artifacts
+
+Formal research runs are stored under:
+
+```text
+backend/results/formal/<RUN_ID>/
+```
+
+Example structure:
+
+```text
 backend/results/formal/<RUN_ID>/
 ├── split_manifest.json
 ├── methodology_manifest.json
@@ -300,287 +505,759 @@ backend/results/formal/<RUN_ID>/
         ├── holdout_predictions.csv
         ├── metrics.json
         └── diagnostics.json
-Formal artifacts are used for:
-- Capstone evidence
-- Reproducibility
-- Methodology verification
-- Statistical analysis
-- Research reporting
-They are not intended to serve directly as live Vercel forecasting data.
-Deployment Artifacts
-Live forecasting models are stored separately from the formal research experiment.
-Example structure:
+```
+
+Formal runs are intended to be:
+
+```text
+immutable
+reproducible
+auditable
+```
+
+Once finalized, they should not be modified by normal deployment operations.
+
+---
+
+### Deployment Artifacts
+
+Operational models are separate from formal research artifacts.
+
+Expected layout:
+
+```text
 backend/models/deployment/current/
 ├── lag_regression/
-│   └── <SYMBOL>.pkl
 ├── arima/
-│   └── <SYMBOL>.pkl
 ├── lstm/
-│   └── <SYMBOL>.pth
 └── deployment_manifest.json
-Deployment models may be refreshed according to the production schedule.
-Formal research artifacts must remain unchanged.
-Production Forecasting Schedule
-ForecastPH separates model retraining from daily inference.
-Weekly Model Retraining
-Every Sunday
-8:00 AM Philippine Time
-The weekly process refreshes deployment-oriented model artifacts using the latest approved methodology.
-Daily Forecasting / Inference
-The production pipeline performs daily data processing and next-session forecasting according to the configured PSE schedule.
-Inference uses deployment models and the latest available market information.
-PSE holidays and non-trading days are handled by the trading-calendar logic.
-Vercel Frontend
-The frontend is built using Next.js and deployed through Vercel.
-The website displays pre-generated forecasting artifacts rather than training machine-learning models inside Vercel.
-Conceptually:
-PSE data
-   ↓
-Python backend
-   ↓
-Feature engineering
-   ↓
-Deployment models
-   ↓
-Next-day inference
-   ↓
-Artifact exporter
-   ↓
-frontend/public/forecasts/
-   ↓
-Vercel
-Company Forecast JSON
-Company pages consume files located under:
-frontend/public/forecasts/company/
-Example:
-frontend/public/forecasts/company/BPI.json
-These files may contain:
-previousClose
-predictedClose
-forecastDate
-dataAsOf
-selected model
-metrics
-nextClose
-OHLCV
-backtestDates
-backtestActual
-backtestByModel
-These JSON files are deployment/frontend outputs.
-They should not be manually edited as a permanent forecasting solution.
-The backend exporter should regenerate them.
-Correct 60-Session Backtest Pipeline
-The following charts are driven by company forecast JSON:
-- Backtest: Predicted vs. Actual (Last 60 Sessions)
-- Forecast Error Over Time
-The intended corrected pipeline is:
-Corrected deployment methodology
-        ↓
-Genuine out-of-sample predictions
-        ↓
-Align Lag-Reg, ARIMA, LSTM and Naive by target date
-        ↓
-Retain common valid trading sessions
-        ↓
-Select latest 60 sessions
-        ↓
-Export:
-    backtestDates
-    backtestActual
-    backtestByModel
-        ↓
-frontend/public/forecasts/company/*.json
-        ↓
-Vercel charts
-The exporter responsible for these frontend fields is:
-backend/scripts/export_forecast_artifacts.py
-The frontend should display the exported backtest instead of recalculating forecasts independently.
-Backtest: Predicted vs. Actual
-The chart compares actual closing prices with genuine historical one-step-ahead model predictions.
-For every plotted session:
-Target date = same for all models
-Actual price = observed close on target date
-Predicted price = forecast generated without seeing target-date actual price
-The chart should display the latest 60 valid common out-of-sample sessions.
-It must not use:
-- Fitted training values
-- Future information
-- Backfilled predictions
-- Independently truncated arrays
-- Artificially reconstructed predictions
-- Different target dates across models
-Forecast Error Over Time
-Forecast Error Over Time uses exactly the same dates and predictions as the Backtest chart.
-Error is defined as:
-Forecast Error = Predicted Close - Actual Close
-Therefore:
-Positive error → model overpredicted
-Negative error → model underpredicted
-Zero → exact prediction
-The chart should not use a separately generated residual dataset if that dataset can become misaligned with the displayed backtest.
-Both charts should be derived from the same aligned 60-session source.
-Frontend Chart Controls
-ForecastPH charts support interactive inspection.
-Controls include:
-+       Zoom in
-−       Zoom out
-Box     Select / zoom range
-Pan     Move horizontally
-Reset   Restore full range
-Mouse controls may include:
-Mouse wheel → Zoom
-Mouse drag  → Pan
-Double-click → Reset
-Next-Day Prediction Chart
-The Next-Day Prediction chart displays:
-- Latest actual close
-- ARIMA next-session forecast
-- Lag-Informed Regression next-session forecast
-- LSTM next-session forecast
-The next-day forecast is separate from the historical 60-session backtest.
-Historical backtests evaluate previous forecasts.
-The next-day chart represents the currently generated future forecast.
-Model Selection
-Principal model selection is based on out-of-sample RMSE.
-The selected model should be chosen from:
-Lag-Informed Regression
-ARIMA
-LSTM
-The Naive baseline remains a benchmark rather than the production forecasting model.
-A lower RMSE indicates better historical out-of-sample accuracy for that company over the evaluated period.
-Statistical significance should be interpreted separately from descriptive RMSE ranking.
-Repository Structure
-Typical project structure:
+```
+
+Deployment models may be retrained according to the production schedule.
+
+Formal artifacts are evidence for the research study.
+
+Deployment artifacts are used for live forecasts.
+
+These two concerns must not be mixed.
+
+---
+
+## System Architecture
+
+```text
+                     ┌─────────────────────┐
+                     │   PSE Market Data   │
+                     └─────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Data Ingestion       │
+                    │ & Preprocessing      │
+                    └──────────┬───────────┘
+                               │
+             ┌─────────────────┼─────────────────┐
+             │                 │                 │
+             ▼                 ▼                 ▼
+      ┌────────────┐    ┌────────────┐    ┌────────────┐
+      │ Lag-Reg    │    │   ARIMA    │    │    LSTM    │
+      └──────┬─────┘    └──────┬─────┘    └──────┬─────┘
+             │                 │                 │
+             └─────────────────┼─────────────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Evaluation           │
+                    │ RMSE / MAE / MASE    │
+                    │ R² / Statistical     │
+                    │ Testing              │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Deployment Artifacts │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ JSON Export          │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+               frontend/public/forecasts/
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Next.js Frontend     │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │       Vercel         │
+                    └──────────────────────┘
+```
+
+---
+
+## Frontend Features
+
+ForecastPH includes:
+
+- company overview pages;
+- sector pages;
+- model-performance comparison;
+- historical OHLCV visualization;
+- next-day prediction chart;
+- Backtest: Predicted vs. Actual;
+- Forecast Error Over Time;
+- latest 60-session visualization;
+- Naive Baseline comparison;
+- RMSE, MAE, MASE, and R²;
+- selected-model indicators;
+- interactive chart controls;
+- dark and light themes;
+- responsive dashboard layout;
+- beginner-oriented explanations;
+- Learn Stocks page;
+- About page;
+- AI assistant;
+- starter questions.
+
+Chart interactions include:
+
+```text
++             Zoom In
+−             Zoom Out
+Box Zoom      Select chart range
+Pan           Move horizontally
+Reset         Restore full view
+Mouse Wheel   Zoom
+Mouse Drag    Pan
+Double Click  Reset view
+```
+
+---
+
+## Admin Features
+
+The ForecastPH administrative interface provides management functionality separate from the public dashboard.
+
+Administrative areas may include:
+
+```text
+/admin
+/admin/models
+/admin/audit
+/admin/calendar
+/admin/ai
+/admin/pipeline
+```
+
+The admin system supports configuration such as:
+
+- site configuration;
+- content configuration;
+- navigation;
+- frontend feature toggles;
+- AI assistant configuration;
+- pipeline status;
+- model information;
+- PSE calendar management;
+- health monitoring;
+- audit information;
+- manual pipeline controls.
+
+Configuration may be persisted in PostgreSQL rather than static frontend configuration files.
+
+---
+
+## Project Structure
+
+A simplified repository structure:
+
+```text
 pse-stock-price-forecast/
+│
 ├── backend/
 │   ├── data/
 │   ├── models/
+│   │   └── deployment/
+│   │       └── current/
 │   ├── results/
+│   │   └── formal/
 │   ├── scripts/
+│   │   └── export_forecast_artifacts.py
 │   ├── services/
-│   └── tests/
+│   │   ├── forecasting/
+│   │   ├── evaluation.py
+│   │   └── ...
+│   ├── tests/
+│   └── requirements.txt
 │
 ├── frontend/
 │   ├── public/
 │   │   └── forecasts/
 │   │       └── company/
 │   ├── src/
-│   └── package.json
+│   │   ├── app/
+│   │   ├── components/
+│   │   └── lib/
+│   ├── package.json
+│   └── next.config.*
 │
 ├── .github/
 │   └── workflows/
 │
-└── README.md
-Local Backend Setup
-From the project root:
-cd ~/Downloads/pse-stock-price-forecast-main/backend
-Create a virtual environment if needed:
-python3.11 -m venv .venv
-Activate it:
-source .venv/bin/activate
-Install dependencies:
-pip install -r requirements.txt
-Run Backend Tests
-From:
-cd ~/Downloads/pse-stock-price-forecast-main/backend
-Run:
-.venv/bin/python -m pytest -q
-The audited implementation has passed the complete backend test suite.
-Run Frontend Locally
-From the project root:
-cd frontend
-Install dependencies:
-npm install
-Run development server:
-npm run dev
-Then open:
-http://localhost:3000
-Build Frontend
-cd frontend
-npm run build
-A successful production build should complete without TypeScript or Next.js build errors.
-Deployment
-The frontend is deployed through Vercel.
-A push to the configured production branch may trigger a Vercel deployment.
-However:
-New Git commit
-≠ automatically new forecast values
-Forecast values change only after the backend generates and publishes updated deployment artifacts.
-The expected production sequence is:
-Latest PSE data
-        ↓
-Corrected backend pipeline
-        ↓
-Weekly model retraining when scheduled
-        ↓
-Deployment models
-        ↓
-Daily inference
-        ↓
-Frontend forecast JSON generation
-        ↓
-Git / deployment publication
-        ↓
-Vercel redeployment
-Important Deployment Rule
-Do not use the immutable formal research run as the live production forecast source.
-Correct separation:
-Formal artifacts
-→ research evidence
+├── README.md
+└── ...
+```
 
-Deployment artifacts
-→ live forecasting
-This separation prevents scheduled production changes from modifying the finalized research evidence.
-Reproducibility
-The corrected research pipeline records provenance information including:
-- Run ID
-- Git commit
-- Branch
-- Working-tree state
-- Dataset information
-- Data cutoff
-- Company universe
-- Dependency versions
-- Split definition
-- Methodology configuration
-- Artifact hashes
-Formal runs can therefore be traced back to the exact implementation used to generate them.
-Research Integrity
-ForecastPH follows these core principles:
-No leakage
-No future-data backfilling
-Chronological evaluation
-Common target dates
-Training-only preprocessing
-Untouched formal hold-out
-Explicit Naive comparison
-Reproducible statistical testing
-Formal/deployment artifact separation
-Immutable finalized evidence
-Limitations
-ForecastPH is a next-day price forecasting research system.
-It does not guarantee:
-- Future profits
-- Correct directional movement every day
-- Protection from market shocks
-- Stable accuracy under structural market changes
-- Investment suitability for a particular user
-Historical predictive accuracy is not a guarantee of future performance.
-Forecasts should be treated as analytical and educational outputs rather than personalized financial advice.
-Intended Users
-ForecastPH is designed primarily for:
-- Beginner traders
-- Intermediate market learners
-- Students
-- Researchers
-- Stakeholders interested in comparative forecasting methods
-The dashboard emphasizes interpretability, model comparison, historical performance, and educational context.
-Key Research Conclusion
-The corrected ForecastPH implementation provides a methodologically aligned framework for comparing Lag-Informed Regression, ARIMA, and LSTM on next-day PSE closing-price forecasting.
-The final formal evaluation shows that model performance varies by company.
-No single principal forecasting method demonstrated statistically significant overall superiority across the full 15-company sample.
-Therefore, ForecastPH uses company-specific evaluation rather than assuming that one forecasting algorithm is universally best.
-Disclaimer
-ForecastPH is developed for academic, educational, and research purposes.
-Forecasted stock prices are statistical estimates based on historical data and model assumptions.
-They should not be interpreted as guaranteed future prices, trading instructions, investment recommendations, or financial advice.
+Exact internal paths may vary as the project evolves.
+
+---
+
+## Installation
+
+### Prerequisites
+
+Recommended:
+
+```text
+Python 3.11
+Node.js
+npm
+Git
+```
+
+Clone the repository:
+
+```bash
+git clone https://github.com/AlvinTubtub/pse-stock-price-forecast.git
+cd pse-stock-price-forecast
+```
+
+---
+
+## Running the Backend
+
+Move to the backend:
+
+```bash
+cd backend
+```
+
+Create a virtual environment:
+
+```bash
+python3.11 -m venv .venv
+```
+
+Activate it on macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+On Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Upgrade pip:
+
+```bash
+python -m pip install --upgrade pip
+```
+
+Install backend dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Running the Frontend
+
+From the project root:
+
+```bash
+cd frontend
+```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run development mode:
+
+```bash
+npm run dev
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+---
+
+## Testing
+
+Backend tests should be executed before deployment or methodology changes are merged.
+
+From:
+
+```text
+backend/
+```
+
+run:
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+or, with the virtual environment activated:
+
+```bash
+python -m pytest -q
+```
+
+The full automated test suite covers forecasting, artifact handling, statistical evaluation, diagnostics, and methodology-related safeguards.
+
+Also useful:
+
+```bash
+python -m compileall -q services scripts
+```
+
+From the repository root:
+
+```bash
+git diff --check
+```
+
+---
+
+## Forecast Artifact Generation
+
+The Vercel frontend does not independently calculate the forecasting results shown in company pages.
+
+Forecast artifacts are generated by the backend and exported to:
+
+```text
+frontend/public/forecasts/
+```
+
+Company-level output:
+
+```text
+frontend/public/forecasts/company/<SYMBOL>.json
+```
+
+Typical company JSON fields may include:
+
+```json
+{
+  "symbol": "BPI",
+  "dataAsOf": "YYYY-MM-DD",
+  "forecastDate": "YYYY-MM-DD",
+  "previousClose": 0,
+  "predictedClose": 0,
+  "model": "ARIMA",
+  "metrics": {},
+  "nextClose": {},
+  "backtestDates": [],
+  "backtestActual": [],
+  "backtestByModel": {}
+}
+```
+
+The exact structure is determined by the exporter.
+
+The export path includes:
+
+```text
+backend/scripts/export_forecast_artifacts.py
+```
+
+Generated frontend JSON should be treated as a **presentation artifact**, not the authoritative model-training source.
+
+Do not manually edit forecast values as a long-term solution because generated files may be overwritten by subsequent pipeline runs.
+
+---
+
+## Deployment Workflow
+
+The intended live forecasting workflow is:
+
+```text
+1. Obtain newest PSE market data
+2. Validate and preprocess data
+3. Update deployment dataset
+4. Use current deployment models or retrain when scheduled
+5. Generate next-session predictions
+6. Generate deployment backtests
+7. Align backtest target dates
+8. Select latest 60 common sessions
+9. Export frontend JSON
+10. Publish updated artifacts
+11. Redeploy / refresh Vercel
+```
+
+This ensures the dashboard reflects backend-generated results rather than manually modified frontend data.
+
+---
+
+## Scheduled Model Lifecycle
+
+ForecastPH separates model retraining from normal daily forecasting.
+
+### Weekly Model Retraining
+
+Scheduled:
+
+```text
+Sunday — 8:00 AM PHT
+```
+
+Weekly retraining should:
+
+```text
+latest main branch
+→ corrected deployment methodology
+→ fresh deployment models
+→ updated deployment metadata
+```
+
+---
+
+### Daily Market Processing / Inference
+
+The forecasting pipeline may run after the relevant PSE trading-session data becomes available.
+
+The production process should use the newest validated market observations and the latest deployment models.
+
+Daily inference should not modify finalized formal research runs.
+
+---
+
+## Vercel Deployment
+
+Vercel serves the Next.js frontend.
+
+A typical update cycle is:
+
+```text
+backend pipeline
+→ updated frontend-readable artifacts
+→ GitHub main
+→ Vercel deployment
+→ updated public dashboard
+```
+
+A Vercel redeployment alone does **not** recalculate forecasts.
+
+If the generated forecast JSON has not changed, a new Vercel build can still display the same forecast values.
+
+Therefore:
+
+```text
+corrected source code
+≠ automatically corrected live forecast artifacts
+```
+
+The full live update requires:
+
+```text
+corrected code
++ regenerated deployment results
++ regenerated frontend JSON
++ published artifacts
++ Vercel refresh/deployment
+```
+
+---
+
+## Important Methodology Notes
+
+### No Random Train/Test Shuffle
+
+Financial time series must maintain chronological order.
+
+The methodology therefore avoids random train/test splitting.
+
+---
+
+### No Future Leakage
+
+Preprocessing that learns parameters from data must be fitted only using information available at the corresponding forecast origin.
+
+Examples include:
+
+```text
+scalers
+PACF-based lag selection
+feature selection
+LSTM normalization
+```
+
+---
+
+### No Backfilling From Future Observations
+
+Formal backtests must not use future observations to fill unavailable historical feature values.
+
+Backtests should be genuine historical forecasts.
+
+---
+
+### Common Target Dates
+
+All models being compared must predict the same target sessions.
+
+Model arrays must not simply be truncated to the same length without checking dates.
+
+Correct comparison requires:
+
+```text
+date-indexed alignment
+```
+
+---
+
+### Naive Baseline
+
+The Naive Baseline assumes:
+
+```text
+Tomorrow's close = Today's close
+```
+
+It is included as a meaningful forecasting benchmark.
+
+A complex forecasting model should not automatically be considered useful simply because it produces predictions.
+
+---
+
+### Model Selection
+
+The lowest RMSE principal model can be reported descriptively for each company.
+
+However, descriptive RMSE ranking must be distinguished from formal statistical evidence.
+
+A model can have the lowest RMSE without demonstrating statistically significant superiority.
+
+---
+
+### Full Precision
+
+Evaluation calculations should preserve full numeric precision.
+
+Rounding belongs in the frontend presentation layer.
+
+---
+
+### RSI Edge Cases
+
+RSI feature calculation should correctly handle:
+
+```text
+gain-only periods → near 100
+loss-only periods → 0
+flat periods      → neutral 50
+```
+
+---
+
+## Research Interpretation
+
+Correcting the methodology improves the **validity, reproducibility, and comparability** of the forecasting experiment.
+
+It can also improve model selection because hyperparameters and models are chosen using more defensible out-of-sample procedures.
+
+However:
+
+> Methodological correction does not guarantee that every corrected forecast will have a lower error than every forecast generated under the previous implementation.
+
+Forecast accuracy remains an empirical result.
+
+The correct interpretation is:
+
+```text
+Better methodology
+→ more trustworthy evaluation
+→ better protection against leakage and optimistic bias
+→ more defensible model selection
+→ potentially better generalization
+```
+
+not:
+
+```text
+Better methodology
+→ guaranteed perfect or universally superior forecasts
+```
+
+Financial markets remain noisy and affected by information unavailable to purely historical forecasting models.
+
+---
+
+## Formal Audit Principles
+
+The audited implementation is designed around the following principles:
+
+```text
+✓ chronological evaluation
+✓ common hold-out dates
+✓ genuine out-of-sample predictions
+✓ no array-length truncation as alignment
+✓ fold-specific preprocessing
+✓ training-only scaling
+✓ fold-specific PACF
+✓ proper LSTM validation separation
+✓ fresh LSTM final refit
+✓ original-scale model selection
+✓ strict ARIMA candidate validation
+✓ ARIMA convergence recording
+✓ date-indexed Naive baseline
+✓ Naive-first statistical gatekeeping
+✓ DM testing with HAC / HLN correction
+✓ Holm multiple-testing correction
+✓ moving-block bootstrap
+✓ Friedman overall comparison
+✓ conditional Wilcoxon post-hoc testing
+✓ unrounded statistical calculations
+✓ residual diagnostics
+✓ formal/deployment artifact separation
+✓ immutable finalized research runs
+✓ reproducible metadata and manifests
+```
+
+---
+
+## Reproducibility
+
+Formal evaluation runs should contain enough information to identify:
+
+- dataset version;
+- data cutoff;
+- company universe;
+- train/hold-out split;
+- model configuration;
+- dependencies;
+- source-code commit;
+- statistical settings;
+- generated artifacts;
+- artifact SHA-256 hashes.
+
+A finalized formal run should therefore represent a reproducible research snapshot rather than a continuously changing deployment output.
+
+---
+
+## Technology Stack
+
+### Backend
+
+```text
+Python
+Pandas
+NumPy
+scikit-learn
+statsmodels
+PyTorch
+SciPy
+```
+
+### Forecasting
+
+```text
+Lag-Informed Regression
+ARIMA
+LSTM
+Naive Baseline
+```
+
+### Frontend
+
+```text
+Next.js
+React
+TypeScript
+Tailwind CSS
+Recharts
+```
+
+### Infrastructure
+
+```text
+GitHub
+GitHub Actions
+Vercel
+PostgreSQL / Neon
+```
+
+---
+
+## Research Scope
+
+ForecastPH is designed for next-trading-session closing-price forecasting using historical market data.
+
+The project does not attempt to predict every possible market-moving event.
+
+Unexpected factors may include:
+
+- macroeconomic announcements;
+- company disclosures;
+- earnings surprises;
+- political developments;
+- geopolitical shocks;
+- regulatory actions;
+- natural disasters;
+- changes in investor sentiment;
+- abnormal liquidity;
+- extraordinary corporate events.
+
+These limitations should be considered when interpreting any model forecast.
+
+---
+
+## Disclaimer
+
+ForecastPH is an academic and educational forecasting system.
+
+The forecasts, model rankings, backtests, statistical results, and dashboard outputs are provided for:
+
+```text
+research
+education
+model comparison
+data-analysis demonstration
+```
+
+They are **not financial advice**, investment recommendations, trading signals, or guarantees of future market performance.
+
+Stock prices are inherently uncertain, and historical predictive performance does not guarantee future results.
+
+Users should conduct independent research and consult qualified financial professionals before making investment decisions.
+
+---
+
+## Repository
+
+```text
+https://github.com/AlvinTubtub/pse-stock-price-forecast
+```
+
+---
+
+## Project
+
+**ForecastPH**
+
+> Cross-Sector Next-Day Stock Price Forecasting of Selected PSE-Listed Companies: A Comparative Study of Lag-Informed Regression, ARIMA, and LSTM.
