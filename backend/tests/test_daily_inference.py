@@ -129,6 +129,22 @@ class TestDailyInference(unittest.TestCase):
             daily_inference._infer_lasso(self.symbol, self.df)
         load.assert_called_once_with(current)
 
+    def test_deployment_current_priority_covers_all_model_artifact_types(self):
+        cases = (
+            ("lag_regression", f"{self.symbol}.pkl", daily_inference.LAG_MODELS_DIR),
+            ("arima", f"{self.symbol}.pkl", daily_inference.ARIMA_MODELS_DIR),
+            ("lstm", f"{self.symbol}.pth", daily_inference.LSTM_MODELS_DIR),
+        )
+        for directory, filename, legacy in cases:
+            current = daily_inference.DEPLOYMENT_CURRENT_DIR / directory / filename
+            current.parent.mkdir(parents=True, exist_ok=True)
+            current.write_bytes(b"current")
+            (legacy / filename).write_bytes(b"legacy")
+            self.assertEqual(
+                daily_inference._deployment_artifact_path(directory, filename, legacy),
+                current,
+            )
+
     def test_legacy_model_path_is_used_when_deployment_current_is_absent(self):
         legacy = daily_inference.LAG_MODELS_DIR / f"{self.symbol}.pkl"
         legacy.write_bytes(b"legacy")

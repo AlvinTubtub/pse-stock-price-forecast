@@ -36,7 +36,14 @@ import numpy as np
 import pandas as pd
 
 from services.data_validator import CSVValidationError, validate_ohlcv_csv
-from services.artifact_runs import FormalRunWriter, create_run_id, deployment_current_dir, write_deployment_manifest
+from services.artifact_runs import (
+    FormalRunWriter,
+    create_run_id,
+    deployment_current_dir,
+    git_worktree_is_dirty,
+    source_data_manifest,
+    write_deployment_manifest,
+)
 from services.pdf_pipeline.config import TARGET_COMPANIES
 from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_formal_statistical_tests, select_best_model
 from services.formal_evaluation import validate_formal_holdout_alignment
@@ -213,10 +220,14 @@ def run_formal_evaluation(
     requested = [symbol.upper() for symbol in symbols]
     if len(set(requested)) != len(requested):
         raise ValueError("Formal evaluation symbol list contains duplicates.")
+    git_dirty = git_worktree_is_dirty()
+    if git_dirty:
+        raise RuntimeError("Formal evaluation requires a clean Git worktree; commit or stash changes first.")
     writer = FormalRunWriter(BASE_DIR, create_run_id(run_id))
     writer.create()
     formal_by_symbol: dict[str, dict] = {}
     plans: dict[str, FormalEvaluationPlan] = {}
+    source_provenance: dict[str, dict[str, object]] = {}
     cutoff_dates: list[pd.Timestamp] = []
     try:
         for symbol in requested:
@@ -224,11 +235,13 @@ def run_formal_evaluation(
             df = validate_ohlcv_csv(csv_path)
             payload = evaluate_formal_symbol(symbol, df)
             plans[symbol] = payload["plan"]
+            source_provenance[symbol] = source_data_manifest(csv_path, df)
             formal_by_symbol[symbol] = {"forecasts": payload["forecasts"], "development_close": payload["development_close"]}
             cutoff_dates.append(pd.to_datetime(df["Date"]).max())
             writer.write_company(symbol, payload["forecasts"], payload["metrics"], payload["diagnostics"])
         writer.write_split_manifest(plans)
-        writer.write_methodology_manifest(str(max(cutoff_dates).date()), requested)
+        writer.write_data_manifest(source_provenance)
+        writer.write_methodology_manifest(str(max(cutoff_dates).date()), requested, git_dirty=git_dirty)
         writer.write_statistics(run_formal_statistical_tests(formal_by_symbol))
         finalized = writer.finalize()
         log.info("Finalized formal run %s", writer.path)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -33,6 +34,51 @@ def _json_default(value: object) -> str:
     if isinstance(value, (datetime, pd.Timestamp)):
         return value.isoformat()
     raise TypeError(f"Not JSON serializable: {type(value).__name__}")
+
+
+def _json_safe(value: object) -> object:
+    """Convert dataframe/numpy values and non-finite floats into strict JSON."""
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (float,)) and not math.isfinite(value):
+        return None
+    if hasattr(value, "item"):
+        try:
+            return _json_safe(value.item())
+        except ValueError:
+            pass
+    return value
+
+
+def file_sha256(path: Path) -> str:
+    """Return the SHA-256 digest of an immutable source or evidence file."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def source_data_manifest(path: Path, df: pd.DataFrame) -> dict[str, object]:
+    """Build reproducible source-data provenance for one formal company."""
+    dates = pd.to_datetime(df["Date"], errors="raise")
+    return {
+        "source_path": str(path),
+        "sha256": file_sha256(path),
+        "row_count": int(len(df)),
+        "first_date": dates.iloc[0],
+        "last_date": dates.iloc[-1],
+    }
+
+
+def git_worktree_is_dirty() -> bool:
+    """Return whether tracked or untracked repository state is dirty."""
+    try:
+        return bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip())
+    except Exception as exc:
+        raise FormalRunIntegrityError("Cannot determine Git worktree state for formal run.") from exc
 
 
 def create_run_id(run_id: str | None = None) -> str:
@@ -97,6 +143,11 @@ class FormalRunWriter:
             "companies": {symbol: self._plan_payload(plan) for symbol, plan in plans.items()},
         })
 
+    def write_data_manifest(self, companies: dict[str, dict[str, object]]) -> None:
+        """Record hashed raw-source provenance before formal finalization."""
+        self._assert_mutable()
+        self._write("data_manifest.json", {"run_id": self.run_id, "companies": companies})
+
     def write_company(self, symbol: str, forecasts: dict[str, pd.DataFrame], metrics: dict, diagnostics: dict) -> None:
         """Write complete, date-indexed holdout evidence for one company."""
         self._assert_mutable()
@@ -110,13 +161,20 @@ class FormalRunWriter:
         self._write(target / "metrics.json", metrics)
         self._write(target / "diagnostics.json", diagnostics)
 
-    def write_methodology_manifest(self, data_cutoff: str, companies: list[str]) -> None:
+    def write_methodology_manifest(
+        self,
+        data_cutoff: str,
+        companies: list[str],
+        *,
+        git_dirty: bool | None = None,
+    ) -> None:
         self._assert_mutable()
         self._write("methodology_manifest.json", {
             "run_id": self.run_id,
             "created_at": datetime.now(timezone.utc),
             "git_branch": self._git("branch", "--show-current"),
             "repository_commit": self._git("rev-parse", "HEAD"),
+            "git_worktree_dirty": git_worktree_is_dirty() if git_dirty is None else git_dirty,
             "data_cutoff": data_cutoff,
             "company_universe": sorted(companies),
             "company_count": len(companies),
@@ -134,7 +192,7 @@ class FormalRunWriter:
         """Validate all required evidence, then permanently mark the run complete."""
         self._assert_mutable()
         plans = self._read_plans()
-        required_root = ("methodology_manifest.json", "split_manifest.json", "statistical_tests.json")
+        required_root = ("methodology_manifest.json", "split_manifest.json", "data_manifest.json", "statistical_tests.json")
         absent = [name for name in required_root if not (self.path / name).is_file()]
         if absent:
             raise FormalRunIntegrityError(f"{self.run_id}: missing required run artifact(s): {absent}.")
@@ -148,7 +206,13 @@ class FormalRunWriter:
                 validate_formal_holdout_alignment(self._read_company_forecasts(company_dir / "holdout_predictions.csv"), plan)
             except Exception as exc:
                 raise FormalRunIntegrityError(f"{symbol}: invalid formal holdout evidence: {exc}") from exc
-        self._write("finalized.json", {"run_id": self.run_id, "finalized_at": datetime.now(timezone.utc), "status": "complete"})
+        evidence_files = [path for path in self.path.rglob("*") if path.is_file() and path.name != "finalized.json"]
+        self._write("finalized.json", {
+            "run_id": self.run_id,
+            "finalized_at": datetime.now(timezone.utc),
+            "status": "complete",
+            "artifact_sha256": {str(path.relative_to(self.path)): file_sha256(path) for path in sorted(evidence_files)},
+        })
         return self.finalized_path
 
     def _read_plans(self) -> dict[str, FormalEvaluationPlan]:
@@ -193,7 +257,7 @@ class FormalRunWriter:
     def _write(self, relative: str | Path, payload: object) -> None:
         path = relative if isinstance(relative, Path) else self.path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default))
+        path.write_text(json.dumps(_json_safe(payload), indent=2, sort_keys=True, default=_json_default, allow_nan=False))
 
     @staticmethod
     def _version(name: str) -> str | None:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,6 +32,7 @@ def _complete_writer(tmp_path: Path) -> FormalRunWriter:
     writer = FormalRunWriter(tmp_path, "controlled_run")
     writer.create()
     writer.write_split_manifest({"BPI": plan})
+    writer.write_data_manifest({"BPI": {"source_path": "data/raw/BPI.csv", "sha256": "synthetic", "row_count": 20, "first_date": "2025-01-01", "last_date": "2025-01-20"}})
     writer.write_company("BPI", forecasts, {model: {"rmse": 0.0} for model in forecasts}, {})
     writer.write_methodology_manifest("2025-01-20", ["BPI"])
     writer.write_statistics({"per_company": {}})
@@ -41,6 +43,7 @@ def test_formal_run_is_versioned_immutable_and_finalizable(tmp_path):
     writer = _complete_writer(tmp_path)
     finalized = writer.finalize()
     assert finalized.is_file()
+    assert "per_company/BPI/holdout_predictions.csv" in json.loads(finalized.read_text())["artifact_sha256"]
     assert deployment_current_dir(tmp_path) == tmp_path / "models/deployment/current"
     assert RunMode.FORMAL == "formal"
     with pytest.raises(FileExistsError):
@@ -54,6 +57,7 @@ def test_incomplete_formal_run_is_rejected(tmp_path):
     writer = FormalRunWriter(tmp_path, "incomplete")
     writer.create()
     writer.write_split_manifest({"BPI": plan})
+    writer.write_data_manifest({"BPI": {}})
     writer.write_company("BPI", forecasts, {}, {})
     with pytest.raises(FormalRunIntegrityError, match="missing required"):
         writer.finalize()
@@ -76,9 +80,15 @@ def test_formal_orchestration_never_writes_deployment_or_dashboard_state(tmp_pat
     payload = {"plan": plan, "forecasts": forecasts, "metrics": {model: {"rmse": 0.0} for model in forecasts}, "diagnostics": {}, "development_close": [1.0, 2.0]}
     monkeypatch.setattr(model_selector, "BASE_DIR", tmp_path)
     source = pd.DataFrame({"Date": pd.date_range("2025-01-01", periods=2), "Close": [1.0, 2.0]})
-    with patch.object(model_selector, "validate_ohlcv_csv", return_value=source), patch.object(model_selector, "evaluate_formal_symbol", return_value=payload), patch.object(model_selector, "run_formal_statistical_tests", return_value={"per_company": {}}):
+    with patch.object(model_selector, "git_worktree_is_dirty", return_value=False), patch.object(model_selector, "validate_ohlcv_csv", return_value=source), patch.object(model_selector, "evaluate_formal_symbol", return_value=payload), patch.object(model_selector, "run_formal_statistical_tests", return_value={"per_company": {}}):
         final = model_selector.run_formal_evaluation(raw_dir=raw_dir, symbols=["BPI"], run_id="formal_only")
     assert final.is_file()
     assert not (tmp_path / "models" / "deployment" / "current").exists()
     assert not (tmp_path / "prediction_cache").exists()
     assert not (tmp_path / "best_models.json").exists()
+
+
+def test_formal_orchestration_rejects_a_dirty_git_worktree(tmp_path):
+    with patch.object(model_selector, "git_worktree_is_dirty", return_value=True):
+        with pytest.raises(RuntimeError, match="clean Git worktree"):
+            model_selector.run_formal_evaluation(raw_dir=tmp_path, symbols=["BPI"], run_id="dirty")
