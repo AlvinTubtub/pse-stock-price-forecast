@@ -72,6 +72,37 @@ def _ensure_dirs() -> None:
     for d in (LAG_MODELS_DIR, ARIMA_MODELS_DIR, LSTM_MODELS_DIR, PREDICTION_CACHE_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
+
+def _deployment_backtest_payload(forecasts: dict[str, pd.DataFrame]) -> dict:
+    """Serialize the audited OOS holdout by target date for frontend export.
+
+    This is deployment metadata, not a formal-run artifact.  The formal run
+    remains immutable under ``results/formal``; the cache only carries the
+    same validated, date-indexed OOS observations needed by the live charts.
+    """
+    labels = {
+        "lag_reg": "Lag-Informed Regression",
+        "arima": "ARIMA",
+        "lstm": "LSTM",
+        "naive": "Naive baseline",
+    }
+    reference = forecasts["lag_reg"].sort_values("target_date").reset_index(drop=True)
+    target_dates = pd.to_datetime(reference["target_date"], errors="raise")
+    return {
+        "schema_version": 1,
+        "source": "audited_oos_holdout",
+        "alignment": "common_target_date",
+        "target_dates": [date.strftime("%Y-%m-%d") for date in target_dates],
+        "actual": [float(value) for value in reference["actual_close"]],
+        "by_model": {
+            labels[key]: [
+                float(value)
+                for value in forecasts[key].sort_values("target_date")["predicted_close"]
+            ]
+            for key in labels
+        },
+    }
+
 def evaluate_formal_symbol(symbol: str, df: pd.DataFrame) -> dict:
     """Evaluate a symbol without writing deployment, cache, or frontend artifacts."""
     log.info("Formal evaluation for %s (%d rows).", symbol, len(df))
@@ -97,7 +128,15 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
     lag_artifact = lag_regression.train_deployment_lag_regression(df); lag_regression.save(lag_artifact, LAG_MODELS_DIR / f"{symbol}.pkl")
     arima_fitted, deployment_order = arima_model.train_deployment_arima(df); arima_model.save(arima_fitted, ARIMA_MODELS_DIR / f"{symbol}.pkl")
     lstm_artifact = lstm_model.train_deployment_lstm(df, formal["lstm_config"]); lstm_model.save(lstm_artifact, LSTM_MODELS_DIR / f"{symbol}.pth")
-    result = {"metrics": formal["metrics"], "next_close": {"lag": round(lag_regression.predict_next(lag_artifact, df), 2), "arima": round(arima_model.predict_next(arima_fitted), 2) if arima_fitted is not None else float(df["Close"].iloc[-1]), "lstm": round(lstm_model.predict_next(lstm_artifact, df), 2) if lstm_artifact is not None else float(df["Close"].iloc[-1])}, "backtest30": formal["backtests"]["lag_reg"][-30:], "backtest_by_model": {"Lag-Informed Regression": formal["backtests"]["lag_reg"], "ARIMA": formal["backtests"]["arima"], "LSTM": formal["backtests"]["lstm"]}}
+    result = {
+        "metrics": formal["metrics"],
+        "next_close": {
+            "lag": round(lag_regression.predict_next(lag_artifact, df), 2),
+            "arima": round(arima_model.predict_next(arima_fitted), 2) if arima_fitted is not None else float(df["Close"].iloc[-1]),
+            "lstm": round(lstm_model.predict_next(lstm_artifact, df), 2) if lstm_artifact is not None else float(df["Close"].iloc[-1]),
+        },
+        "deployment_backtest": _deployment_backtest_payload(formal["forecasts"]),
+    }
     log.info("%s deployment ARIMA order=%s", symbol, deployment_order)
     return result, {"forecasts": formal["forecasts"], "development_close": formal["development_close"]}
 

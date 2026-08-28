@@ -30,6 +30,7 @@ beyond the stdlib + pandas, both already installed for the pipeline).
 from __future__ import annotations
 
 import json
+import math
 import statistics
 import sys
 from datetime import datetime, timezone, timedelta
@@ -66,6 +67,9 @@ MODEL_LABELS = {
     "lstm": "LSTM",
     "naive": "Naive baseline",
 }
+
+DEPLOYMENT_BACKTEST_MODEL_LABELS = tuple(MODEL_LABELS.values())
+BACKTEST_WINDOW = 60
 
 SECTORS = {
     "FINANCIALS": "Financials",
@@ -145,9 +149,54 @@ def _get_forecast_date(cache: dict, latest_processed: dict) -> str:
     return calendar.next_trading_day(datetime.now(PHT).date()).isoformat()
 
 
+def aligned_deployment_backtest_60(cache: dict, symbol: str) -> tuple[list[str], list[float], dict[str, list[float]]]:
+    """Return the latest common OOS window; never reconstruct it from OHLCV.
+
+    The cache is written by ``model_selector`` only after the formal forecast
+    frames have passed strict target-date validation.  Rejecting a malformed
+    cache is intentional: padding, backfilling, positional alignment, or a
+    raw-price fallback would publish a misleading chart.
+    """
+    payload = cache.get("deployment_backtest")
+    if not isinstance(payload, dict):
+        raise ValueError(f"{symbol}: missing deployment_backtest; retrain before export.")
+    if payload.get("schema_version") != 1:
+        raise ValueError(f"{symbol}: unsupported deployment_backtest schema.")
+    if payload.get("source") != "audited_oos_holdout" or payload.get("alignment") != "common_target_date":
+        raise ValueError(f"{symbol}: deployment_backtest is not an audited common-target-date OOS series.")
+
+    dates = payload.get("target_dates")
+    actual = payload.get("actual")
+    by_model = payload.get("by_model")
+    if not isinstance(dates, list) or not isinstance(actual, list) or not isinstance(by_model, dict):
+        raise ValueError(f"{symbol}: malformed deployment_backtest payload.")
+    parsed_dates = pd.to_datetime(dates, format="%Y-%m-%d", errors="raise")
+    if len(dates) == 0 or len(set(dates)) != len(dates) or not parsed_dates.is_monotonic_increasing:
+        raise ValueError(f"{symbol}: target dates must be non-empty, unique, and chronological.")
+    if len(actual) != len(dates):
+        raise ValueError(f"{symbol}: actual series does not match target-date count.")
+
+    def numeric(values: list, name: str) -> list[float]:
+        if not isinstance(values, list) or len(values) != len(dates):
+            raise ValueError(f"{symbol}: {name} does not match target-date count.")
+        converted = [float(value) for value in values]
+        if not all(math.isfinite(value) for value in converted):
+            raise ValueError(f"{symbol}: {name} contains a non-finite value.")
+        return converted
+
+    actual_values = numeric(actual, "actual")
+    model_values = {
+        label: numeric(by_model.get(label), label)
+        for label in DEPLOYMENT_BACKTEST_MODEL_LABELS
+    }
+    start = max(0, len(dates) - BACKTEST_WINDOW)
+    return dates[start:], actual_values[start:], {label: values[start:] for label, values in model_values.items()}
+
+
 def main() -> None:
     COMPANY_OUT_DIR.mkdir(parents=True, exist_ok=True)
     HISTORY_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    print("[export] Building frontend artifacts from audited deployment caches.")
 
     best_models = load_json(BEST_MODELS_PATH, {})
     latest_processed = load_json(LATEST_PROCESSED_PATH, {})
@@ -175,8 +224,6 @@ def main() -> None:
 
         metrics = cache["metrics"]
         next_close = cache["next_close"]
-        backtest_actual = cache.get("backtest30", [])
-        backtest_by_model = cache.get("backtest_by_model", {})
 
         previous_close = round(float(df["Close"].iloc[-1]), 2)
         winning_model_label = best_models.get(symbol) or MODEL_LABELS[best_model_id(metrics)]
@@ -199,21 +246,11 @@ def main() -> None:
 
         history = ohlcv_records(df)
 
-        full_dates = [
-            row.Date.strftime("%Y-%m-%d") if hasattr(row.Date, "strftime") else str(row.Date)
-            for row in df.itertuples()
-        ]
-        backtest_dates_60 = full_dates[-60:] if len(full_dates) >= 60 else full_dates
-
-        full_close = [round(float(c), 2) for c in df["Close"]]
-        backtest_actual_60 = full_close[-60:] if len(full_close) >= 60 else full_close
-        backtest_by_model_60 = {
-            m_name: (m_series[-60:] if isinstance(m_series, list) and len(m_series) >= 60 else m_series)
-            for m_name, m_series in backtest_by_model.items()
-        }
-        if "Naive baseline" not in backtest_by_model_60 and "Naive Baseline" not in backtest_by_model_60:
-            naive_60 = full_close[-61:-1] if len(full_close) >= 61 else full_close
-            backtest_by_model_60["Naive baseline"] = naive_60
+        backtest_dates_60, backtest_actual_60, backtest_by_model_60 = aligned_deployment_backtest_60(cache, symbol)
+        print(
+            f"[export] {symbol}: selected {len(backtest_dates_60)} aligned OOS sessions "
+            f"({backtest_dates_60[0]} to {backtest_dates_60[-1]})."
+        )
 
         # Determine forecast date from inference metadata if available
         forecast_date = _get_forecast_date(cache, latest_processed)
@@ -236,6 +273,11 @@ def main() -> None:
             "backtestDates": backtest_dates_60,
             "backtestActual": backtest_actual_60,
             "backtestByModel": backtest_by_model_60,
+            "backtestMethodology": {
+                "source": "audited_oos_holdout",
+                "alignment": "common_target_date",
+                "window": len(backtest_dates_60),
+            },
             "forecastDate": forecast_date,
             "dataAsOf": cache.get("inference_metadata", {}).get("data_as_of"),
             "inferenceAt": cache.get("inference_metadata", {}).get("inference_at"),

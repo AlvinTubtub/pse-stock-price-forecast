@@ -34,6 +34,10 @@ try:
     from statsmodels.stats.diagnostic import acorr_ljungbox, het_arch
     HAS_STATSMODELS_DIAGNOSTICS = True
 except Exception:  # pragma: no cover - environment-dependent optional diagnostics
+    # Keep stable module attributes so callers/tests can explicitly supply a
+    # diagnostics implementation when the optional dependency is unavailable.
+    acorr_ljungbox = None
+    het_arch = None
     HAS_STATSMODELS_DIAGNOSTICS = False
 
 log = logging.getLogger(__name__)

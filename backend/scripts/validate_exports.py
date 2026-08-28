@@ -31,6 +31,7 @@ sys.path.insert(0, str(BASE_DIR))
 from services.pdf_pipeline.config import TARGET_COMPANIES  # noqa: E402
 
 EXPECTED_TICKERS = sorted(TARGET_COMPANIES.keys())
+BACKTEST_MODELS = {"Lag-Informed Regression", "ARIMA", "LSTM", "Naive baseline"}
 
 
 def _load(path: Path) -> dict | list | None:
@@ -90,6 +91,24 @@ def main() -> int:
             errors.append(f"Missing {company_path}")
         if not history_path.exists():
             errors.append(f"Missing {history_path}")
+        detail = _load(company_path)
+        if not isinstance(detail, dict):
+            continue
+        dates = detail.get("backtestDates")
+        actual = detail.get("backtestActual")
+        by_model = detail.get("backtestByModel")
+        methodology = detail.get("backtestMethodology")
+        if not isinstance(dates, list) or len(dates) != 60 or dates != sorted(dates) or len(set(dates)) != 60:
+            errors.append(f"{symbol}: backtestDates must contain exactly 60 unique chronological sessions")
+            continue
+        if not isinstance(actual, list) or len(actual) != len(dates):
+            errors.append(f"{symbol}: backtestActual does not align with backtestDates")
+        if not isinstance(by_model, dict) or set(by_model) != BACKTEST_MODELS:
+            errors.append(f"{symbol}: backtestByModel must contain exactly the four audited models")
+        elif any(not isinstance(values, list) or len(values) != len(dates) for values in by_model.values()):
+            errors.append(f"{symbol}: a model prediction series does not align with backtestDates")
+        if methodology != {"source": "audited_oos_holdout", "alignment": "common_target_date", "window": 60}:
+            errors.append(f"{symbol}: backtest methodology metadata is missing or invalid")
 
     print("=" * 60)
     print("Validating exported frontend artifacts...")
