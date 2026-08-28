@@ -32,11 +32,12 @@ import json
 import logging
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from services.data_validator import CSVValidationError, validate_ohlcv_csv
 from services.pdf_pipeline.config import TARGET_COMPANIES
-from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_cross_model_statistical_tests, select_best_model
+from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_formal_statistical_tests, select_best_model
 from services.formal_evaluation import (
     FORMAL_FORECAST_COLUMNS,
     FORMAL_MODEL_KEYS,
@@ -147,7 +148,7 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
     validated = validate_formal_holdout_alignment(
         {"lag_reg": formal_lag.forecasts, "arima": formal_arima.forecasts, "lstm": formal_lstm.forecasts, "naive": naive_rows}, plan
     )
-    return result, {}
+    return result, {"forecasts": validated, "development_close": df.loc[pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"].to_numpy(dtype=float)}
 
 
 def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> dict[str, str]:
@@ -163,8 +164,7 @@ def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> di
     """
     _ensure_dirs()
     best_models: dict[str, str] = {}
-    test_errors_by_symbol: dict[str, dict[str, np.ndarray]] = {}
-    rmse_by_symbol: dict[str, dict[str, float]] = {}
+    formal_by_symbol: dict[str, dict] = {}
 
     csv_paths = sorted(raw_dir.glob("*.csv"))
     csv_by_symbol = {p.stem.upper(): p for p in csv_paths}
@@ -206,7 +206,7 @@ def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> di
             continue
 
         try:
-            result, test_errors = train_symbol(symbol, df)
+            result, formal_result = train_symbol(symbol, df)
         except Exception as exc:
             failures[symbol] = str(exc)
             log.exception("Training failed for %s — skipping.", symbol)
@@ -218,8 +218,7 @@ def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> di
         (PREDICTION_CACHE_DIR / f"{symbol}.json").write_text(json.dumps(result, indent=2))
         log.info("%s best model: %s (RMSE %s)", symbol, MODEL_LABELS[best_key], result["metrics"][best_key]["rmse"])
 
-        test_errors_by_symbol[symbol] = test_errors
-        rmse_by_symbol[symbol] = {k: float(result["metrics"][k]["rmse"]) for k in STAT_MODEL_KEYS}
+        formal_by_symbol[symbol] = formal_result
 
     if strict and failures:
         detail = "; ".join(f"{symbol}: {message}" for symbol, message in sorted(failures.items()))
@@ -238,21 +237,11 @@ def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> di
     BEST_MODELS_PATH.write_text(json.dumps(best_models, indent=2, sort_keys=True))
     log.info("Wrote %s (%d tickers)", BEST_MODELS_PATH, len(best_models))
 
-    if test_errors_by_symbol:
+    if formal_by_symbol:
         try:
-            stats = run_cross_model_statistical_tests(
-                test_errors_by_symbol, rmse_by_symbol,
-                model_keys=STAT_MODEL_KEYS, min_companies=MIN_CONSISTENCY_COMPANIES,
-            )
+            stats = run_formal_statistical_tests(formal_by_symbol)
             STATISTICAL_TESTS_PATH.write_text(json.dumps(stats, indent=2, sort_keys=True))
-            log.info(
-                "Wrote %s (Friedman p=%.4g, best-model consistency: %s on %d/%d companies)",
-                STATISTICAL_TESTS_PATH,
-                stats["friedman"]["p_value"],
-                stats["best_model_consistency"]["dominant_model"],
-                stats["best_model_consistency"]["dominant_count"],
-                stats["best_model_consistency"]["total_companies"],
-            )
+            log.info("Wrote Phase-5 formal statistics to %s", STATISTICAL_TESTS_PATH)
         except Exception:
             log.exception("Cross-model statistical tests failed — best_models.json is still valid, but statistical_tests.json was not updated.")
 

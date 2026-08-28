@@ -27,7 +27,7 @@ import logging
 
 import numpy as np
 import pandas as pd
-from scipy.stats import friedmanchisquare, t as t_dist, wilcoxon
+from scipy.stats import friedmanchisquare, shapiro, t as t_dist, wilcoxon
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 log = logging.getLogger(__name__)
@@ -49,7 +49,22 @@ def _naive_mae(y_reference: np.ndarray) -> float:
     return float(np.mean(np.abs(np.diff(y_reference)))) or 1e-8
 
 
-def compute_metrics(y_true, y_pred, y_train=None) -> dict:
+def common_mase_denominator(development_close) -> float:
+    """Single company-level MASE denominator from development Close only.
+
+    A zero denominator is non-computable rather than silently replaced by an
+    epsilon, which would fabricate a MASE scale.
+    """
+    values = np.asarray(development_close, dtype=float)
+    if len(values) < 2 or not np.isfinite(values).all():
+        raise ValueError("Development Close must contain at least two finite observations for MASE.")
+    denominator = float(np.mean(np.abs(np.diff(values))))
+    if denominator == 0.0:
+        raise ValueError("MASE is not computable: development naive MAE is zero.")
+    return denominator
+
+
+def compute_metrics(y_true, y_pred, y_train=None, mase_denominator: float | None = None) -> dict:
     """RMSE, MAE, MASE, R² as full-precision numeric values.
 
     ``y_train`` should be the in-sample (training) target series, used as
@@ -62,8 +77,10 @@ def compute_metrics(y_true, y_pred, y_train=None) -> dict:
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
     mae = float(mean_absolute_error(y_true, y_pred))
 
-    naive_reference = y_true if y_train is None else np.asarray(y_train, dtype=float)
-    mase = mae / _naive_mae(naive_reference)
+    denominator = float(mase_denominator) if mase_denominator is not None else _naive_mae(y_true if y_train is None else y_train)
+    if denominator <= 0 or not np.isfinite(denominator):
+        raise ValueError("MASE denominator must be a positive finite value.")
+    mase = mae / denominator
 
     r2 = float(r2_score(y_true, y_pred)) if len(y_true) > 1 else 0.0
 
@@ -216,6 +233,61 @@ def holm_correction(p_values: list[float]) -> list[float]:
     return adjusted.tolist()
 
 
+def dm_result(errors_a, errors_b, model_a: str, model_b: str, *, power: int = 2, alpha: float = .05) -> dict:
+    """Detailed DM result. Negative mean differential means model_a has lower loss."""
+    a, b = np.asarray(errors_a, float), np.asarray(errors_b, float)
+    differential = np.abs(a) ** power - np.abs(b) ** power
+    bandwidth = max(int(np.floor(4 * (len(a) / 100) ** (2 / 9))), 0)
+    statistic, p_value = diebold_mariano_test(a, b, power=power)
+    mean = float(differential.mean()) if len(differential) else float("nan")
+    return {"model_a": model_a, "model_b": model_b, "loss": "squared_error" if power == 2 else "absolute_error", "mean_loss_differential": mean, "dm_statistic": statistic, "hln_statistic": statistic, "raw_p_value": p_value, "hac_bandwidth": bandwidth, "direction": "model_a_lower_loss" if mean < 0 else "model_b_lower_loss" if mean > 0 else "equal_loss", "n_observations": len(a), "alpha": alpha}
+
+
+def moving_block_bootstrap(differential, *, replications: int = 5000, seed: int = 42, block_length: int | None = None) -> dict:
+    """Centered moving-block bootstrap of a loss-differential mean.
+
+    Uses ceil(n**(1/3)) contiguous blocks, a predeclared dependence-aware
+    rule; tests may explicitly reduce ``replications``.
+    """
+    values = np.asarray(differential, float)
+    n = len(values)
+    if n < 2 or not np.isfinite(values).all():
+        return {"method": "moving_block_bootstrap", "computable": False, "reason": "fewer_than_two_finite_observations", "bootstrap_replications": replications, "seed": seed}
+    block = block_length or max(1, int(np.ceil(n ** (1 / 3))))
+    centered = values - values.mean(); blocks = [centered[i:i + block] for i in range(n - block + 1)]
+    rng = np.random.default_rng(seed); means = np.empty(replications)
+    for index in range(replications):
+        sample = np.concatenate([blocks[i] for i in rng.integers(0, len(blocks), size=int(np.ceil(n / block)))])[:n]
+        means[index] = sample.mean()
+    observed = float(values.mean())
+    return {"method": "moving_block_bootstrap", "computable": True, "bootstrap_replications": replications, "seed": seed, "block_length": block, "observed_mean_loss_differential": observed, "bootstrap_p_value": float((1 + np.sum(np.abs(means) >= abs(observed))) / (replications + 1)), "confidence_interval": [float(np.percentile(means + observed, 2.5)), float(np.percentile(means + observed, 97.5))]}
+
+
+def _diagnostics(errors) -> dict:
+    values = np.asarray(errors, float)
+    if len(values) < 3 or not np.isfinite(values).all():
+        return {"shapiro_wilk": {"computable": False, "reason": "insufficient_or_nonfinite_errors", "n": len(values)}, "arch_lm": {"computable": False, "reason": "insufficient_or_nonfinite_errors", "n": len(values)}}
+    stat, p = shapiro(values)
+    return {"shapiro_wilk": {"diagnostic": "shapiro_wilk", "computable": True, "statistic": float(stat), "p_value": float(p), "n": len(values)}, "arch_lm": {"diagnostic": "arch_lm", "computable": False, "reason": "statsmodels_arch_helper_unavailable", "n": len(values)}}
+
+
+def _stage(errors: dict[str, np.ndarray], metrics: dict[str, dict], power: int, alpha: float) -> dict:
+    principals = ("lag_reg", "arima", "lstm")
+    stage1 = [dm_result(errors[key], errors["naive"], key, "naive", power=power, alpha=alpha) for key in principals]
+    adjusted = holm_correction([item["raw_p_value"] for item in stage1])
+    eligible = []
+    for item, holm in zip(stage1, adjusted):
+        item["holm_adjusted_p_value"] = holm
+        item["beats_naive_rmse"] = metrics[item["model_a"]]["rmse"] < metrics["naive"]["rmse"]
+        item["significantly_beats_naive"] = item["mean_loss_differential"] < 0 and holm < alpha
+        if item["significantly_beats_naive"]: eligible.append(item["model_a"])
+    pairs = [(a, b) for i, a in enumerate(eligible) for b in eligible[i + 1:]]
+    stage2 = [dm_result(errors[a], errors[b], a, b, power=power, alpha=alpha) for a, b in pairs]
+    for item, holm in zip(stage2, holm_correction([item["raw_p_value"] for item in stage2])):
+        item["holm_adjusted_p_value"] = holm; item["significant"] = holm < alpha
+    return {"stage1_vs_naive": stage1, "eligible_principal_models": eligible, "stage2_executed": len(eligible) >= 2, "stage2_principal": stage2, "reason": None if len(eligible) >= 2 else "fewer_than_two_models_significantly_beat_naive"}
+
+
 def friedman_test(rmse_by_model: dict[str, list[float]]) -> dict:
     """Friedman rank test across companies: each model contributes one
     RMSE observation per company (paired by company). Tests whether the
@@ -284,6 +356,36 @@ def best_model_consistency_check(rmse_by_model: dict[str, list[float]], min_comp
         "dominant_count": dominant_count,
         "pass": dominant_count >= min_companies,
     }
+
+
+def run_formal_statistical_tests(companies: dict[str, dict], *, alpha: float = .05, permutations: int = 10000, seed: int = 42) -> dict:
+    """Phase-5 hierarchy over strictly date-aligned formal forecast frames.
+
+    Each company entry contains ``forecasts`` keyed by the four model names
+    and its development-only ``development_close`` series.
+    """
+    per_company, mase_rows, rmse_rows = {}, {}, {}
+    keys = ("lag_reg", "arima", "lstm", "naive")
+    for symbol, payload in sorted(companies.items()):
+        denominator = common_mase_denominator(payload["development_close"])
+        frames = payload["forecasts"]
+        errors = {key: frames[key]["error"].to_numpy(float) for key in keys}
+        metrics = {key: compute_metrics(frames[key]["actual_close"], frames[key]["predicted_close"], mase_denominator=denominator) for key in keys}
+        per_company[symbol] = {"mase_denominator": denominator, "metrics": metrics, "dm_squared_error": _stage(errors, metrics, 2, alpha), "dm_absolute_error": _stage(errors, metrics, 1, alpha), "moving_block_bootstrap": {key: moving_block_bootstrap(np.abs(errors[key]) ** 2 - np.abs(errors["naive"]) ** 2) for key in ("lag_reg", "arima", "lstm")}, "diagnostics": {key: _diagnostics(errors[key]) for key in ("lag_reg", "arima", "lstm")}}
+        mase_rows[symbol] = {key: metrics[key]["mase"] for key in keys}; rmse_rows[symbol] = {key: metrics[key]["rmse"] for key in keys if key != "naive"}
+    ordered = sorted(mase_rows); matrix = {key: [mase_rows[s][key] for s in ordered] for key in keys}
+    friedman = friedman_test(matrix); observed = friedman["statistic"]; rng = np.random.default_rng(seed); extreme = 0
+    if len(ordered) >= 3:
+        values = np.asarray([[mase_rows[s][key] for key in keys] for s in ordered])
+        for _ in range(permutations):
+            permuted = np.asarray([row[rng.permutation(len(keys))] for row in values])
+            statistic = float(friedmanchisquare(*permuted.T).statistic)
+            extreme += statistic >= observed
+        friedman.update({"permutation_p_value": float((1 + extreme) / (1 + permutations)), "permutation_count": permutations, "seed": seed, "model_order": list(keys)})
+    significant = bool(np.isfinite(friedman["permutation_p_value"]) and friedman["permutation_p_value"] < alpha) if "permutation_p_value" in friedman else False
+    posthoc = holm_wilcoxon_posthoc(matrix) if significant else {}
+    principal_matrix = {key: [rmse_rows[s][key] for s in ordered] for key in ("lag_reg", "arima", "lstm")}
+    return {"per_company": per_company, "across_company": {"friedman_mase": friedman, "wilcoxon_posthoc": {"posthoc_executed": significant, "results": posthoc}, "rmse_consistency": best_model_consistency_check(principal_matrix)}}
 
 
 def run_cross_model_statistical_tests(
