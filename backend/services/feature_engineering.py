@@ -1,9 +1,8 @@
-"""Feature engineering for next-day price forecasting.
+"""OHLCV-derived predictors for the Lag-Informed Regression model.
 
-Shared by all three forecasting models (Lag-Informed Regression, ARIMA's
-stationarity checks, and the LSTM's input windowing) so every model sees
-the exact same feature definitions — no drift between what regression
-trains on and what the LSTM feeds its sequences.
+These engineered predictors are a regression-specific feature contract.
+ARIMA operates on Close directly, and LSTM has its own input preparation;
+neither model should be described as consuming this regression matrix.
 
 Per the capstone paper's methodology, the forecast *target* is the
 next-day price **change** rather than the next-day price level:
@@ -14,8 +13,8 @@ next-day price **change** rather than the next-day price level:
 ``build_full_features`` exposes both ``target`` (legacy: same-day Close
 level — see the note on ``build_lag_features`` below — kept only for
 backward compatibility with anything still reading it directly) and
-``target_delta`` (next-day ΔClose — what the regression, ARIMA
-differencing, and LSTM models now train against). Use
+``target_delta`` (next-day ΔClose — the Lag-Informed Regression target).
+Use
 ``reconstruct_price`` to turn a ΔClose prediction back into a peso price.
 
 Tiers exposed:
@@ -58,8 +57,12 @@ TECHNICAL_COLUMNS = [
     "bb_lower",
     "daily_return",
     "rolling_volatility",
-    "hl_spread",
-    "oc_spread",
+    "hl_range_pct",
+    "oc_return_pct",
+    "ema_gap_pct",
+    "macd_pct",
+    "bb_width_pct",
+    "bb_percent_b",
 ]
 
 # Lagged-return columns, individually addressable (return_lag_1..return_lag_20)
@@ -74,13 +77,15 @@ RETURN_COLUMNS = RETURN_LAG_COLUMNS + [
     "return_vol_5",
     "return_vol_10",
     "return_vol_20",
-    "hl_range_pct",
     "log_volume",
     "volume_mean_10",
     "volume_mean_20",
 ]
 
-FULL_FEATURE_COLUMNS = LAG_COLUMNS + TECHNICAL_COLUMNS + RETURN_COLUMNS
+# Public, explicit methodology contract for Lag-Informed Regression.
+# ``FULL_FEATURE_COLUMNS`` remains an alias for existing consumers.
+REGRESSION_FEATURE_COLUMNS = LAG_COLUMNS + TECHNICAL_COLUMNS + RETURN_COLUMNS
+FULL_FEATURE_COLUMNS = REGRESSION_FEATURE_COLUMNS
 
 
 def build_lag_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -111,15 +116,23 @@ def build_lag_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _rsi(close: pd.Series, period: int = 14) -> pd.Series:
-    """Wilder's Relative Strength Index."""
+    """Wilder RSI with explicit zero-loss/gain handling after warm-up."""
     delta = close.diff()
     gain = delta.clip(lower=0.0)
     loss = -delta.clip(upper=0.0)
     avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(50.0)  # neutral RSI where undefined (e.g. no losses yet)
+    rsi = pd.Series(np.nan, index=close.index, dtype=float)
+    ready = avg_gain.notna() & avg_loss.notna()
+    gain_only = ready & (avg_gain > 0) & (avg_loss == 0)
+    loss_only = ready & (avg_gain == 0) & (avg_loss > 0)
+    flat = ready & (avg_gain == 0) & (avg_loss == 0)
+    normal = ready & (avg_loss > 0)
+    rsi.loc[gain_only] = 100.0
+    rsi.loc[loss_only] = 0.0
+    rsi.loc[flat] = 50.0
+    rsi.loc[normal] = 100.0 - (100.0 / (1.0 + avg_gain.loc[normal] / avg_loss.loc[normal]))
+    return rsi
 
 
 def _macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> tuple[pd.Series, pd.Series]:
@@ -157,11 +170,20 @@ def build_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     bb_upper, bb_lower = _bollinger(close)
     out["bb_upper"] = bb_upper
     out["bb_lower"] = bb_lower
-
     out["daily_return"] = close.pct_change()
     out["rolling_volatility"] = out["daily_return"].rolling(10).std()
+    # Legacy raw-spread aliases are retained so already-persisted regression
+    # artifacts can still run daily inference. New formal fits use the
+    # percentage-normalized columns in REGRESSION_FEATURE_COLUMNS instead.
     out["hl_spread"] = df["High"] - df["Low"]
     out["oc_spread"] = df["Open"] - df["Close"]
+    out["hl_range_pct"] = (df["High"] - df["Low"]) / close.replace(0, np.nan)
+    out["oc_return_pct"] = (df["Close"] - df["Open"]) / df["Open"].replace(0, np.nan)
+    out["ema_gap_pct"] = (out["ema_10"] - out["ema_20"]) / out["ema_20"].replace(0, np.nan)
+    out["macd_pct"] = macd_line / close.replace(0, np.nan)
+    bb_range = (bb_upper - bb_lower).replace(0, np.nan)
+    out["bb_width_pct"] = bb_range / close.replace(0, np.nan)
+    out["bb_percent_b"] = (close - bb_lower) / bb_range
 
     return out
 
@@ -184,7 +206,6 @@ def build_return_features(df: pd.DataFrame) -> pd.DataFrame:
         out[f"return_mean_{window}"] = daily_return.shift(1).rolling(window).mean()
         out[f"return_vol_{window}"] = daily_return.shift(1).rolling(window).std()
 
-    out["hl_range_pct"] = (df["High"] - df["Low"]) / df["Close"].replace(0, np.nan)
     out["log_volume"] = np.log1p(df["Volume"].clip(lower=0))
     out["volume_mean_10"] = df["Volume"].shift(1).rolling(10).mean()
     out["volume_mean_20"] = df["Volume"].shift(1).rolling(20).mean()
@@ -210,6 +231,10 @@ def build_full_features(df: pd.DataFrame) -> pd.DataFrame:
     target_delta.index = df.index
 
     out = pd.concat([lag, technical, returns], axis=1)
+    # Keep explicit chronological keys with every supervised row.  These
+    # identifiers are not predictor columns and never establish a split.
+    out["origin_date"] = pd.to_datetime(df["Date"])
+    out["target_date"] = pd.to_datetime(df["Date"]).shift(-1)
     out["target"] = target_close
     out["target_delta"] = target_delta
     return out

@@ -90,8 +90,16 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
         plan.holdout_start_date.date(), plan.holdout_end_date.date(),
     )
 
-    lag_artifact, lag_metrics, lag_next, lag_backtest, lag_test_actual, lag_test_pred = lag_regression.train(df)
+    # Formal regression is development-only and supplies the genuine OOS
+    # backtest/metrics.  The separately refit deployment artifact preserves
+    # current daily-inference behavior and is the only artifact persisted.
+    formal_lag = lag_regression.train_formal_lag_regression(df, plan)
+    validate_formal_holdout_alignment({"lag_reg": formal_lag.forecasts}, plan, required_models=("lag_reg",))
+    lag_artifact = lag_regression.train_deployment_lag_regression(df)
     lag_regression.save(lag_artifact, LAG_MODELS_DIR / f"{symbol}.pkl")
+    lag_metrics = formal_lag.metrics
+    lag_next = lag_regression.predict_next(lag_artifact, df)
+    lag_backtest = formal_lag.backtest
 
     arima_fitted, order, arima_metrics, arima_next, arima_backtest, arima_test_actual, arima_test_pred = arima_model.train(df)
     arima_model.save(arima_fitted, ARIMA_MODELS_DIR / f"{symbol}.pkl")
