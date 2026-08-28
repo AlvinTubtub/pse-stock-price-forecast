@@ -101,9 +101,14 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
     lag_next = lag_regression.predict_next(lag_artifact, df)
     lag_backtest = formal_lag.backtest
 
-    arima_fitted, order, arima_metrics, arima_next, arima_backtest, arima_test_actual, arima_test_pred = arima_model.train(df)
+    formal_arima = arima_model.train_formal_arima(df, plan)
+    validate_formal_holdout_alignment({"arima": formal_arima.forecasts}, plan, required_models=("arima",))
+    arima_fitted, deployment_order = arima_model.train_deployment_arima(df)
     arima_model.save(arima_fitted, ARIMA_MODELS_DIR / f"{symbol}.pkl")
-    log.info("%s ARIMA order selected: %s", symbol, order)
+    arima_metrics = formal_arima.metrics
+    arima_next = arima_model.predict_next(arima_fitted) if arima_fitted is not None else float(df["Close"].iloc[-1])
+    arima_backtest = formal_arima.backtest
+    log.info("%s ARIMA formal order=%s deployment order=%s", symbol, formal_arima.order, deployment_order)
 
     lstm_artifact, lstm_metrics, lstm_next, lstm_backtest, lstm_test_actual, lstm_test_pred = lstm_model.train(df)
     lstm_model.save(lstm_artifact, LSTM_MODELS_DIR / f"{symbol}.pth")
