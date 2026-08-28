@@ -1,0 +1,82 @@
+{
+  "artifact_layout": "deployment/current",
+  "artifacts": {
+    "ALI": {
+      "arima": "models/deployment/current/arima/ALI.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/ALI.pkl",
+      "lstm": "models/deployment/current/lstm/ALI.pth"
+    },
+    "APX": {
+      "arima": "models/deployment/current/arima/APX.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/APX.pkl",
+      "lstm": "models/deployment/current/lstm/APX.pth"
+    },
+    "BPI": {
+      "arima": "models/deployment/current/arima/BPI.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/BPI.pkl",
+      "lstm": "models/deployment/current/lstm/BPI.pth"
+    },
+    "GLO": {
+      "arima": "models/deployment/current/arima/GLO.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/GLO.pkl",
+      "lstm": "models/deployment/current/lstm/GLO.pth"
+    },
+    "ICT": {
+      "arima": "models/deployment/current/arima/ICT.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/ICT.pkl",
+      "lstm": "models/deployment/current/lstm/ICT.pth"
+    },
+    "JFC": {
+      "arima": "models/deployment/current/arima/JFC.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/JFC.pkl",
+      "lstm": "models/deployment/current/lstm/JFC.pth"
+    },
+    "MBT": {
+      "arima": "models/deployment/current/arima/MBT.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/MBT.pkl",
+      "lstm": "models/deployment/current/lstm/MBT.pth"
+    },
+    "MEG": {
+      "arima": "models/deployment/current/arima/MEG.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/MEG.pkl",
+      "lstm": "models/deployment/current/lstm/MEG.pth"
+    },
+    "MER": {
+      "arima": "models/deployment/current/arima/MER.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/MER.pkl",
+      "lstm": "models/deployment/current/lstm/MER.pth"
+    },
+    "NIKL": {
+      "arima": "models/deployment/current/arima/NIKL.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/NIKL.pkl",
+      "lstm": "models/deployment/current/lstm/NIKL.pth"
+    },
+    "PGOLD": {
+      "arima": "models/deployment/current/arima/PGOLD.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/PGOLD.pkl",
+      "lstm": "models/deployment/current/lstm/PGOLD.pth"
+    },
+    "SCC": {
+      "arima": "models/deployment/current/arima/SCC.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/SCC.pkl",
+      "lstm": "models/deployment/current/lstm/SCC.pth"
+    },
+    "SECB": {
+      "arima": "models/deployment/current/arima/SECB.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/SECB.pkl",
+      "lstm": "models/deployment/current/lstm/SECB.pth"
+    },
+    "SHLPH": {
+      "arima": "models/deployment/current/arima/SHLPH.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/SHLPH.pkl",
+      "lstm": "models/deployment/current/lstm/SHLPH.pth"
+    },
+    "SMPH": {
+      "arima": "models/deployment/current/arima/SMPH.pkl",
+      "lag_regression": "models/deployment/current/lag_regression/SMPH.pkl",
+      "lstm": "models/deployment/current/lstm/SMPH.pth"
+    }
+  },
+  "created_at": "2026-08-28T16:55:52.727214+00:00",
+  "mode": "deployment"
+}

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-28T16:02:09.341403+08:00",
+  "generatedAt": "2026-08-29T00:58:15.468617+08:00",
   "forecastDate": "2026-09-01",
   "lastRunAt": "2026-08-28T08:02:04+00:00",
   "status": "ok",
@@ -28,32 +28,32 @@
     }
   ],
   "marketSummary": {
-    "gainers": 3,
-    "losers": 9,
-    "unchanged": 3
+    "gainers": 5,
+    "losers": 6,
+    "unchanged": 4
   },
   "topGainer": {
-    "symbol": "ICT",
-    "name": "Intl. Container Terminal Services",
-    "sector": "Services",
-    "latestClose": 885.0,
-    "predictedClose": 891.13,
-    "pctChange": 0.69,
+    "symbol": "BPI",
+    "name": "Bank of the Philippine Islands",
+    "sector": "Financials",
+    "latestClose": 100.0,
+    "predictedClose": 100.72,
+    "pctChange": 0.72,
     "direction": "bullish",
-    "bestModel": "LSTM",
-    "confidence": 98.9,
+    "bestModel": "ARIMA",
+    "confidence": 93.8,
     "forecastDate": "2026-09-01"
   },
   "topLoser": {
-    "symbol": "APX",
-    "name": "Apex Mining Co., Inc.",
-    "sector": "Mining and Oil",
-    "latestClose": 16.22,
-    "predictedClose": 16.12,
-    "pctChange": -0.62,
+    "symbol": "JFC",
+    "name": "Jollibee Foods Corporation",
+    "sector": "Industrial",
+    "latestClose": 150.0,
+    "predictedClose": 149.45,
+    "pctChange": -0.37,
     "direction": "bearish",
     "bestModel": "LSTM",
-    "confidence": 96.5,
+    "confidence": 98.3,
     "forecastDate": "2026-09-01"
   }
 }
