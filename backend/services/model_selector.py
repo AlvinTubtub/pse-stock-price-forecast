@@ -32,13 +32,19 @@ import json
 import logging
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from services.data_validator import CSVValidationError, validate_ohlcv_csv
 from services.pdf_pipeline.config import TARGET_COMPANIES
 from services.evaluation import evaluate_naive, run_cross_model_statistical_tests, select_best_model
+from services.formal_evaluation import (
+    FORMAL_FORECAST_COLUMNS,
+    FORMAL_MODEL_KEYS,
+    FormalHoldoutAlignmentError,
+    validate_formal_holdout_alignment,
+)
 from services.forecasting import MODEL_LABELS, arima_model, lag_regression, lstm_model
+from services.time_series_cv import FormalEvaluationPlan, create_formal_evaluation_plan
 
 log = logging.getLogger(__name__)
 
@@ -62,22 +68,6 @@ def _ensure_dirs() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
-def _align_test_errors(test_sets: dict[str, tuple[list[float], list[float]]]) -> dict[str, np.ndarray]:
-    """Each model's (test_actual, test_pred) pair may have a different
-    length — regression/ARIMA split on the raw row count, the LSTM splits
-    on however many windows its grid-search-chosen lookback produced.
-    Truncates every model to the shortest common length, right-aligned
-    (all splits end on the same most-recent calendar day), so pairwise
-    forecast errors are comparable date-for-date, as the Diebold-Mariano
-    test requires.
-    """
-    min_len = min(len(actual) for actual, _pred in test_sets.values())
-    errors = {}
-    for model_key, (actual, pred) in test_sets.items():
-        actual_arr = np.asarray(actual[-min_len:], dtype=float)
-        pred_arr = np.asarray(pred[-min_len:], dtype=float)
-        errors[model_key] = actual_arr - pred_arr
-    return errors
 
 
 def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndarray]]:
@@ -93,6 +83,12 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
     statistical tests, not persisted to the dashboard cache.
     """
     log.info("Training models for %s (%d rows)...", symbol, len(df))
+    plan = create_formal_evaluation_plan(df, symbol)
+    log.info(
+        "%s formal evaluation plan: %d development and %d hold-out target dates (%s to %s).",
+        symbol, plan.development_count, plan.holdout_count,
+        plan.holdout_start_date.date(), plan.holdout_end_date.date(),
+    )
 
     lag_artifact, lag_metrics, lag_next, lag_backtest, lag_test_actual, lag_test_pred = lag_regression.train(df)
     lag_regression.save(lag_artifact, LAG_MODELS_DIR / f"{symbol}.pkl")
@@ -104,7 +100,7 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
     lstm_artifact, lstm_metrics, lstm_next, lstm_backtest, lstm_test_actual, lstm_test_pred = lstm_model.train(df)
     lstm_model.save(lstm_artifact, LSTM_MODELS_DIR / f"{symbol}.pth")
 
-    naive_metrics = evaluate_naive(df)
+    naive_metrics = evaluate_naive(df, plan=plan)
 
     result = {
         "metrics": {
@@ -126,12 +122,13 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
         },
     }
 
-    test_errors = _align_test_errors({
-        "lag_reg": (lag_test_actual, lag_test_pred),
-        "arima": (arima_test_actual, arima_test_pred),
-        "lstm": (lstm_test_actual, lstm_test_pred),
-    })
-    return result, test_errors
+    # Legacy model APIs currently return unkeyed arrays.  They are not
+    # accepted as formal research outputs because converting them by array
+    # position would reintroduce M01.  Phase 2–4 model adapters must emit
+    # FORMAL_FORECAST_COLUMNS and pass validate_formal_holdout_alignment.
+    # Dashboard metrics/backtests remain available for compatibility, but no
+    # cross-model formal statistics are produced from legacy arrays.
+    return result, {}
 
 
 def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> dict[str, str]:

@@ -32,11 +32,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 log = logging.getLogger(__name__)
 
-# Matches TEST_FRACTION in services/forecasting/arima_model.py and
-# services/forecasting/lag_regression.py — there is no shared split
-# helper to import (see note below), so this is kept numerically
-# identical to those rather than introducing a divergent split.
-TEST_FRACTION = 0.15
+from services.time_series_cv import FormalEvaluationPlan, build_forecast_rows
 
 
 def _naive_mae(y_reference: np.ndarray) -> float:
@@ -54,8 +50,7 @@ def _naive_mae(y_reference: np.ndarray) -> float:
 
 
 def compute_metrics(y_true, y_pred, y_train=None) -> dict:
-    """RMSE, MAE, MASE, R² — the four headline metrics used across the
-    project, all as formatted strings for direct display.
+    """RMSE, MAE, MASE, R² as full-precision numeric values.
 
     ``y_train`` should be the in-sample (training) target series, used as
     the naive one-step-forecast baseline that scales MASE. When omitted
@@ -73,18 +68,36 @@ def compute_metrics(y_true, y_pred, y_train=None) -> dict:
     r2 = float(r2_score(y_true, y_pred)) if len(y_true) > 1 else 0.0
 
     return {
-        "rmse": f"{rmse:.4f}",
-        "mae": f"{mae:.4f}",
-        "mase": f"{mase:.4f}",
-        "r2": f"{r2:.4f}",
+        "rmse": rmse,
+        "mae": mae,
+        "mase": float(mase),
+        "r2": r2,
     }
 
 
-def evaluate_naive(df: pd.DataFrame) -> dict:
+def build_naive_formal_forecasts(df: pd.DataFrame, plan: FormalEvaluationPlan) -> pd.DataFrame:
+    """Build one naive prediction per required formal hold-out target date.
+
+    The naive forecast is exactly ``Close[t]`` for target ``t+1``.  This is
+    intentionally date-keyed, so it is suitable for strict cross-model
+    validation rather than positional array comparisons.
+    """
+    rows = build_forecast_rows(df, plan.symbol)
+    holdout = rows.loc[rows["target_date"].isin(plan.holdout_target_dates)].copy()
+    if len(holdout) != plan.holdout_count:
+        raise ValueError(f"{plan.symbol}: naive forecast rows do not match the frozen hold-out plan.")
+    holdout["model"] = "naive"
+    holdout["predicted_close"] = pd.to_numeric(
+        df.set_index(pd.to_datetime(df["Date"]))["Close"].reindex(holdout["origin_date"]).to_numpy(),
+        errors="raise",
+    )
+    holdout["error"] = holdout["actual_close"] - holdout["predicted_close"]
+    return holdout[["symbol", "model", "origin_date", "target_date", "actual_close", "predicted_close", "error"]]
+
+
+def evaluate_naive(df: pd.DataFrame, plan: FormalEvaluationPlan | None = None) -> dict:
     """Baseline: walk-forward one-step naive forecast (predict tomorrow's
-    close = today's close), evaluated on the same held-out 15% test
-    window used by the other models (see ``TEST_FRACTION`` in
-    services/forecasting/arima_model.py and lag_regression.py).
+    close = today's close), evaluated on the frozen plan when supplied.
 
     The first test-set prediction is the last *training* observation;
     every prediction after that is the previous *actual* test-set value
@@ -94,15 +107,20 @@ def evaluate_naive(df: pd.DataFrame) -> dict:
     (training-period) naive MAE, per Hyndman & Koehler, matching how the
     other models are scored.
     """
-    close = df["Close"].values
-    n = len(close)
-    n_test = max(1, int(round(n * TEST_FRACTION)))
-    train_series = close[: n - n_test]
-    test_series = close[n - n_test :]
+    if plan is not None:
+        naive_rows = build_naive_formal_forecasts(df, plan)
+        train_series = df.loc[pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"].to_numpy(dtype=float)
+        test_series = naive_rows["actual_close"].to_numpy(dtype=float)
+        y_pred = naive_rows["predicted_close"].to_numpy(dtype=float)
+    else:
+        close = df["Close"].values
+        n_test = max(1, int(round(len(close) * 0.15)))
+        train_series = close[: len(close) - n_test]
+        test_series = close[len(close) - n_test :]
+        y_pred = np.concatenate([[train_series[-1]], test_series[:-1]])
 
     log.info("Naive baseline: %d train rows, %d test rows", len(train_series), len(test_series))
 
-    y_pred = np.concatenate([[train_series[-1]], test_series[:-1]])
     metrics = compute_metrics(test_series, y_pred, y_train=train_series)
 
     log.info("Naive baseline evaluation complete.")
