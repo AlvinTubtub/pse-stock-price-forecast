@@ -36,7 +36,7 @@ import pandas as pd
 
 from services.data_validator import CSVValidationError, validate_ohlcv_csv
 from services.pdf_pipeline.config import TARGET_COMPANIES
-from services.evaluation import evaluate_naive, run_cross_model_statistical_tests, select_best_model
+from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_cross_model_statistical_tests, select_best_model
 from services.formal_evaluation import (
     FORMAL_FORECAST_COLUMNS,
     FORMAL_MODEL_KEYS,
@@ -110,8 +110,13 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
     arima_backtest = formal_arima.backtest
     log.info("%s ARIMA formal order=%s deployment order=%s", symbol, formal_arima.order, deployment_order)
 
-    lstm_artifact, lstm_metrics, lstm_next, lstm_backtest, lstm_test_actual, lstm_test_pred = lstm_model.train(df)
+    formal_lstm = lstm_model.train_formal_lstm(df, plan)
+    validate_formal_holdout_alignment({"lstm": formal_lstm.forecasts}, plan, required_models=("lstm",))
+    lstm_artifact = lstm_model.train_deployment_lstm(df, formal_lstm.selected_config)
     lstm_model.save(lstm_artifact, LSTM_MODELS_DIR / f"{symbol}.pth")
+    lstm_metrics = formal_lstm.metrics
+    lstm_next = lstm_model.predict_next(lstm_artifact, df) if lstm_artifact is not None else float(df["Close"].iloc[-1])
+    lstm_backtest = formal_lstm.backtest
 
     naive_metrics = evaluate_naive(df, plan=plan)
 
@@ -135,12 +140,13 @@ def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndar
         },
     }
 
-    # Legacy model APIs currently return unkeyed arrays.  They are not
-    # accepted as formal research outputs because converting them by array
-    # position would reintroduce M01.  Phase 2–4 model adapters must emit
-    # FORMAL_FORECAST_COLUMNS and pass validate_formal_holdout_alignment.
-    # Dashboard metrics/backtests remain available for compatibility, but no
-    # cross-model formal statistics are produced from legacy arrays.
+    # All four methods now have exact date-indexed formal rows. Validate the
+    # common plan before deriving aligned errors, but keep Phase 5 inference
+    # disabled rather than reviving the old DM/Friedman workflow.
+    naive_rows = build_naive_formal_forecasts(df, plan)
+    validated = validate_formal_holdout_alignment(
+        {"lag_reg": formal_lag.forecasts, "arima": formal_arima.forecasts, "lstm": formal_lstm.forecasts, "naive": naive_rows}, plan
+    )
     return result, {}
 
 
