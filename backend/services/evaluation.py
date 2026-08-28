@@ -30,6 +30,12 @@ import pandas as pd
 from scipy.stats import friedmanchisquare, shapiro, t as t_dist, wilcoxon
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+try:
+    from statsmodels.stats.diagnostic import acorr_ljungbox, het_arch
+    HAS_STATSMODELS_DIAGNOSTICS = True
+except Exception:  # pragma: no cover - environment-dependent optional diagnostics
+    HAS_STATSMODELS_DIAGNOSTICS = False
+
 log = logging.getLogger(__name__)
 
 from services.time_series_cv import FormalEvaluationPlan, build_forecast_rows
@@ -263,12 +269,42 @@ def moving_block_bootstrap(differential, *, replications: int = 5000, seed: int 
     return {"method": "moving_block_bootstrap", "computable": True, "bootstrap_replications": replications, "seed": seed, "block_length": block, "observed_mean_loss_differential": observed, "bootstrap_p_value": float((1 + np.sum(np.abs(means) >= abs(observed))) / (replications + 1)), "confidence_interval": [float(np.percentile(means + observed, 2.5)), float(np.percentile(means + observed, 97.5))]}
 
 
+def run_formal_residual_diagnostics(errors, *, include_ljung_box: bool = False) -> dict:
+    """Diagnostics for the unmodified chronological formal hold-out errors.
+
+    ARCH uses a deterministic ``min(5, n // 5)`` lag rule and requires at
+    least ten errors.  Non-finite or too-short sequences are explicitly
+    non-computable; this helper never drops or reorders observations.
+    """
+    values = np.asarray(errors, dtype=float)
+    target = "holdout_forecast_errors"
+    n = int(len(values))
+    valid = bool(np.isfinite(values).all())
+    reason = "nonfinite_errors" if not valid else "insufficient_errors"
+    result: dict = {}
+    if include_ljung_box:
+        if not valid or n < 3 or not HAS_STATSMODELS_DIAGNOSTICS:
+            result["ljung_box"] = {"diagnostic": "ljung_box", "diagnostic_target": target, "computable": False, "reason": reason if valid else reason, "lags": [], "n": n, "statistic": None, "p_value": None}
+        else:
+            lag = min(10, n - 1)
+            table = acorr_ljungbox(values, lags=[lag], return_df=True)
+            result["ljung_box"] = {"diagnostic": "ljung_box", "diagnostic_target": target, "computable": True, "lags": [lag], "n": n, "statistic": float(table["lb_stat"].iloc[0]), "p_value": float(table["lb_pvalue"].iloc[0])}
+    if not valid or n < 3 or np.ptp(values) == 0:
+        result["shapiro_wilk"] = {"diagnostic": "shapiro_wilk", "diagnostic_target": target, "computable": False, "reason": "zero_variance_errors" if valid and n >= 3 else reason, "n": n, "statistic": None, "p_value": None}
+    else:
+        statistic, p_value = shapiro(values)
+        result["shapiro_wilk"] = {"diagnostic": "shapiro_wilk", "diagnostic_target": target, "computable": True, "n": n, "statistic": float(statistic), "p_value": float(p_value)}
+    if not valid or n < 10 or not HAS_STATSMODELS_DIAGNOSTICS:
+        result["arch_lm"] = {"diagnostic": "arch_lm", "diagnostic_target": target, "computable": False, "reason": reason if valid else reason, "n": n, "lags": [], "lm_statistic": None, "lm_p_value": None, "f_statistic": None, "f_p_value": None}
+    else:
+        lags = min(5, n // 5)
+        lm_statistic, lm_p_value, f_statistic, f_p_value = het_arch(values, nlags=lags)
+        result["arch_lm"] = {"diagnostic": "arch_lm", "diagnostic_target": target, "computable": True, "n": n, "lags": [lags], "lm_statistic": float(lm_statistic), "lm_p_value": float(lm_p_value), "f_statistic": float(f_statistic), "f_p_value": float(f_p_value)}
+    return result
+
+
 def _diagnostics(errors) -> dict:
-    values = np.asarray(errors, float)
-    if len(values) < 3 or not np.isfinite(values).all():
-        return {"shapiro_wilk": {"computable": False, "reason": "insufficient_or_nonfinite_errors", "n": len(values)}, "arch_lm": {"computable": False, "reason": "insufficient_or_nonfinite_errors", "n": len(values)}}
-    stat, p = shapiro(values)
-    return {"shapiro_wilk": {"diagnostic": "shapiro_wilk", "computable": True, "statistic": float(stat), "p_value": float(p), "n": len(values)}, "arch_lm": {"diagnostic": "arch_lm", "computable": False, "reason": "statsmodels_arch_helper_unavailable", "n": len(values)}}
+    return run_formal_residual_diagnostics(errors)
 
 
 def _stage(errors: dict[str, np.ndarray], metrics: dict[str, dict], power: int, alpha: float) -> dict:

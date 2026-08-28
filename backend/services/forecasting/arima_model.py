@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from services.evaluation import compute_metrics
+from services.evaluation import compute_metrics, run_formal_residual_diagnostics
 from services.time_series_cv import FormalEvaluationPlan, development_ohlcv_for_plan, expanding_window_splitter
 
 log = logging.getLogger(__name__)
@@ -127,21 +127,20 @@ def _select_formal_order(development_close: pd.Series) -> tuple[tuple[int, int, 
     return winner.order, results
 
 
-def _holdout_ljung_box(errors: np.ndarray) -> dict[str, float | int | str | list[int]]:
-    """Ljung-Box diagnostic of genuine formal hold-out forecast errors."""
-    errors = np.asarray(errors, dtype=float)
-    if len(errors) < 2 or not HAS_STATSMODELS:
-        return {"diagnostic_target": "holdout_forecast_errors", "lags": [], "n_errors": int(len(errors)), "statistic": float("nan"), "p_value": float("nan")}
-    lag = min(LJUNG_BOX_LAGS, len(errors) - 1)
+def _adf_metadata(series: pd.Series) -> dict:
+    """Record the development-only ADF decision used to prioritize orders."""
+    if not HAS_STATSMODELS:
+        return {"computable": False, "reason": "statsmodels_unavailable"}
     try:
-        table = acorr_ljungbox(errors, lags=[lag], return_df=True)
-        return {
-            "diagnostic_target": "holdout_forecast_errors", "lags": [lag], "n_errors": int(len(errors)),
-            "statistic": float(table["lb_stat"].iloc[0]), "p_value": float(table["lb_pvalue"].iloc[0]),
-        }
-    except Exception:  # pragma: no cover
-        log.warning("Formal hold-out Ljung-Box failed.", exc_info=True)
-        return {"diagnostic_target": "holdout_forecast_errors", "lags": [lag], "n_errors": int(len(errors)), "statistic": float("nan"), "p_value": float("nan")}
+        statistic, p_value, *_ = adfuller(pd.Series(series, dtype=float).dropna())
+        return {"computable": True, "statistic": float(statistic), "p_value": float(p_value), "stationary_at_alpha_0_05": bool(p_value < .05)}
+    except Exception as exc:
+        return {"computable": False, "reason": f"adf_failed:{type(exc).__name__}"}
+
+
+def _holdout_ljung_box(errors: np.ndarray) -> dict:
+    """Backward-compatible formal Ljung-Box entrypoint for hold-out errors."""
+    return run_formal_residual_diagnostics(errors, include_ljung_box=True)["ljung_box"]
 
 
 def train_formal_arima(df: pd.DataFrame, plan: FormalEvaluationPlan) -> FormalARIMAResult:
@@ -163,9 +162,16 @@ def train_formal_arima(df: pd.DataFrame, plan: FormalEvaluationPlan) -> FormalAR
         "actual_close": actual.to_numpy(dtype=float), "predicted_close": predicted,
     })
     forecasts["error"] = forecasts["actual_close"] - forecasts["predicted_close"]
-    diagnostics = _holdout_ljung_box(forecasts["error"].to_numpy())
+    ljung_box = _holdout_ljung_box(forecasts["error"].to_numpy())
+    diagnostics = {
+        "selected_order": list(order),
+        "adf": _adf_metadata(development_close),
+        "ljung_box": ljung_box,
+        **ljung_box,
+        **run_formal_residual_diagnostics(forecasts["error"].to_numpy()),
+    }
     metrics = compute_metrics(forecasts["actual_close"], forecasts["predicted_close"], y_train=development_close)
-    metrics["ljung_box_pvalue"] = float(diagnostics["p_value"])
+    metrics["ljung_box_pvalue"] = ljung_box["p_value"]
     return FormalARIMAResult(formal_model, order, metrics, forecasts, forecasts["predicted_close"].tolist(), diagnostics, candidates)
 
 

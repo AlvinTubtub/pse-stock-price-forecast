@@ -45,7 +45,7 @@ from services.artifact_runs import (
     write_deployment_manifest,
 )
 from services.pdf_pipeline.config import TARGET_COMPANIES
-from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_formal_statistical_tests, select_best_model
+from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_formal_residual_diagnostics, run_formal_statistical_tests, select_best_model
 from services.formal_evaluation import validate_formal_holdout_alignment
 from services.forecasting import MODEL_LABELS, arima_model, lag_regression, lstm_model
 from services.time_series_cv import FormalEvaluationPlan, create_formal_evaluation_plan
@@ -80,7 +80,14 @@ def evaluate_formal_symbol(symbol: str, df: pd.DataFrame) -> dict:
     arima = arima_model.train_formal_arima(df, plan)
     lstm = lstm_model.train_formal_lstm(df, plan)
     forecasts = validate_formal_holdout_alignment({"lag_reg": lag.forecasts, "arima": arima.forecasts, "lstm": lstm.forecasts, "naive": build_naive_formal_forecasts(df, plan)}, plan)
-    return {"plan": plan, "forecasts": forecasts, "metrics": {"lag_reg": lag.metrics, "arima": arima.metrics, "lstm": lstm.metrics, "naive": evaluate_naive(df, plan=plan)}, "diagnostics": {"arima": arima.diagnostics, "lstm": lstm.metadata}, "development_close": df.loc[pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"].to_numpy(dtype=float), "lstm_config": lstm.selected_config, "backtests": {"lag_reg": lag.backtest, "arima": arima.backtest, "lstm": lstm.backtest}}
+    lag_metadata = {
+        "selected_alpha": lag.artifact.alpha,
+        "selected_features": lag.artifact.selected_features,
+        "coefficients": {name: float(value) for name, value in zip(lag.artifact.candidate_features, lag.artifact.model.coef_)},
+        **run_formal_residual_diagnostics(forecasts["lag_reg"]["error"], include_ljung_box=True),
+    }
+    lstm_metadata = {"training_metadata": lstm.metadata, **run_formal_residual_diagnostics(forecasts["lstm"]["error"])}
+    return {"plan": plan, "forecasts": forecasts, "metrics": {"lag_reg": lag.metrics, "arima": arima.metrics, "lstm": lstm.metrics, "naive": evaluate_naive(df, plan=plan)}, "diagnostics": {"lag_reg": lag_metadata, "arima": arima.diagnostics, "lstm": lstm_metadata}, "development_close": df.loc[pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"].to_numpy(dtype=float), "lstm_config": lstm.selected_config, "backtests": {"lag_reg": lag.backtest, "arima": arima.backtest, "lstm": lstm.backtest}}
 
 
 def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndarray]]:
@@ -236,13 +243,19 @@ def run_formal_evaluation(
             payload = evaluate_formal_symbol(symbol, df)
             plans[symbol] = payload["plan"]
             source_provenance[symbol] = source_data_manifest(csv_path, df)
-            formal_by_symbol[symbol] = {"forecasts": payload["forecasts"], "development_close": payload["development_close"]}
+            formal_by_symbol[symbol] = payload
             cutoff_dates.append(pd.to_datetime(df["Date"]).max())
-            writer.write_company(symbol, payload["forecasts"], payload["metrics"], payload["diagnostics"])
         writer.write_split_manifest(plans)
         writer.write_data_manifest(source_provenance)
         writer.write_methodology_manifest(str(max(cutoff_dates).date()), requested, git_dirty=git_dirty)
-        writer.write_statistics(run_formal_statistical_tests(formal_by_symbol))
+        statistics = run_formal_statistical_tests(formal_by_symbol)
+        for symbol in requested:
+            stage1 = statistics["per_company"][symbol]["dm_squared_error"]["stage1_vs_naive"]
+            flags = {item["model_a"]: {"beats_naive_rmse": item["beats_naive_rmse"], "significantly_beats_naive": item["significantly_beats_naive"]} for item in stage1}
+            for model_key in ("lag_reg", "arima", "lstm"):
+                formal_by_symbol[symbol]["diagnostics"][model_key].update(flags[model_key])
+            writer.write_company(symbol, formal_by_symbol[symbol]["forecasts"], formal_by_symbol[symbol]["metrics"], formal_by_symbol[symbol]["diagnostics"])
+        writer.write_statistics(statistics)
         finalized = writer.finalize()
         log.info("Finalized formal run %s", writer.path)
         return finalized

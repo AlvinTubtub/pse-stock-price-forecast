@@ -77,10 +77,11 @@ def test_formal_orchestration_never_writes_deployment_or_dashboard_state(tmp_pat
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
     (raw_dir / "BPI.csv").write_text("Date,Close\n2025-01-01,1\n")
-    payload = {"plan": plan, "forecasts": forecasts, "metrics": {model: {"rmse": 0.0} for model in forecasts}, "diagnostics": {}, "development_close": [1.0, 2.0]}
+    payload = {"plan": plan, "forecasts": forecasts, "metrics": {model: {"rmse": 0.0} for model in forecasts}, "diagnostics": {model: {} for model in ("lag_reg", "arima", "lstm")}, "development_close": [1.0, 2.0]}
     monkeypatch.setattr(model_selector, "BASE_DIR", tmp_path)
     source = pd.DataFrame({"Date": pd.date_range("2025-01-01", periods=2), "Close": [1.0, 2.0]})
-    with patch.object(model_selector, "git_worktree_is_dirty", return_value=False), patch.object(model_selector, "validate_ohlcv_csv", return_value=source), patch.object(model_selector, "evaluate_formal_symbol", return_value=payload), patch.object(model_selector, "run_formal_statistical_tests", return_value={"per_company": {}}):
+    statistics = {"per_company": {"BPI": {"dm_squared_error": {"stage1_vs_naive": [{"model_a": model, "beats_naive_rmse": True, "significantly_beats_naive": False} for model in ("lag_reg", "arima", "lstm")]}}}}
+    with patch.object(model_selector, "git_worktree_is_dirty", return_value=False), patch.object(model_selector, "validate_ohlcv_csv", return_value=source), patch.object(model_selector, "evaluate_formal_symbol", return_value=payload), patch.object(model_selector, "run_formal_statistical_tests", return_value=statistics):
         final = model_selector.run_formal_evaluation(raw_dir=raw_dir, symbols=["BPI"], run_id="formal_only")
     assert final.is_file()
     assert not (tmp_path / "models" / "deployment" / "current").exists()
