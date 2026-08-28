@@ -2,11 +2,11 @@
   "symbol": "SMPH",
   "name": "SM Prime Holdings, Inc.",
   "sector": "Property",
-  "previousClose": 17.8,
-  "predictedClose": 17.82,
-  "pesoChange": 0.02,
-  "pctChange": 0.11,
-  "direction": "bullish",
+  "previousClose": 17.84,
+  "predictedClose": 17.83,
+  "pesoChange": -0.01,
+  "pctChange": -0.06,
+  "direction": "bearish",
   "model": "Lag-Informed Regression",
   "confidence": 95.4,
   "metrics": {
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 17.82,
-    "arima": 17.85,
-    "lstm": 19.69
+    "lag": 17.83,
+    "arima": 17.84,
+    "lstm": 19.89
   },
   "ohlcv": [
     {
@@ -13025,10 +13025,17 @@
       "low": 17.8,
       "close": 17.8,
       "volume": 153131470
+    },
+    {
+      "date": "2026-08-28",
+      "open": 17.82,
+      "high": 17.9,
+      "low": 17.76,
+      "close": 17.84,
+      "volume": 292717936
     }
   ],
   "backtestDates": [
-    "2026-06-03",
     "2026-06-04",
     "2026-06-05",
     "2026-06-08",
@@ -13087,10 +13094,10 @@
     "2026-08-24",
     "2026-08-25",
     "2026-08-26",
-    "2026-08-27"
+    "2026-08-27",
+    "2026-08-28"
   ],
   "backtestActual": [
-    18.4,
     18.3,
     18.12,
     17.92,
@@ -13149,7 +13156,8 @@
     18.16,
     18.1,
     18.1,
-    17.8
+    17.8,
+    17.84
   ],
   "backtestByModel": {
     "Lag-Informed Regression": [
@@ -13339,7 +13347,6 @@
       20.078412532806396
     ],
     "Naive baseline": [
-      18.5,
       18.4,
       18.3,
       18.12,
@@ -13398,10 +13405,11 @@
       18.24,
       18.16,
       18.1,
-      18.1
+      18.1,
+      17.8
     ]
   },
-  "forecastDate": "2026-08-28",
-  "dataAsOf": "2026-08-27",
-  "inferenceAt": "2026-08-27T16:01:52+08:00"
+  "forecastDate": "2026-09-01",
+  "dataAsOf": "2026-08-28",
+  "inferenceAt": "2026-08-28T16:02:07+08:00"
 }
