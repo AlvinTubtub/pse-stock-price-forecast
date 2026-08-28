@@ -18,7 +18,7 @@ JSON, see scripts/export_forecast_artifacts.py).
 
 Directory layout produced:
 
-    models/
+    models/deployment/current/
         lag_regression/<TICKER>.pkl
         arima/<TICKER>.pkl
         lstm/<TICKER>.pth
@@ -36,14 +36,10 @@ import numpy as np
 import pandas as pd
 
 from services.data_validator import CSVValidationError, validate_ohlcv_csv
+from services.artifact_runs import FormalRunWriter, create_run_id, deployment_current_dir, write_deployment_manifest
 from services.pdf_pipeline.config import TARGET_COMPANIES
 from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_formal_statistical_tests, select_best_model
-from services.formal_evaluation import (
-    FORMAL_FORECAST_COLUMNS,
-    FORMAL_MODEL_KEYS,
-    FormalHoldoutAlignmentError,
-    validate_formal_holdout_alignment,
-)
+from services.formal_evaluation import validate_formal_holdout_alignment
 from services.forecasting import MODEL_LABELS, arima_model, lag_regression, lstm_model
 from services.time_series_cv import FormalEvaluationPlan, create_formal_evaluation_plan
 
@@ -52,9 +48,10 @@ log = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 RAW_DIR = BASE_DIR / "data" / "raw"
 MODELS_DIR = BASE_DIR / "models"
-LAG_MODELS_DIR = MODELS_DIR / "lag_regression"
-ARIMA_MODELS_DIR = MODELS_DIR / "arima"
-LSTM_MODELS_DIR = MODELS_DIR / "lstm"
+DEPLOYMENT_CURRENT_DIR = deployment_current_dir(BASE_DIR)
+LAG_MODELS_DIR = DEPLOYMENT_CURRENT_DIR / "lag_regression"
+ARIMA_MODELS_DIR = DEPLOYMENT_CURRENT_DIR / "arima"
+LSTM_MODELS_DIR = DEPLOYMENT_CURRENT_DIR / "lstm"
 PREDICTION_CACHE_DIR = BASE_DIR / "prediction_cache"
 BEST_MODELS_PATH = BASE_DIR / "best_models.json"
 STATISTICAL_TESTS_PATH = BASE_DIR / "statistical_tests.json"
@@ -68,87 +65,27 @@ def _ensure_dirs() -> None:
     for d in (LAG_MODELS_DIR, ARIMA_MODELS_DIR, LSTM_MODELS_DIR, PREDICTION_CACHE_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-
+def evaluate_formal_symbol(symbol: str, df: pd.DataFrame) -> dict:
+    """Evaluate a symbol without writing deployment, cache, or frontend artifacts."""
+    log.info("Formal evaluation for %s (%d rows).", symbol, len(df))
+    plan = create_formal_evaluation_plan(df, symbol)
+    lag = lag_regression.train_formal_lag_regression(df, plan)
+    arima = arima_model.train_formal_arima(df, plan)
+    lstm = lstm_model.train_formal_lstm(df, plan)
+    forecasts = validate_formal_holdout_alignment({"lag_reg": lag.forecasts, "arima": arima.forecasts, "lstm": lstm.forecasts, "naive": build_naive_formal_forecasts(df, plan)}, plan)
+    return {"plan": plan, "forecasts": forecasts, "metrics": {"lag_reg": lag.metrics, "arima": arima.metrics, "lstm": lstm.metrics, "naive": evaluate_naive(df, plan=plan)}, "diagnostics": {"arima": arima.diagnostics, "lstm": lstm.metadata}, "development_close": df.loc[pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"].to_numpy(dtype=float), "lstm_config": lstm.selected_config, "backtests": {"lag_reg": lag.backtest, "arima": arima.backtest, "lstm": lstm.backtest}}
 
 
 def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndarray]]:
-    """Trains + evaluates all three models for one ticker, saves each to
-    disk, and returns (result, test_errors).
-
-    ``result`` is cached for the dashboard (same shape as the legacy
-    ``run_all_models`` return value, plus whatever additive diagnostic
-    fields each model's metrics dict now includes, e.g. ARIMA's
-    ``ljung_box_pvalue``). ``test_errors`` is {model_key: np.ndarray of
-    (actual - predicted) reconstructed-price errors}, aligned to a common
-    test window — used by train_and_select_all for the cross-model
-    statistical tests, not persisted to the dashboard cache.
-    """
-    log.info("Training models for %s (%d rows)...", symbol, len(df))
-    plan = create_formal_evaluation_plan(df, symbol)
-    log.info(
-        "%s formal evaluation plan: %d development and %d hold-out target dates (%s to %s).",
-        symbol, plan.development_count, plan.holdout_count,
-        plan.holdout_start_date.date(), plan.holdout_end_date.date(),
-    )
-
-    # Formal regression is development-only and supplies the genuine OOS
-    # backtest/metrics.  The separately refit deployment artifact preserves
-    # current daily-inference behavior and is the only artifact persisted.
-    formal_lag = lag_regression.train_formal_lag_regression(df, plan)
-    validate_formal_holdout_alignment({"lag_reg": formal_lag.forecasts}, plan, required_models=("lag_reg",))
-    lag_artifact = lag_regression.train_deployment_lag_regression(df)
-    lag_regression.save(lag_artifact, LAG_MODELS_DIR / f"{symbol}.pkl")
-    lag_metrics = formal_lag.metrics
-    lag_next = lag_regression.predict_next(lag_artifact, df)
-    lag_backtest = formal_lag.backtest
-
-    formal_arima = arima_model.train_formal_arima(df, plan)
-    validate_formal_holdout_alignment({"arima": formal_arima.forecasts}, plan, required_models=("arima",))
-    arima_fitted, deployment_order = arima_model.train_deployment_arima(df)
-    arima_model.save(arima_fitted, ARIMA_MODELS_DIR / f"{symbol}.pkl")
-    arima_metrics = formal_arima.metrics
-    arima_next = arima_model.predict_next(arima_fitted) if arima_fitted is not None else float(df["Close"].iloc[-1])
-    arima_backtest = formal_arima.backtest
-    log.info("%s ARIMA formal order=%s deployment order=%s", symbol, formal_arima.order, deployment_order)
-
-    formal_lstm = lstm_model.train_formal_lstm(df, plan)
-    validate_formal_holdout_alignment({"lstm": formal_lstm.forecasts}, plan, required_models=("lstm",))
-    lstm_artifact = lstm_model.train_deployment_lstm(df, formal_lstm.selected_config)
-    lstm_model.save(lstm_artifact, LSTM_MODELS_DIR / f"{symbol}.pth")
-    lstm_metrics = formal_lstm.metrics
-    lstm_next = lstm_model.predict_next(lstm_artifact, df) if lstm_artifact is not None else float(df["Close"].iloc[-1])
-    lstm_backtest = formal_lstm.backtest
-
-    naive_metrics = evaluate_naive(df, plan=plan)
-
-    result = {
-        "metrics": {
-            "lag_reg": lag_metrics,
-            "arima": arima_metrics,
-            "lstm": lstm_metrics,
-            "naive": naive_metrics,
-        },
-        "next_close": {
-            "lag": round(lag_next, 2),
-            "arima": round(arima_next, 2),
-            "lstm": round(lstm_next, 2),
-        },
-        "backtest30": lag_backtest[-30:] if len(lag_backtest) >= 30 else lag_backtest,
-        "backtest_by_model": {
-            "Lag-Informed Regression": lag_backtest,
-            "ARIMA": arima_backtest,
-            "LSTM": lstm_backtest,
-        },
-    }
-
-    # All four methods now have exact date-indexed formal rows. Validate the
-    # common plan before deriving aligned errors, but keep Phase 5 inference
-    # disabled rather than reviving the old DM/Friedman workflow.
-    naive_rows = build_naive_formal_forecasts(df, plan)
-    validated = validate_formal_holdout_alignment(
-        {"lag_reg": formal_lag.forecasts, "arima": formal_arima.forecasts, "lstm": formal_lstm.forecasts, "naive": naive_rows}, plan
-    )
-    return result, {"forecasts": validated, "development_close": df.loc[pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"].to_numpy(dtype=float)}
+    """Refit deployment artifacts after deriving the established formal configuration."""
+    formal = evaluate_formal_symbol(symbol, df)
+    log.info("Deployment refit for %s writes only deployment-current artifacts.", symbol)
+    lag_artifact = lag_regression.train_deployment_lag_regression(df); lag_regression.save(lag_artifact, LAG_MODELS_DIR / f"{symbol}.pkl")
+    arima_fitted, deployment_order = arima_model.train_deployment_arima(df); arima_model.save(arima_fitted, ARIMA_MODELS_DIR / f"{symbol}.pkl")
+    lstm_artifact = lstm_model.train_deployment_lstm(df, formal["lstm_config"]); lstm_model.save(lstm_artifact, LSTM_MODELS_DIR / f"{symbol}.pth")
+    result = {"metrics": formal["metrics"], "next_close": {"lag": round(lag_regression.predict_next(lag_artifact, df), 2), "arima": round(arima_model.predict_next(arima_fitted), 2) if arima_fitted is not None else float(df["Close"].iloc[-1]), "lstm": round(lstm_model.predict_next(lstm_artifact, df), 2) if lstm_artifact is not None else float(df["Close"].iloc[-1])}, "backtest30": formal["backtests"]["lag_reg"][-30:], "backtest_by_model": {"Lag-Informed Regression": formal["backtests"]["lag_reg"], "ARIMA": formal["backtests"]["arima"], "LSTM": formal["backtests"]["lstm"]}}
+    log.info("%s deployment ARIMA order=%s", symbol, deployment_order)
+    return result, {"forecasts": formal["forecasts"], "development_close": formal["development_close"]}
 
 
 def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> dict[str, str]:
@@ -245,13 +182,69 @@ def train_and_select_all(raw_dir: Path = RAW_DIR, *, strict: bool = False) -> di
         except Exception:
             log.exception("Cross-model statistical tests failed — best_models.json is still valid, but statistical_tests.json was not updated.")
 
+    deployment_artifacts = {
+        symbol: {
+            "lag_regression": str((LAG_MODELS_DIR / f"{symbol}.pkl").relative_to(BASE_DIR)),
+            "arima": str((ARIMA_MODELS_DIR / f"{symbol}.pkl").relative_to(BASE_DIR)),
+            "lstm": str((LSTM_MODELS_DIR / f"{symbol}.pth").relative_to(BASE_DIR)),
+        }
+        for symbol in best_models
+    }
+    manifest = write_deployment_manifest(BASE_DIR, deployment_artifacts)
+    log.info("Wrote deployment manifest to %s", manifest)
+
     return best_models
+
+
+def run_formal_evaluation(
+    raw_dir: Path = RAW_DIR,
+    *,
+    symbols: list[str],
+    run_id: str | None = None,
+) -> Path:
+    """Manually create one immutable formal run; never write deployment state.
+
+    A caller must explicitly name its company universe.  This prevents a
+    scheduled deployment workflow from accidentally launching a full formal
+    research experiment.
+    """
+    if not symbols:
+        raise ValueError("Formal evaluation requires an explicit symbol list (for example: BPI).")
+    requested = [symbol.upper() for symbol in symbols]
+    if len(set(requested)) != len(requested):
+        raise ValueError("Formal evaluation symbol list contains duplicates.")
+    writer = FormalRunWriter(BASE_DIR, create_run_id(run_id))
+    writer.create()
+    formal_by_symbol: dict[str, dict] = {}
+    plans: dict[str, FormalEvaluationPlan] = {}
+    cutoff_dates: list[pd.Timestamp] = []
+    try:
+        for symbol in requested:
+            csv_path = raw_dir / f"{symbol}.csv"
+            df = validate_ohlcv_csv(csv_path)
+            payload = evaluate_formal_symbol(symbol, df)
+            plans[symbol] = payload["plan"]
+            formal_by_symbol[symbol] = {"forecasts": payload["forecasts"], "development_close": payload["development_close"]}
+            cutoff_dates.append(pd.to_datetime(df["Date"]).max())
+            writer.write_company(symbol, payload["forecasts"], payload["metrics"], payload["diagnostics"])
+        writer.write_split_manifest(plans)
+        writer.write_methodology_manifest(str(max(cutoff_dates).date()), requested)
+        writer.write_statistics(run_formal_statistical_tests(formal_by_symbol))
+        finalized = writer.finalize()
+        log.info("Finalized formal run %s", writer.path)
+        return finalized
+    except Exception:
+        log.exception("Formal run %s failed before finalization; deployment artifacts were not modified.", writer.run_id)
+        raise
 
 
 if __name__ == "__main__":  # pragma: no cover
     import argparse
 
-    parser = argparse.ArgumentParser(description="Train and persist the weekly PSE forecasting models.")
+    parser = argparse.ArgumentParser(description="Run deployment training or a manually requested formal evaluation.")
+    parser.add_argument("--mode", choices=("deployment", "formal"), default="deployment")
+    parser.add_argument("--symbols", nargs="+", help="Required for manual formal mode; use BPI for integration validation.")
+    parser.add_argument("--run-id", help="Optional immutable formal-run identifier.")
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -260,5 +253,13 @@ if __name__ == "__main__":  # pragma: no cover
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    mapping = train_and_select_all(strict=args.strict)
-    print(json.dumps(mapping, indent=2, sort_keys=True))
+    if args.mode == "formal":
+        if args.strict:
+            parser.error("--strict is a deployment-only option.")
+        finalized = run_formal_evaluation(symbols=args.symbols or [], run_id=args.run_id)
+        print(finalized)
+    else:
+        if args.symbols or args.run_id:
+            parser.error("--symbols and --run-id are formal-mode options.")
+        mapping = train_and_select_all(strict=args.strict)
+        print(json.dumps(mapping, indent=2, sort_keys=True))

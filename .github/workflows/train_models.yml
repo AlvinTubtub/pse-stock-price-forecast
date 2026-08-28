@@ -71,9 +71,9 @@ jobs:
           root = Path(".")
           tickers = sorted(TARGET_COMPANIES)
           expected = {
-              "lag_regression": [root / "models" / "lag_regression" / f"{t}.pkl" for t in tickers],
-              "arima": [root / "models" / "arima" / f"{t}.pkl" for t in tickers],
-              "lstm": [root / "models" / "lstm" / f"{t}.pth" for t in tickers],
+              "lag_regression": [root / "models" / "deployment" / "current" / "lag_regression" / f"{t}.pkl" for t in tickers],
+              "arima": [root / "models" / "deployment" / "current" / "arima" / f"{t}.pkl" for t in tickers],
+              "lstm": [root / "models" / "deployment" / "current" / "lstm" / f"{t}.pth" for t in tickers],
               "prediction_cache": [root / "prediction_cache" / f"{t}.json" for t in tickers],
           }
 
@@ -89,6 +89,9 @@ jobs:
               raise SystemExit("best_models.json was not generated")
           if not statistical_tests.is_file():
               raise SystemExit("statistical_tests.json was not generated")
+          deployment_manifest = root / "models" / "deployment" / "current" / "deployment_manifest.json"
+          if not deployment_manifest.is_file():
+              raise SystemExit("deployment_manifest.json was not generated")
           print(f"Universe: {len(tickers)}/{len(tickers)} tickers")
           PY
 

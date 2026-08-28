@@ -36,6 +36,9 @@ log = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 RAW_DIR = BASE_DIR / "data" / "raw"
 MODELS_DIR = BASE_DIR / "models"
+# New weekly deployment artifacts are written here.  The three legacy
+# directories remain readable while existing repositories are migrated.
+DEPLOYMENT_CURRENT_DIR = MODELS_DIR / "deployment" / "current"
 LAG_MODELS_DIR = MODELS_DIR / "lag_regression"
 ARIMA_MODELS_DIR = MODELS_DIR / "arima"
 LSTM_MODELS_DIR = MODELS_DIR / "lstm"
@@ -68,6 +71,14 @@ def _write_cache(symbol: str, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2))
 
 
+def _deployment_artifact_path(model_directory: str, filename: str, legacy_dir: Path) -> Path:
+    """Prefer deployment-current, then safely read the pre-Phase-6 layout."""
+    current = DEPLOYMENT_CURRENT_DIR / model_directory / filename
+    if current.is_file():
+        return current
+    return legacy_dir / filename
+
+
 # ---------------------------------------------------------------------------
 # Per-model inference helpers (no training, no refitting)
 # ---------------------------------------------------------------------------
@@ -79,7 +90,7 @@ def _infer_lasso(symbol: str, df: pd.DataFrame) -> float:
     Uses the persisted StandardScaler and LassoCV model directly.
     Does NOT fit the scaler or model.
     """
-    artifact_path = LAG_MODELS_DIR / f"{symbol}.pkl"
+    artifact_path = _deployment_artifact_path("lag_regression", f"{symbol}.pkl", LAG_MODELS_DIR)
     if not artifact_path.exists():
         raise FileNotFoundError(f"LASSO artifact missing for {symbol}: {artifact_path}")
 
@@ -94,7 +105,7 @@ def _infer_lstm(symbol: str, df: pd.DataFrame) -> float:
     Uses the persisted MinMaxScaler, model weights, and lookback window.
     Does NOT retrain or refit.
     """
-    artifact_path = LSTM_MODELS_DIR / f"{symbol}.pth"
+    artifact_path = _deployment_artifact_path("lstm", f"{symbol}.pth", LSTM_MODELS_DIR)
     if not artifact_path.exists():
         raise FileNotFoundError(f"LSTM artifact missing for {symbol}: {artifact_path}")
 
@@ -115,7 +126,7 @@ def _infer_arima(symbol: str, df: pd.DataFrame) -> float:
     ``model.append(new_values, refit=False)``.  Never performs daily ARIMA
     parameter refitting.
     """
-    model_path = ARIMA_MODELS_DIR / f"{symbol}.pkl"
+    model_path = _deployment_artifact_path("arima", f"{symbol}.pkl", ARIMA_MODELS_DIR)
     if not model_path.exists():
         raise FileNotFoundError(f"ARIMA artifact missing for {symbol}: {model_path}")
 
