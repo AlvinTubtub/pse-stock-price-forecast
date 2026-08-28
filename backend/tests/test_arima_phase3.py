@@ -62,6 +62,26 @@ def test_failed_fold_invalidates_entire_candidate(monkeypatch):
     assert result.mean_validation_rmse is None
 
 
+def test_nonconverged_but_finite_fold_is_recorded_under_current_rule(monkeypatch):
+    close = pd.Series(np.arange(70.0))
+    arima.HAS_STATSMODELS = True
+
+    class Fit:
+        mle_retvals = {"converged": False}
+        def forecast(self, steps): return pd.Series([1.0])
+        def append(self, actual, refit=False): return self
+
+    class Factory:
+        def __init__(self, values, order): self.values = values
+        def fit(self): return Fit()
+
+    monkeypatch.setattr(arima, "ARIMA", Factory, raising=False)
+    result = arima._evaluate_candidate(close, (1, 1, 0))
+    assert result.valid is True
+    assert result.cv_fold_convergence == (False,) * result.required_fold_count
+    assert arima._candidate_diagnostics(result)["all_cv_folds_converged"] is False
+
+
 def test_all_failed_candidates_raise_without_out_of_range_fallback(monkeypatch):
     arima.HAS_STATSMODELS = True
     monkeypatch.setattr(arima, "is_stationary", lambda _series: False)
@@ -100,6 +120,7 @@ def test_formal_output_uses_exact_plan_dates_and_holdout_ljung_box(monkeypatch):
     arima.HAS_STATSMODELS = True
 
     class Fit:
+        mle_retvals = {"converged": True}
         def forecast(self, steps): return pd.Series([101.0])
         def append(self, actual, refit=False): return self
     class Factory:
@@ -111,7 +132,7 @@ def test_formal_output_uses_exact_plan_dates_and_holdout_ljung_box(monkeypatch):
     monkeypatch.setattr(arima, "ARIMA", Factory, raising=False)
     def select_order(development):
         selected_on["close"] = development.copy()
-        return (1, 1, 0), []
+        return (1, 1, 0), [arima.ARIMACandidateResult((1, 1, 0), 5, 5, True, .1, (), (True,) * 5)]
     monkeypatch.setattr(arima, "_select_formal_order", select_order)
     monkeypatch.setattr(arima, "_holdout_ljung_box", lambda errors: seen.setdefault("errors", np.asarray(errors)) or {})
     # Return a concrete diagnostic instead of a truth-value-ambiguous ndarray.
@@ -123,6 +144,9 @@ def test_formal_output_uses_exact_plan_dates_and_holdout_ljung_box(monkeypatch):
     assert selected_on["close"].iloc[-1] == df.loc[df["Date"] == plan.development_end_date, "Close"].iloc[0]
     assert formal.backtest == list(formal.forecasts["predicted_close"])
     assert formal.diagnostics["diagnostic_target"] == "holdout_forecast_errors"
+    assert formal.diagnostics["cv_fold_convergence"] == [True] * 5
+    assert formal.diagnostics["all_cv_folds_converged"] is True
+    assert formal.diagnostics["final_fit_converged"] is True
 
 
 def test_wrong_date_is_rejected_even_when_prediction_count_matches():

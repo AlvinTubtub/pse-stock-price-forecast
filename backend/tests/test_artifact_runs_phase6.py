@@ -52,6 +52,15 @@ def test_formal_run_is_versioned_immutable_and_finalizable(tmp_path):
         writer.write_statistics({})
 
 
+def test_methodology_manifest_records_all_research_dependencies(tmp_path):
+    writer = FormalRunWriter(tmp_path, "dependency_manifest")
+    writer.create()
+    writer.write_methodology_manifest("2025-01-20", ["BPI"], git_dirty=False)
+    dependencies = json.loads((writer.path / "methodology_manifest.json").read_text())["dependencies"]
+    assert set(("numpy", "pandas", "scipy", "statsmodels", "scikit-learn", "torch")) <= set(dependencies)
+    assert dependencies["scikit-learn"] is not None
+
+
 def test_incomplete_formal_run_is_rejected(tmp_path):
     plan, forecasts = _plan_and_forecasts()
     writer = FormalRunWriter(tmp_path, "incomplete")

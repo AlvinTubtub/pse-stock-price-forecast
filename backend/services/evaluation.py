@@ -381,8 +381,10 @@ def best_model_consistency_check(rmse_by_model: dict[str, list[float]], min_comp
         winner = min(rmses, key=rmses.get)
         counts[winner] += 1
 
-    dominant_model = max(counts, key=counts.get) if counts else None
-    dominant_count = counts.get(dominant_model, 0)
+    dominant_count = max(counts.values(), default=0)
+    tied_models = sorted(model for model, count in counts.items() if count == dominant_count)
+    tie = len(tied_models) > 1
+    dominant_model = None if tie else tied_models[0] if tied_models else None
 
     return {
         "counts": counts,
@@ -390,6 +392,8 @@ def best_model_consistency_check(rmse_by_model: dict[str, list[float]], min_comp
         "min_required": min_companies,
         "dominant_model": dominant_model,
         "dominant_count": dominant_count,
+        "tie": tie,
+        "tied_models": tied_models if tie else [],
         "pass": dominant_count >= min_companies,
     }
 

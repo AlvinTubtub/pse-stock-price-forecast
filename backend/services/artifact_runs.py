@@ -181,7 +181,7 @@ class FormalRunWriter:
             "research_model_set": list(FORMAL_MODEL_KEYS),
             "formal_split": {"development_ratio": .85, "holdout_ratio": .15, "split_basis": "target_date"},
             "artifact_policy": {"formal_immutable": True, "deployment_separate": True},
-            "dependencies": {name: self._version(name) for name in ("numpy", "pandas", "scipy", "statsmodels", "torch")},
+            "dependencies": {name: self._version(name) for name in ("numpy", "pandas", "scipy", "statsmodels", "scikit-learn", "torch")},
         })
 
     def write_statistics(self, statistics: dict) -> None:

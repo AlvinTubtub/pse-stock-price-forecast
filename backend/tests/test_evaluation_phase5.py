@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from services.evaluation import common_mase_denominator, moving_block_bootstrap, _stage
+from services.evaluation import best_model_consistency_check, common_mase_denominator, moving_block_bootstrap, _stage
 
 def test_common_mase_denominator_excludes_holdout_and_is_shared():
     dev = [10., 12., 11., 14.]
@@ -25,3 +25,60 @@ def test_moving_block_bootstrap_is_reproducible_and_default_is_5000():
     b = moving_block_bootstrap(values, replications=100, seed=42)
     assert a == b
     assert moving_block_bootstrap(values)["bootstrap_replications"] == 5000
+
+
+def test_rmse_consistency_reports_a_unique_winner_and_eight_of_fifteen_pass():
+    result = best_model_consistency_check({
+        "arima": [2.0] * 15,
+        "lag_reg": [1.0] * 8 + [3.0] * 7,
+        "lstm": [3.0] * 8 + [1.0] * 7,
+    })
+    assert result["dominant_model"] == "lag_reg"
+    assert result["dominant_count"] == 8
+    assert result["tie"] is False
+    assert result["tied_models"] == []
+    assert result["pass"] is True
+
+
+def test_rmse_consistency_reports_two_way_tie_deterministically():
+    result = best_model_consistency_check({
+        "lstm": [3.0, 3.0, 2.0, 3.0],
+        "arima": [3.0, 1.0, 3.0, 1.0],
+        "lag_reg": [2.0, 2.0, 1.0, 2.0],
+    })
+    assert result["dominant_model"] is None
+    assert result["dominant_count"] == 2
+    assert result["tie"] is True
+    assert result["tied_models"] == ["arima", "lag_reg"]
+    assert result["pass"] is False
+
+
+def test_rmse_consistency_reports_three_way_tie_deterministically():
+    result = best_model_consistency_check({
+        "lstm": [3.0, 3.0, 1.0],
+        "arima": [1.0, 3.0, 3.0],
+        "lag_reg": [3.0, 1.0, 3.0],
+    })
+    assert result["dominant_model"] is None
+    assert result["dominant_count"] == 1
+    assert result["tie"] is True
+    assert result["tied_models"] == ["arima", "lag_reg", "lstm"]
+    assert result["pass"] is False
+
+
+def test_rmse_consistency_fails_below_eight_of_fifteen():
+    result = best_model_consistency_check({
+        "arima": [2.0] * 15,
+        "lag_reg": [1.0] * 7 + [3.0] * 8,
+        "lstm": [3.0] * 7 + [1.0] * 8,
+    })
+    assert result["dominant_model"] == "lstm"
+    assert result["dominant_count"] == 8
+    assert result["pass"] is True
+    result = best_model_consistency_check({
+        "arima": [2.0] * 15,
+        "lag_reg": [1.0] * 7 + [3.0] * 8,
+        "lstm": [3.0] * 7 + [1.0] * 7 + [3.0],
+    })
+    assert result["dominant_count"] == 7
+    assert result["pass"] is False

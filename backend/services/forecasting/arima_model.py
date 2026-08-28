@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,7 @@ class ARIMACandidateResult:
     valid: bool
     mean_validation_rmse: float | None
     failure_reasons: tuple[str, ...] = ()
+    cv_fold_convergence: tuple[bool | None, ...] = ()
 
 
 @dataclass
@@ -47,7 +49,7 @@ class FormalARIMAResult:
     metrics: dict[str, float]
     forecasts: pd.DataFrame
     backtest: list[float]
-    diagnostics: dict[str, float | int | str | list[int]]
+    diagnostics: dict[str, object]
     candidate_results: list[ARIMACandidateResult]
 
 
@@ -90,27 +92,77 @@ def _walk_forward_forecast(initial_fit, future_actuals: np.ndarray) -> np.ndarra
     return predictions
 
 
+def _fit_convergence_status(fit: object) -> bool | None:
+    """Return optimizer convergence when statsmodels exposes it.
+
+    ``None`` is deliberately distinct from ``False``: it means the fitted
+    result did not expose a usable optimizer convergence flag.  Formal CV
+    currently records this evidence without changing its approved
+    finite-prediction fold-completion rule.
+    """
+    retvals = getattr(fit, "mle_retvals", None)
+    if not hasattr(retvals, "get"):
+        return None
+    converged = retvals.get("converged")
+    return None if converged is None else bool(converged)
+
+
+def _all_folds_converged(statuses: tuple[bool | None, ...]) -> bool | None:
+    """Summarize convergence without treating unavailable metadata as true."""
+    if any(status is False for status in statuses):
+        return False
+    if statuses and all(status is True for status in statuses):
+        return True
+    return None
+
+
+def _candidate_diagnostics(result: ARIMACandidateResult) -> dict[str, object]:
+    """Return JSON-safe convergence and completeness evidence for one order."""
+    return {
+        "order": list(result.order),
+        "required_fold_count": result.required_fold_count,
+        "successful_fold_count": result.successful_fold_count,
+        "valid_under_finite_prediction_rule": result.valid,
+        "mean_validation_rmse": result.mean_validation_rmse,
+        "failure_reasons": list(result.failure_reasons),
+        "cv_fold_convergence": list(result.cv_fold_convergence),
+        "all_cv_folds_converged": _all_folds_converged(result.cv_fold_convergence),
+    }
+
+
 def _evaluate_candidate(close: pd.Series, order: tuple[int, int, int]) -> ARIMACandidateResult:
     """Strict chronological CV: a failed fold invalidates its candidate."""
     splitter = expanding_window_splitter(len(close))
     required = splitter.get_n_splits()
     rmses: list[float] = []
     failures: list[str] = []
+    convergence: list[bool | None] = []
     for fold_index, (train_idx, validation_idx) in enumerate(splitter.split(close), start=1):
         try:
             fit = ARIMA(close.iloc[train_idx], order=order).fit()
+            converged = _fit_convergence_status(fit)
+            convergence.append(converged)
+            if converged is False:
+                log.warning(
+                    "Formal ARIMA order=%s fold=%d did not converge; recording it under the current finite-prediction rule.",
+                    order,
+                    fold_index,
+                )
             actual = close.iloc[validation_idx].to_numpy(dtype=float)
             predicted = _walk_forward_forecast(fit, actual)
             if len(predicted) != len(actual) or not np.isfinite(predicted).all():
                 raise ValueError("unusable validation prediction")
             rmses.append(float(np.sqrt(np.mean((actual - predicted) ** 2))))
         except Exception as exc:
+            if len(convergence) < fold_index:
+                convergence.append(None)
             failures.append(f"fold {fold_index}: {type(exc).__name__}: {exc}")
     valid = len(rmses) == required
     return ARIMACandidateResult(
         order=order, required_fold_count=required, successful_fold_count=len(rmses), valid=valid,
         mean_validation_rmse=float(np.mean(rmses)) if valid else None,
         failure_reasons=tuple(failures),
+        cv_fold_convergence=tuple(convergence),
     )
 
 
@@ -149,6 +201,8 @@ def train_formal_arima(df: pd.DataFrame, plan: FormalEvaluationPlan) -> FormalAR
     development_close = development["Close"].astype(float).reset_index(drop=True)
     order, candidates = _select_formal_order(development_close)
     formal_model = ARIMA(development_close, order=order).fit()
+    final_fit_converged = _fit_convergence_status(formal_model)
+    selected_candidate = next((candidate for candidate in candidates if candidate.order == order), None)
 
     all_dates = pd.to_datetime(df["Date"])
     lookup = pd.Series(df["Close"].to_numpy(dtype=float), index=all_dates)
@@ -165,6 +219,10 @@ def train_formal_arima(df: pd.DataFrame, plan: FormalEvaluationPlan) -> FormalAR
     ljung_box = _holdout_ljung_box(forecasts["error"].to_numpy())
     diagnostics = {
         "selected_order": list(order),
+        "cv_fold_convergence": list(selected_candidate.cv_fold_convergence) if selected_candidate else None,
+        "all_cv_folds_converged": _all_folds_converged(selected_candidate.cv_fold_convergence) if selected_candidate else None,
+        "final_fit_converged": final_fit_converged,
+        "candidate_cv": [_candidate_diagnostics(candidate) for candidate in candidates],
         "adf": _adf_metadata(development_close),
         "ljung_box": ljung_box,
         **ljung_box,
