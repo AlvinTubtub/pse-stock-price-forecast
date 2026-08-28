@@ -95,6 +95,10 @@ class _LSTMNet(nn.Module if HAS_TORCH else object):
         self.fc = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
+        if x.ndim != 3:
+            raise ValueError(f"LSTM input must be (batch, sequence_length, features); got {tuple(x.shape)}.")
+        if x.shape[-1] != self.input_size:
+            raise ValueError(f"LSTM expected {self.input_size} feature(s), got {x.shape[-1]}.")
         out, _ = self.lstm(x)
         return self.fc(out[:, -1, :])
 
@@ -135,6 +139,14 @@ def _scale_sequences(sequences: np.ndarray, targets: np.ndarray, scaler: MinMaxS
     return scaled_x, scaled_y
 
 
+def _formal_input_tensor(sequences: np.ndarray):
+    """Convert formal univariate arrays from ``(batch, seq)`` to 3-D tensors."""
+    values = np.asarray(sequences, dtype="float32")
+    if values.ndim != 2:
+        raise ValueError(f"Formal LSTM sequences must be rank 2 before tensor conversion; got {values.shape}.")
+    return torch.tensor(values).unsqueeze(-1)
+
+
 def _train_formal_one_config(X_fit, y_fit, X_stop, y_stop, config: LSTMConfig):
     """Train with an internal chronological stopping tail, never fold validation."""
     _set_seed()
@@ -148,11 +160,11 @@ def _train_formal_one_config(X_fit, y_fit, X_stop, y_stop, config: LSTMConfig):
         for start in range(0, len(X_fit), config.batch_size):
             index = torch.randperm(len(X_fit), generator=generator)[start:start + config.batch_size]
             optimizer.zero_grad()
-            loss = loss_fn(model(torch.tensor(X_fit[index]).unsqueeze(-1)), torch.tensor(y_fit[index]).unsqueeze(-1))
+            loss = loss_fn(model(_formal_input_tensor(X_fit[index])), torch.tensor(y_fit[index]).unsqueeze(-1))
             loss.backward(); optimizer.step()
         model.eval()
         with torch.inference_mode():
-            stop_loss = float(loss_fn(model(torch.tensor(X_stop).unsqueeze(-1)), torch.tensor(y_stop).unsqueeze(-1)).item())
+            stop_loss = float(loss_fn(model(_formal_input_tensor(X_stop)), torch.tensor(y_stop).unsqueeze(-1)).item())
         if stop_loss < best_loss - 1e-6:
             best_loss, best_epoch, stale = stop_loss, epoch, 0
             best_state = {key: value.clone() for key, value in model.state_dict().items()}
@@ -186,7 +198,7 @@ def _evaluate_formal_config(samples: pd.DataFrame, config: LSTMConfig) -> tuple[
             return None, fold_results
         model = _LSTMNet(1, config.hidden_size); model.load_state_dict(state); model.eval()
         with torch.inference_mode():
-            predicted_scaled = model(torch.tensor(X_val).unsqueeze(-1)).squeeze(-1).numpy()
+            predicted_scaled = model(_formal_input_tensor(X_val)).squeeze(-1).numpy()
         predicted_delta = scaler.inverse_transform(predicted_scaled.reshape(-1, 1)).reshape(-1)
         rmse = float(np.sqrt(np.mean((validation["target_delta"].to_numpy() - predicted_delta) ** 2)))
         fold_results.append({"rmse": rmse, "train_count": len(train), "validation_count": len(validation), **epoch_info})
@@ -234,7 +246,7 @@ def train_formal_lstm(df: pd.DataFrame, plan: FormalEvaluationPlan) -> FormalLST
         raise ValueError(f"{plan.symbol}: LSTM cannot produce every required formal hold-out date.")
     X_holdout, _ = _scale_sequences(np.stack(holdout["sequence"]), holdout["target_delta"].to_numpy(), scaler)
     with torch.inference_mode():
-        predicted_scaled = model(torch.tensor(X_holdout).unsqueeze(-1)).squeeze(-1).numpy()
+        predicted_scaled = model(_formal_input_tensor(X_holdout)).squeeze(-1).numpy()
     predicted_delta = scaler.inverse_transform(predicted_scaled.reshape(-1, 1)).reshape(-1)
     forecasts = pd.DataFrame({"symbol": plan.symbol, "model": "lstm", "origin_date": holdout["origin_date"], "target_date": holdout["target_date"], "actual_close": holdout["actual_close"], "predicted_close": holdout["origin_close"].to_numpy() + predicted_delta}).sort_values("target_date").reset_index(drop=True)
     forecasts["error"] = forecasts["actual_close"] - forecasts["predicted_close"]
