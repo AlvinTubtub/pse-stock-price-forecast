@@ -140,11 +140,27 @@ def _scale_sequences(sequences: np.ndarray, targets: np.ndarray, scaler: MinMaxS
 
 
 def _formal_input_tensor(sequences: np.ndarray):
-    """Convert formal univariate arrays from ``(batch, seq)`` to 3-D tensors."""
+    """Convert formal univariate sequences to ``(batch, seq_len, 1)``."""
     values = np.asarray(sequences, dtype="float32")
-    if values.ndim != 2:
-        raise ValueError(f"Formal LSTM sequences must be rank 2 before tensor conversion; got {values.shape}.")
-    return torch.tensor(values).unsqueeze(-1)
+    if values.ndim == 1:
+        values = values[np.newaxis, :, np.newaxis]
+    elif values.ndim == 2:
+        values = values[:, :, np.newaxis]
+    elif values.ndim != 3 or values.shape[-1] != 1:
+        raise ValueError(f"Formal LSTM sequences must be (seq,), (batch, seq), or (batch, seq, 1); got {values.shape}.")
+    return torch.as_tensor(values, dtype=torch.float32)
+
+
+def _formal_target_tensor(targets: np.ndarray):
+    """Convert scalar or batched formal ΔClose targets to ``(batch, 1)``."""
+    values = np.asarray(targets, dtype="float32")
+    if values.ndim == 0:
+        values = values.reshape(1, 1)
+    elif values.ndim == 1:
+        values = values[:, np.newaxis]
+    elif values.ndim != 2 or values.shape[-1] != 1:
+        raise ValueError(f"Formal LSTM targets must be scalar, (batch,), or (batch, 1); got {values.shape}.")
+    return torch.as_tensor(values, dtype=torch.float32)
 
 
 def _train_formal_one_config(X_fit, y_fit, X_stop, y_stop, config: LSTMConfig):
@@ -160,11 +176,11 @@ def _train_formal_one_config(X_fit, y_fit, X_stop, y_stop, config: LSTMConfig):
         for start in range(0, len(X_fit), config.batch_size):
             index = torch.randperm(len(X_fit), generator=generator)[start:start + config.batch_size]
             optimizer.zero_grad()
-            loss = loss_fn(model(_formal_input_tensor(X_fit[index])), torch.tensor(y_fit[index]).unsqueeze(-1))
+            loss = loss_fn(model(_formal_input_tensor(X_fit[index])), _formal_target_tensor(y_fit[index]))
             loss.backward(); optimizer.step()
         model.eval()
         with torch.inference_mode():
-            stop_loss = float(loss_fn(model(_formal_input_tensor(X_stop)), torch.tensor(y_stop).unsqueeze(-1)).item())
+            stop_loss = float(loss_fn(model(_formal_input_tensor(X_stop)), _formal_target_tensor(y_stop)).item())
         if stop_loss < best_loss - 1e-6:
             best_loss, best_epoch, stale = stop_loss, epoch, 0
             best_state = {key: value.clone() for key, value in model.state_dict().items()}

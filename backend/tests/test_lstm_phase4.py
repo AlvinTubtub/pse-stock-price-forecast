@@ -45,6 +45,17 @@ def test_formal_samples_are_univariate_delta_close_with_correct_target():
     assert first["target_date"] == df["Date"].iloc[6]
 
 
+def test_singleton_minibatch_preserves_lstm_batch_and_target_dimensions():
+    """The final one-sample mini-batch must not lose its batch dimension."""
+    sequences = np.zeros((17, 30), dtype="float32")
+    targets = np.zeros(17, dtype="float32")
+
+    assert tuple(lstm._formal_input_tensor(sequences[0]).shape) == (1, 30, 1)
+    assert tuple(lstm._formal_input_tensor(sequences[:16]).shape) == (16, 30, 1)
+    assert tuple(lstm._formal_target_tensor(targets[0]).shape) == (1, 1)
+    assert tuple(lstm._formal_target_tensor(targets[:16]).shape) == (16, 1)
+
+
 def test_approved_grid_has_exactly_48_configurations():
     grid = list(itertools.product(lstm.LOOKBACK_GRID, lstm.HIDDEN_UNITS_GRID, lstm.LEARNING_RATE_GRID, lstm.BATCH_SIZE_GRID))
     assert len(grid) == len(set(grid)) == 48
