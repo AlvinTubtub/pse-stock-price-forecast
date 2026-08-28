@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import itertools
 import logging
+import random
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -33,6 +35,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 from services.evaluation import compute_metrics
 from services.feature_engineering import build_full_features, reconstruct_price
+from services.time_series_cv import FormalEvaluationPlan, development_ohlcv_for_plan, expanding_window_splitter
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +62,26 @@ FEATURE_COLUMNS = [
 ]
 
 MIN_ROWS_FOR_TRAINING = max(LOOKBACK_GRID) + 60  # enough rows for train+val+test at the largest lookback
+FORMAL_INPUT_DESIGN = "univariate_delta_close"
+EARLY_STOPPING_FRACTION = 0.15
+
+
+@dataclass(frozen=True)
+class LSTMConfig:
+    lookback: int
+    hidden_size: int
+    learning_rate: float
+    batch_size: int
+
+
+@dataclass
+class FormalLSTMResult:
+    artifact: dict
+    metrics: dict[str, float]
+    forecasts: pd.DataFrame
+    backtest: list[float]
+    selected_config: LSTMConfig
+    metadata: dict
 
 
 class _LSTMNet(nn.Module if HAS_TORCH else object):
@@ -72,8 +95,181 @@ class _LSTMNet(nn.Module if HAS_TORCH else object):
         self.fc = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
+        if x.ndim != 3:
+            raise ValueError(f"LSTM input must be (batch, sequence_length, features); got {tuple(x.shape)}.")
+        if x.shape[-1] != self.input_size:
+            raise ValueError(f"LSTM expected {self.input_size} feature(s), got {x.shape[-1]}.")
         out, _ = self.lstm(x)
         return self.fc(out[:, -1, :])
+
+
+def _set_seed() -> None:
+    """Set deterministic practical CPU/CUDA random sources for formal training."""
+    random.seed(SEED)
+    np.random.seed(SEED)
+    if HAS_TORCH:
+        torch.manual_seed(SEED)
+        if torch.cuda.is_available():  # pragma: no cover - local hardware dependent
+            torch.cuda.manual_seed_all(SEED)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
+def _formal_delta_samples(df: pd.DataFrame, lookback: int) -> pd.DataFrame:
+    """One univariate ΔClose sequence per target date, with explicit dates."""
+    dates = pd.to_datetime(df["Date"]).reset_index(drop=True)
+    close = df["Close"].astype(float).reset_index(drop=True)
+    delta = close.diff()
+    rows = []
+    for target_index in range(lookback + 1, len(df)):
+        # target_index is t+1. Inputs are ΔClose[t-lookback+1]..ΔClose[t].
+        values = delta.iloc[target_index - lookback:target_index].to_numpy(dtype=float)
+        if len(values) == lookback and np.isfinite(values).all():
+            rows.append({
+                "origin_date": dates.iloc[target_index - 1], "target_date": dates.iloc[target_index],
+                "origin_close": float(close.iloc[target_index - 1]), "actual_close": float(close.iloc[target_index]),
+                "target_delta": float(delta.iloc[target_index]), "sequence": values,
+            })
+    return pd.DataFrame(rows)
+
+
+def _scale_sequences(sequences: np.ndarray, targets: np.ndarray, scaler: MinMaxScaler) -> tuple[np.ndarray, np.ndarray]:
+    scaled_x = scaler.transform(sequences.reshape(-1, 1)).reshape(sequences.shape).astype("float32")
+    scaled_y = scaler.transform(targets.reshape(-1, 1)).reshape(-1).astype("float32")
+    return scaled_x, scaled_y
+
+
+def _formal_input_tensor(sequences: np.ndarray):
+    """Convert formal univariate sequences to ``(batch, seq_len, 1)``."""
+    values = np.asarray(sequences, dtype="float32")
+    if values.ndim == 1:
+        values = values[np.newaxis, :, np.newaxis]
+    elif values.ndim == 2:
+        values = values[:, :, np.newaxis]
+    elif values.ndim != 3 or values.shape[-1] != 1:
+        raise ValueError(f"Formal LSTM sequences must be (seq,), (batch, seq), or (batch, seq, 1); got {values.shape}.")
+    return torch.as_tensor(values, dtype=torch.float32)
+
+
+def _formal_target_tensor(targets: np.ndarray):
+    """Convert scalar or batched formal ΔClose targets to ``(batch, 1)``."""
+    values = np.asarray(targets, dtype="float32")
+    if values.ndim == 0:
+        values = values.reshape(1, 1)
+    elif values.ndim == 1:
+        values = values[:, np.newaxis]
+    elif values.ndim != 2 or values.shape[-1] != 1:
+        raise ValueError(f"Formal LSTM targets must be scalar, (batch,), or (batch, 1); got {values.shape}.")
+    return torch.as_tensor(values, dtype=torch.float32)
+
+
+def _train_formal_one_config(X_fit, y_fit, X_stop, y_stop, config: LSTMConfig):
+    """Train with an internal chronological stopping tail, never fold validation."""
+    _set_seed()
+    model = _LSTMNet(1, config.hidden_size)
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    loss_fn = nn.MSELoss()
+    best_loss, best_state, best_epoch, stale = float("inf"), None, 0, 0
+    generator = torch.Generator().manual_seed(SEED)
+    for epoch in range(1, EPOCHS + 1):
+        model.train()
+        for start in range(0, len(X_fit), config.batch_size):
+            index = torch.randperm(len(X_fit), generator=generator)[start:start + config.batch_size]
+            optimizer.zero_grad()
+            loss = loss_fn(model(_formal_input_tensor(X_fit[index])), _formal_target_tensor(y_fit[index]))
+            loss.backward(); optimizer.step()
+        model.eval()
+        with torch.inference_mode():
+            stop_loss = float(loss_fn(model(_formal_input_tensor(X_stop)), _formal_target_tensor(y_stop)).item())
+        if stop_loss < best_loss - 1e-6:
+            best_loss, best_epoch, stale = stop_loss, epoch, 0
+            best_state = {key: value.clone() for key, value in model.state_dict().items()}
+        else:
+            stale += 1
+            if stale >= PATIENCE:
+                break
+    return best_loss, best_state, {"epochs_trained": epoch, "best_epoch": best_epoch, "early_stopped": stale >= PATIENCE}
+
+
+def _evaluate_formal_config(samples: pd.DataFrame, config: LSTMConfig) -> tuple[float | None, list[dict]]:
+    """Five expanding folds; each fold fits its scaler and stop-tail internally."""
+    if len(samples) < 20:
+        return None, []
+    folds = expanding_window_splitter(len(samples))
+    fold_results = []
+    for train_idx, validation_idx in folds.split(samples):
+        train, validation = samples.iloc[train_idx], samples.iloc[validation_idx]
+        stop_count = max(1, int(round(len(train) * EARLY_STOPPING_FRACTION)))
+        fit = train.iloc[:-stop_count]
+        stop = train.iloc[-stop_count:]
+        if len(fit) < 2 or len(stop) < 1:
+            return None, fold_results
+        scaler_values = np.concatenate([np.concatenate(fit["sequence"].to_list()), fit["target_delta"].to_numpy()])
+        scaler = MinMaxScaler().fit(scaler_values.reshape(-1, 1))
+        X_fit, y_fit = _scale_sequences(np.stack(fit["sequence"]), fit["target_delta"].to_numpy(), scaler)
+        X_stop, y_stop = _scale_sequences(np.stack(stop["sequence"]), stop["target_delta"].to_numpy(), scaler)
+        X_val, _ = _scale_sequences(np.stack(validation["sequence"]), validation["target_delta"].to_numpy(), scaler)
+        _loss, state, epoch_info = _train_formal_one_config(X_fit, y_fit, X_stop, y_stop, config)
+        if state is None:
+            return None, fold_results
+        model = _LSTMNet(1, config.hidden_size); model.load_state_dict(state); model.eval()
+        with torch.inference_mode():
+            predicted_scaled = model(_formal_input_tensor(X_val)).squeeze(-1).numpy()
+        predicted_delta = scaler.inverse_transform(predicted_scaled.reshape(-1, 1)).reshape(-1)
+        rmse = float(np.sqrt(np.mean((validation["target_delta"].to_numpy() - predicted_delta) ** 2)))
+        fold_results.append({"rmse": rmse, "train_count": len(train), "validation_count": len(validation), **epoch_info})
+    return float(np.mean([row["rmse"] for row in fold_results])), fold_results
+
+
+def _select_formal_config(development: pd.DataFrame) -> tuple[LSTMConfig, float, list[dict]]:
+    """Select across the exact 48-config grid by original-scale mean RMSE."""
+    candidates = [LSTMConfig(*values) for values in itertools.product(LOOKBACK_GRID, HIDDEN_UNITS_GRID, LEARNING_RATE_GRID, BATCH_SIZE_GRID)]
+    results = []
+    for config in candidates:
+        score, folds = _evaluate_formal_config(_formal_delta_samples(development, config.lookback), config)
+        if score is not None and len(folds) == 5:
+            results.append((score, config, folds))
+    if not results:
+        raise ValueError("No LSTM configuration completed all five formal development folds.")
+    score, config, folds = min(results, key=lambda item: (item[0], item[1].lookback, item[1].hidden_size, item[1].learning_rate, item[1].batch_size))
+    return config, score, folds
+
+
+def _fit_final_formal(development: pd.DataFrame, config: LSTMConfig):
+    """Fresh development-only model/scaler refit after CV selection."""
+    samples = _formal_delta_samples(development, config.lookback)
+    stop_count = max(1, int(round(len(samples) * EARLY_STOPPING_FRACTION)))
+    fit, stop = samples.iloc[:-stop_count], samples.iloc[-stop_count:]
+    scaler_values = np.concatenate([np.concatenate(samples["sequence"].to_list()), samples["target_delta"].to_numpy()])
+    scaler = MinMaxScaler().fit(scaler_values.reshape(-1, 1))
+    X_fit, y_fit = _scale_sequences(np.stack(fit["sequence"]), fit["target_delta"].to_numpy(), scaler)
+    X_stop, y_stop = _scale_sequences(np.stack(stop["sequence"]), stop["target_delta"].to_numpy(), scaler)
+    _loss, state, epoch_info = _train_formal_one_config(X_fit, y_fit, X_stop, y_stop, config)
+    model = _LSTMNet(1, config.hidden_size); model.load_state_dict(state); model.eval()
+    return model, scaler, samples, epoch_info
+
+
+def train_formal_lstm(df: pd.DataFrame, plan: FormalEvaluationPlan) -> FormalLSTMResult:
+    """Formal univariate ΔClose CV, fresh refit, and frozen hold-out scoring."""
+    if not HAS_TORCH:
+        raise RuntimeError("PyTorch is required for formal LSTM evaluation; no fallback is permitted.")
+    development = development_ohlcv_for_plan(df, plan)
+    config, mean_rmse, folds = _select_formal_config(development)
+    model, scaler, development_samples, final_epoch = _fit_final_formal(development, config)
+    samples = _formal_delta_samples(df, config.lookback)
+    holdout = samples.loc[samples["target_date"].isin(plan.holdout_target_dates)].copy()
+    if len(holdout) != plan.holdout_count or set(holdout["target_date"]) != set(plan.holdout_target_dates):
+        raise ValueError(f"{plan.symbol}: LSTM cannot produce every required formal hold-out date.")
+    X_holdout, _ = _scale_sequences(np.stack(holdout["sequence"]), holdout["target_delta"].to_numpy(), scaler)
+    with torch.inference_mode():
+        predicted_scaled = model(_formal_input_tensor(X_holdout)).squeeze(-1).numpy()
+    predicted_delta = scaler.inverse_transform(predicted_scaled.reshape(-1, 1)).reshape(-1)
+    forecasts = pd.DataFrame({"symbol": plan.symbol, "model": "lstm", "origin_date": holdout["origin_date"], "target_date": holdout["target_date"], "actual_close": holdout["actual_close"], "predicted_close": holdout["origin_close"].to_numpy() + predicted_delta}).sort_values("target_date").reset_index(drop=True)
+    forecasts["error"] = forecasts["actual_close"] - forecasts["predicted_close"]
+    artifact = {"artifact_version": 2, "input_design": FORMAL_INPUT_DESIGN, "state_dict": model.state_dict(), "input_size": 1, "seq_len": config.lookback, "hidden_size": config.hidden_size, "delta_scaler": scaler}
+    metadata = {"selected_config": config.__dict__, "mean_validation_rmse": mean_rmse, "fold_results": folds, "max_epochs": EPOCHS, "patience": PATIENCE, "seed": SEED, "input_design": FORMAL_INPUT_DESIGN, "development_sequence_count": len(development_samples), "holdout_prediction_count": len(forecasts), "final_epoch_info": final_epoch}
+    metrics = compute_metrics(forecasts["actual_close"], forecasts["predicted_close"], y_train=development["Close"])
+    return FormalLSTMResult(artifact, metrics, forecasts, forecasts["predicted_close"].tolist(), config, metadata)
 
 
 def _build_feature_frame(df: pd.DataFrame, require_target: bool = True) -> pd.DataFrame:
@@ -290,6 +486,22 @@ def train(df: pd.DataFrame):
     return artifact, metrics, next_close, backtest, test_actual_close.tolist(), test_pred_close.tolist()
 
 
+def train_deployment_lstm(df: pd.DataFrame, config: LSTMConfig) -> dict:
+    """Fresh all-data univariate deployment refit using a frozen formal config."""
+    if not HAS_TORCH:
+        return None
+    model, scaler, _samples, _epoch_info = _fit_final_formal(df, config)
+    return {
+        "artifact_version": 2,
+        "input_design": FORMAL_INPUT_DESIGN,
+        "state_dict": model.state_dict(),
+        "input_size": 1,
+        "seq_len": config.lookback,
+        "hidden_size": config.hidden_size,
+        "delta_scaler": scaler,
+    }
+
+
 def save(artifact, path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if artifact is None or not HAS_TORCH:
@@ -308,6 +520,17 @@ def predict_next(artifact, df: pd.DataFrame) -> float:
     model = _LSTMNet(input_size=artifact["input_size"], hidden_size=artifact["hidden_size"])
     model.load_state_dict(artifact["state_dict"])
     model.eval()
+
+    if artifact.get("input_design") == FORMAL_INPUT_DESIGN:
+        deltas = df["Close"].astype(float).diff().dropna().to_numpy(dtype="float32")
+        seq_len = artifact["seq_len"]
+        if len(deltas) < seq_len:
+            raise ValueError("Not enough historical ΔClose observations for the persisted univariate LSTM.")
+        values = artifact["delta_scaler"].transform(deltas[-seq_len:].reshape(-1, 1)).reshape(1, seq_len, 1).astype("float32")
+        with torch.inference_mode():
+            next_delta_scaled = model(torch.tensor(values)).item()
+        next_delta = float(artifact["delta_scaler"].inverse_transform([[next_delta_scaled]])[0, 0])
+        return float(df["Close"].iloc[-1] + next_delta)
 
     frame = _build_feature_frame(df, require_target=False)
     seq_len = artifact["seq_len"]

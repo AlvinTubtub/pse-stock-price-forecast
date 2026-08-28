@@ -41,3 +41,6 @@ backend/*.log
 # IDE
 .vscode/
 .idea/
+
+# Generated formal research result artifacts
+/backend/results/
