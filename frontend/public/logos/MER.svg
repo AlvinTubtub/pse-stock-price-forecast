@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <rect width="100" height="100" rx="20" fill="#EA580C" />
+  <!-- Meralco Electric Energy Sunburst Flash -->
+  <circle cx="50" cy="44" r="26" fill="#C2410C" />
+  <circle cx="50" cy="44" r="22" fill="#F97316" />
+  <!-- Sun Rays Flash -->
+  <path d="M50 20 L54 36 L70 34 L58 44 L68 58 L52 50 L48 68 L44 50 L28 58 L38 44 L26 34 L42 36 Z" fill="#FDE047" />
+  <circle cx="50" cy="44" r="8" fill="#FFFFFF" />
+  <text x="50" y="86" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="1.5">MERALCO</text>
+</svg>

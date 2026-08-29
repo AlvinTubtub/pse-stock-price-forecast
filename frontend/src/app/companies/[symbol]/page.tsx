@@ -5,6 +5,7 @@ import NextDayPredictionChart from "@/components/charts/NextDayPredictionChart";
 import PredictionChart from "@/components/charts/PredictionChart";
 import ErrorChart from "@/components/charts/ErrorChart";
 import ChangeBadge from "@/components/ChangeBadge";
+import CompanyLogo from "@/components/CompanyLogo";
 import StatCard from "@/components/StatCard";
 import { getAllSymbols, getCompanyDetail } from "@/lib/data";
 import { formatDate, formatNum, formatPeso, formatPct } from "@/lib/format";
@@ -49,13 +50,18 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
           >
             ← Back to Companies
           </a>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-white tracking-tight">{company.symbol}</h1>
-            <span className="text-xs px-2.5 py-1 rounded-md bg-dark-bg border border-dark-border text-slate-300 font-medium">
-              {company.sector}
-            </span>
+          <div className="flex items-center gap-3.5">
+            <CompanyLogo symbol={company.symbol} name={company.name} size="lg" />
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold text-white tracking-tight">{company.symbol}</h1>
+                <span className="text-xs px-2.5 py-1 rounded-md bg-dark-bg border border-dark-border text-slate-300 font-medium">
+                  {company.sector}
+                </span>
+              </div>
+              <p className="text-sm text-slate-400 mt-0.5">{company.name}</p>
+            </div>
           </div>
-          <p className="text-sm text-slate-400 mt-0.5">{company.name}</p>
         </div>
 
         {/* Date context */}

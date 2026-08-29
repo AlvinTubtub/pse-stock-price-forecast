@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ModelBarChart from "@/components/charts/ModelBarChart";
+import CompanyLogo from "@/components/CompanyLogo";
 import StatCard from "@/components/StatCard";
 import { getMetrics } from "@/lib/data";
 import { formatNum } from "@/lib/format";
@@ -391,9 +392,10 @@ export default async function ComparePage() {
                 <td className="py-2.5 px-3 font-semibold text-white">
                   <Link
                     href={`/companies/${row.symbol}`}
-                    className="text-brand-400 hover:text-brand-300 hover:underline"
+                    className="inline-flex items-center gap-2 text-brand-400 hover:text-brand-300 hover:underline"
                   >
-                    {row.symbol}
+                    <CompanyLogo symbol={row.symbol} size="xs" />
+                    <span>{row.symbol}</span>
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-slate-200">{row.bestModel}</td>

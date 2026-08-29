@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
+import CompanyLogo from "@/components/CompanyLogo";
 import type { CompanySummary } from "@/lib/types";
 
 const LINKS = [
@@ -106,16 +107,18 @@ export default function Navbar({
                       onClick={() =>
                         goTo(`/companies/${company.symbol}`)
                       }
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-white/5 transition-colors"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-white/5 transition-colors flex items-center gap-2.5"
                     >
-                      <span className="font-semibold text-white">
-                        {company.symbol}
-                      </span>
-
-                      <span className="text-slate-400">
-                        {" "}
-                        — {company.name}
-                      </span>
+                      <CompanyLogo symbol={company.symbol} size="xs" />
+                      <div className="truncate min-w-0">
+                        <span className="font-semibold text-white">
+                          {company.symbol}
+                        </span>
+                        <span className="text-slate-400 text-xs">
+                          {" "}
+                          — {company.name}
+                        </span>
+                      </div>
                     </button>
                   ))}
                 </div>

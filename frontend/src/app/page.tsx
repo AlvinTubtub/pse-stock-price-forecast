@@ -1,6 +1,7 @@
 import Link from "next/link";
 import StatCard from "@/components/StatCard";
 import CompanyCard from "@/components/CompanyCard";
+import CompanyLogo from "@/components/CompanyLogo";
 import ChangeBadge from "@/components/ChangeBadge";
 import { getCompanies, getDashboard } from "@/lib/data";
 import { formatDate, formatDateTimePht, formatPeso } from "@/lib/format";
@@ -62,18 +63,21 @@ export default async function HomePage() {
             Top Forecasted Gainer
           </p>
           {dashboard?.topGainer ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <Link
-                  href={`/companies/${dashboard.topGainer.symbol}`}
-                  className="text-xl font-bold text-white hover:text-brand-400 transition-colors"
-                >
-                  {dashboard.topGainer.symbol}
-                </Link>
-                <p className="text-sm text-slate-400">{dashboard.topGainer.name}</p>
-                <p className="text-xs text-slate-500 mt-1">{dashboard.topGainer.sector}</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <CompanyLogo symbol={dashboard.topGainer.symbol} name={dashboard.topGainer.name} size="md" />
+                <div className="min-w-0">
+                  <Link
+                    href={`/companies/${dashboard.topGainer.symbol}`}
+                    className="text-xl font-bold text-white hover:text-brand-400 transition-colors leading-tight block"
+                  >
+                    {dashboard.topGainer.symbol}
+                  </Link>
+                  <p className="text-sm text-slate-400 truncate max-w-[12rem]">{dashboard.topGainer.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{dashboard.topGainer.sector}</p>
+                </div>
               </div>
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <p className="text-lg font-semibold text-white">
                   {formatPeso(dashboard.topGainer.predictedClose)}
                 </p>
@@ -90,18 +94,21 @@ export default async function HomePage() {
             Top Forecasted Loser
           </p>
           {dashboard?.topLoser ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <Link
-                  href={`/companies/${dashboard.topLoser.symbol}`}
-                  className="text-xl font-bold text-white hover:text-brand-400 transition-colors"
-                >
-                  {dashboard.topLoser.symbol}
-                </Link>
-                <p className="text-sm text-slate-400">{dashboard.topLoser.name}</p>
-                <p className="text-xs text-slate-500 mt-1">{dashboard.topLoser.sector}</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <CompanyLogo symbol={dashboard.topLoser.symbol} name={dashboard.topLoser.name} size="md" />
+                <div className="min-w-0">
+                  <Link
+                    href={`/companies/${dashboard.topLoser.symbol}`}
+                    className="text-xl font-bold text-white hover:text-brand-400 transition-colors leading-tight block"
+                  >
+                    {dashboard.topLoser.symbol}
+                  </Link>
+                  <p className="text-sm text-slate-400 truncate max-w-[12rem]">{dashboard.topLoser.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{dashboard.topLoser.sector}</p>
+                </div>
               </div>
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <p className="text-lg font-semibold text-white">
                   {formatPeso(dashboard.topLoser.predictedClose)}
                 </p>

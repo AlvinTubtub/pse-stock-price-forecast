@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <rect width="100" height="100" rx="20" fill="#0F172A" />
+  <!-- ICTSI Orange/Blue Maritime Port Emblem -->
+  <path d="M22 62 L42 24 L58 24 L78 62 Z" fill="#F97316" />
+  <rect x="36" y="34" width="28" height="20" rx="3" fill="#FFFFFF" />
+  <rect x="40" y="38" width="8" height="12" fill="#0F172A" />
+  <rect x="52" y="38" width="8" height="12" fill="#0F172A" />
+  <path d="M20 66 L80 66 L74 72 L26 72 Z" fill="#38BDF8" />
+  <text x="50" y="86" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="2">ICTSI</text>
+</svg>

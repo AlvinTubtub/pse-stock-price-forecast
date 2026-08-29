@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ChangeBadge from "./ChangeBadge";
+import CompanyLogo from "./CompanyLogo";
 import { formatDate, formatPeso } from "@/lib/format";
 import type { CompanySummary } from "@/lib/types";
 
@@ -9,10 +10,13 @@ export default function CompanyCard({ company }: { company: CompanySummary }) {
       href={`/companies/${company.symbol}`}
       className="block bg-dark-card border border-dark-border rounded-xl p-5 hover:border-brand-500/50 transition-colors shadow-sm space-y-4"
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="font-bold text-white text-lg">{company.symbol}</p>
-          <p className="text-sm text-slate-400 truncate max-w-[15rem]">{company.name}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <CompanyLogo symbol={company.symbol} name={company.name} size="md" />
+          <div className="min-w-0">
+            <p className="font-bold text-white text-lg leading-tight">{company.symbol}</p>
+            <p className="text-sm text-slate-400 truncate max-w-[13rem]">{company.name}</p>
+          </div>
         </div>
         <ChangeBadge pctChange={company.pctChange} />
       </div>
