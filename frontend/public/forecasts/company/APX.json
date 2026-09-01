@@ -2,10 +2,10 @@
   "symbol": "APX",
   "name": "Apex Mining Co., Inc.",
   "sector": "Mining and Oil",
-  "previousClose": 16.22,
-  "predictedClose": 16.3,
+  "previousClose": 15.84,
+  "predictedClose": 15.92,
   "pesoChange": 0.08,
-  "pctChange": 0.49,
+  "pctChange": 0.51,
   "direction": "bullish",
   "model": "Lag-Informed Regression",
   "confidence": 96.3,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 16.3,
-    "arima": 16.28,
-    "lstm": 16.26
+    "lag": 15.92,
+    "arima": 15.84,
+    "lstm": 15.85
   },
   "ohlcv": [
     {
@@ -13033,6 +13033,14 @@
       "low": 15.74,
       "close": 16.22,
       "volume": 115932218
+    },
+    {
+      "date": "2026-09-01",
+      "open": 15.88,
+      "high": 16.2,
+      "low": 15.5,
+      "close": 15.84,
+      "volume": 59771492
     }
   ],
   "backtestDates": [
@@ -13414,7 +13422,7 @@
     "alignment": "common_target_date",
     "window": 60
   },
-  "forecastDate": "2026-09-01",
-  "dataAsOf": "2026-08-28",
-  "inferenceAt": "2026-09-01T16:01:58+08:00"
+  "forecastDate": "2026-09-02",
+  "dataAsOf": "2026-09-01",
+  "inferenceAt": "2026-09-01T22:28:21+08:00"
 }

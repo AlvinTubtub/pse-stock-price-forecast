@@ -2,8 +2,8 @@
   "symbol": "GLO",
   "name": "Globe Telecom, Inc.",
   "sector": "Services",
-  "previousClose": 1630.0,
-  "predictedClose": 1629.83,
+  "previousClose": 1601.0,
+  "predictedClose": 1600.83,
   "pesoChange": -0.17,
   "pctChange": -0.01,
   "direction": "bearish",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 1629.83,
-    "arima": 1629.68,
-    "lstm": 1629.81
+    "lag": 1600.83,
+    "arima": 1600.66,
+    "lstm": 1600.63
   },
   "ohlcv": [
     {
@@ -13033,6 +13033,14 @@
       "low": 1621.0,
       "close": 1630.0,
       "volume": 57880540
+    },
+    {
+      "date": "2026-09-01",
+      "open": 1630.0,
+      "high": 1630.0,
+      "low": 1600.0,
+      "close": 1601.0,
+      "volume": 85339705
     }
   ],
   "backtestDates": [
@@ -13414,7 +13422,7 @@
     "alignment": "common_target_date",
     "window": 60
   },
-  "forecastDate": "2026-09-01",
-  "dataAsOf": "2026-08-28",
-  "inferenceAt": "2026-09-01T16:01:58+08:00"
+  "forecastDate": "2026-09-02",
+  "dataAsOf": "2026-09-01",
+  "inferenceAt": "2026-09-01T22:28:21+08:00"
 }

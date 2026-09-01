@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-01T16:02:00.296756+08:00",
-  "forecastDate": "2026-09-01",
-  "lastRunAt": "2026-09-01T08:01:55+00:00",
-  "status": "no_files",
+  "generatedAt": "2026-09-01T22:28:23.186211+08:00",
+  "forecastDate": "2026-09-02",
+  "lastRunAt": "2026-09-01T14:28:19+00:00",
+  "status": "ok",
   "totalCompanies": 15,
   "missingCompanies": [],
   "sectors": [
@@ -29,31 +29,31 @@
   ],
   "marketSummary": {
     "gainers": 5,
-    "losers": 6,
-    "unchanged": 4
+    "losers": 8,
+    "unchanged": 2
   },
   "topGainer": {
+    "symbol": "APX",
+    "name": "Apex Mining Co., Inc.",
+    "sector": "Mining and Oil",
+    "latestClose": 15.84,
+    "predictedClose": 15.92,
+    "pctChange": 0.51,
+    "direction": "bullish",
+    "bestModel": "Lag-Informed Regression",
+    "confidence": 96.3,
+    "forecastDate": "2026-09-02"
+  },
+  "topLoser": {
     "symbol": "BPI",
     "name": "Bank of the Philippine Islands",
     "sector": "Financials",
-    "latestClose": 100.0,
-    "predictedClose": 100.72,
-    "pctChange": 0.72,
-    "direction": "bullish",
+    "latestClose": 105.5,
+    "predictedClose": 105.01,
+    "pctChange": -0.46,
+    "direction": "bearish",
     "bestModel": "ARIMA",
     "confidence": 93.8,
-    "forecastDate": "2026-09-01"
-  },
-  "topLoser": {
-    "symbol": "JFC",
-    "name": "Jollibee Foods Corporation",
-    "sector": "Industrial",
-    "latestClose": 150.0,
-    "predictedClose": 149.45,
-    "pctChange": -0.37,
-    "direction": "bearish",
-    "bestModel": "LSTM",
-    "confidence": 98.3,
-    "forecastDate": "2026-09-01"
+    "forecastDate": "2026-09-02"
   }
 }

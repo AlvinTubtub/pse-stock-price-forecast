@@ -3,9 +3,9 @@
   "name": "Security Bank Corporation",
   "sector": "Financials",
   "previousClose": 63.8,
-  "predictedClose": 63.89,
-  "pesoChange": 0.09,
-  "pctChange": 0.14,
+  "predictedClose": 63.86,
+  "pesoChange": 0.06,
+  "pctChange": 0.09,
   "direction": "bullish",
   "model": "ARIMA",
   "confidence": 89.9,
@@ -38,7 +38,7 @@
   },
   "nextClose": {
     "lag": 63.73,
-    "arima": 63.89,
+    "arima": 63.86,
     "lstm": 63.73
   },
   "ohlcv": [
@@ -13033,6 +13033,14 @@
       "low": 63.6,
       "close": 63.8,
       "volume": 13252103
+    },
+    {
+      "date": "2026-09-01",
+      "open": 63.8,
+      "high": 64.3,
+      "low": 63.6,
+      "close": 63.8,
+      "volume": 5582843
     }
   ],
   "backtestDates": [
@@ -13414,7 +13422,7 @@
     "alignment": "common_target_date",
     "window": 60
   },
-  "forecastDate": "2026-09-01",
-  "dataAsOf": "2026-08-28",
-  "inferenceAt": "2026-09-01T16:01:58+08:00"
+  "forecastDate": "2026-09-02",
+  "dataAsOf": "2026-09-01",
+  "inferenceAt": "2026-09-01T22:28:21+08:00"
 }

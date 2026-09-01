@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-01T16:02:00.296756+08:00",
-  "forecastDate": "2026-09-01",
-  "lastRunAt": "2026-09-01T08:01:55+00:00",
-  "status": "no_files",
+  "generatedAt": "2026-09-01T22:28:23.186211+08:00",
+  "forecastDate": "2026-09-02",
+  "lastRunAt": "2026-09-01T14:28:19+00:00",
+  "status": "ok",
   "aggregate": {
     "Lag-Informed Regression": {
       "rmse": 4.4145,

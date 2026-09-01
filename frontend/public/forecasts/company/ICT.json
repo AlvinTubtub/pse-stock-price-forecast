@@ -2,11 +2,11 @@
   "symbol": "ICT",
   "name": "Intl. Container Terminal Services",
   "sector": "Services",
-  "previousClose": 885.0,
-  "predictedClose": 889.31,
-  "pesoChange": 4.31,
-  "pctChange": 0.49,
-  "direction": "bullish",
+  "previousClose": 950.0,
+  "predictedClose": 947.28,
+  "pesoChange": -2.72,
+  "pctChange": -0.29,
+  "direction": "bearish",
   "model": "LSTM",
   "confidence": 98.9,
   "metrics": {
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 885.37,
-    "arima": 892.5,
-    "lstm": 889.31
+    "lag": 949.18,
+    "arima": 943.12,
+    "lstm": 947.28
   },
   "ohlcv": [
     {
@@ -13033,6 +13033,14 @@
       "low": 875.0,
       "close": 885.0,
       "volume": 4308466365
+    },
+    {
+      "date": "2026-09-01",
+      "open": 960.0,
+      "high": 966.0,
+      "low": 919.5,
+      "close": 950.0,
+      "volume": 2519249675
     }
   ],
   "backtestDates": [
@@ -13414,7 +13422,7 @@
     "alignment": "common_target_date",
     "window": 60
   },
-  "forecastDate": "2026-09-01",
-  "dataAsOf": "2026-08-28",
-  "inferenceAt": "2026-09-01T16:01:58+08:00"
+  "forecastDate": "2026-09-02",
+  "dataAsOf": "2026-09-01",
+  "inferenceAt": "2026-09-01T22:28:21+08:00"
 }
