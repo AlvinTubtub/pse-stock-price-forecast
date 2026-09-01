@@ -13415,6 +13415,6 @@
     "window": 60
   },
   "forecastDate": "2026-09-01",
-  "dataAsOf": null,
-  "inferenceAt": null
+  "dataAsOf": "2026-08-28",
+  "inferenceAt": "2026-09-01T16:01:58+08:00"
 }
