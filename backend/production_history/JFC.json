@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "symbol": "JFC",
+  "records": [
+    {
+      "target_date": "2026-09-02",
+      "issued_at": "2026-09-01T22:28:21+08:00",
+      "data_as_of": "2026-09-01",
+      "predictions": {
+        "Lag-Informed Regression": 152.77,
+        "ARIMA": 153.15,
+        "LSTM": 152.35
+      },
+      "actual": 152.0,
+      "reconciled_at": "2026-09-02T16:01:44+08:00"
+    },
+    {
+      "target_date": "2026-09-03",
+      "issued_at": "2026-09-02T16:01:44+08:00",
+      "data_as_of": "2026-09-02",
+      "predictions": {
+        "Lag-Informed Regression": 151.97,
+        "ARIMA": 152.35,
+        "LSTM": 151.57
+      },
+      "actual": null,
+      "reconciled_at": null
+    }
+  ]
+}

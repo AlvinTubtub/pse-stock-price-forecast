@@ -38,6 +38,20 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
 
   const maseVal = parseFloat(String(selectedMetrics.mase));
   const beatsNaive = !isNaN(maseVal) && maseVal < 1.0;
+  const productionDates = company.productionBacktestDates ?? [];
+  const productionActual = company.productionBacktestActual ?? [];
+  const productionByModel = company.productionBacktestByModel ?? {};
+  const hasRealizedProductionHistory =
+    productionDates.length > 0 && productionDates.length === productionActual.length;
+  const auditedDates = company.backtestDates ?? [];
+  const chartDates = [...auditedDates, ...productionDates];
+  const chartActual = [...company.backtestActual, ...productionActual];
+  const chartByModel = Object.fromEntries(
+    Object.entries(company.backtestByModel).map(([model, values]) => [
+      model,
+      productionByModel[model] ? [...values, ...productionByModel[model]] : values,
+    ])
+  );
 
   return (
     <div className="space-y-8">
@@ -196,33 +210,41 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
 
       {/* 6. Backtest: Predicted vs. Actual */}
       <section className="bg-dark-card border border-dark-border rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-1">
-          Backtest: Predicted vs. Actual (Last 60 Sessions)
-        </h2>
+        <div className="flex flex-wrap items-center gap-2 mb-1">
+          <h2 className="text-lg font-semibold text-white">
+            Backtest: Predicted vs. Actual (Last 60 Sessions)
+          </h2>
+          <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Audited evaluation</span>
+          {hasRealizedProductionHistory && <span className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">Live forecast</span>}
+        </div>
         <p className="text-sm text-slate-400 mb-4">
-          Latest realized ForecastPH predictions compared with actual closing prices for up to the most
-          recent 60 trading sessions.
+          Latest audited evaluation followed by verified live ForecastPH forecasts. The vertical marker separates the research holdout from live history; research metrics are unchanged.
         </p>
         <PredictionChart
-          dates={company.productionBacktestDates ?? []}
-          actual={company.productionBacktestActual ?? []}
-          byModel={company.productionBacktestByModel ?? {}}
+          dates={chartDates}
+          actual={chartActual}
+          byModel={chartByModel}
           selectedModel={company.model}
+          liveStartDate={productionDates[0]}
         />
       </section>
 
       {/* 7. Forecast Error Over Time */}
       <section className="bg-dark-card border border-dark-border rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-1">Forecast Error Over Time</h2>
+        <div className="flex flex-wrap items-center gap-2 mb-1">
+          <h2 className="text-lg font-semibold text-white">Forecast Error Over Time</h2>
+          <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Audited evaluation</span>
+          {hasRealizedProductionHistory && <span className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">Live forecast</span>}
+        </div>
         <p className="text-sm text-slate-400 mb-4">
-          Production forecast error for up to the latest 60 realized trading sessions, calculated as
-          predicted close minus actual close (₱).
+          Audited evaluation error followed by verified live ForecastPH error. The vertical marker separates the research holdout from live history; both use predicted close minus actual close (₱).
         </p>
         <ErrorChart
-          dates={company.productionBacktestDates ?? []}
-          actual={company.productionBacktestActual ?? []}
-          byModel={company.productionBacktestByModel ?? {}}
+          dates={chartDates}
+          actual={chartActual}
+          byModel={chartByModel}
           selectedModel={company.model}
+          liveStartDate={productionDates[0]}
         />
       </section>
 

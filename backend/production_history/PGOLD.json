@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "symbol": "PGOLD",
+  "records": [
+    {
+      "target_date": "2026-09-02",
+      "issued_at": "2026-09-01T22:28:21+08:00",
+      "data_as_of": "2026-09-01",
+      "predictions": {
+        "Lag-Informed Regression": 40.25,
+        "ARIMA": 40.31,
+        "LSTM": 40.28
+      },
+      "actual": 40.0,
+      "reconciled_at": "2026-09-02T16:01:44+08:00"
+    },
+    {
+      "target_date": "2026-09-03",
+      "issued_at": "2026-09-02T16:01:44+08:00",
+      "data_as_of": "2026-09-02",
+      "predictions": {
+        "Lag-Informed Regression": 40.0,
+        "ARIMA": 40.02,
+        "LSTM": 40.0
+      },
+      "actual": null,
+      "reconciled_at": null
+    }
+  ]
+}

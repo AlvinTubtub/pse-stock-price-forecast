@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "symbol": "BPI",
+  "records": [
+    {
+      "target_date": "2026-09-02",
+      "issued_at": "2026-09-01T22:28:21+08:00",
+      "data_as_of": "2026-09-01",
+      "predictions": {
+        "Lag-Informed Regression": 105.22,
+        "ARIMA": 105.01,
+        "LSTM": 104.95
+      },
+      "actual": 104.0,
+      "reconciled_at": "2026-09-02T16:01:44+08:00"
+    },
+    {
+      "target_date": "2026-09-03",
+      "issued_at": "2026-09-02T16:01:44+08:00",
+      "data_as_of": "2026-09-02",
+      "predictions": {
+        "Lag-Informed Regression": 104.08,
+        "ARIMA": 103.78,
+        "LSTM": 103.8
+      },
+      "actual": null,
+      "reconciled_at": null
+    }
+  ]
+}

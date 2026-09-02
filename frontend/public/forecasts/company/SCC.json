@@ -13430,6 +13430,23 @@
     "alignment": "common_target_date",
     "window": 60
   },
+  "productionBacktestDates": [
+    "2026-09-02"
+  ],
+  "productionBacktestActual": [
+    16.2
+  ],
+  "productionBacktestByModel": {
+    "Lag-Informed Regression": [
+      16.6
+    ],
+    "ARIMA": [
+      16.58
+    ],
+    "LSTM": [
+      16.49
+    ]
+  },
   "forecastDate": "2026-09-03",
   "dataAsOf": "2026-09-02",
   "inferenceAt": "2026-09-02T16:01:44+08:00"

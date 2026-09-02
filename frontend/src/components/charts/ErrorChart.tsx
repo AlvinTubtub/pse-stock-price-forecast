@@ -59,9 +59,10 @@ export interface ErrorChartProps {
   actual: number[];
   byModel: Record<string, number[]>;
   selectedModel?: string;
+  liveStartDate?: string;
 }
 
-export default function ErrorChart({ dates, actual, byModel, selectedModel }: ErrorChartProps) {
+export default function ErrorChart({ dates, actual, byModel, selectedModel, liveStartDate }: ErrorChartProps) {
   const data = useMemo(() => {
     return actual.map((value, i) => {
       const rawDate = dates?.[i] || `Day ${i + 1}`;
@@ -99,6 +100,20 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel }: Er
 
   const seriesNames = Object.keys(byModel);
   const chart = useInteractiveChart({ data, xKey: "step" });
+
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[360px] items-center justify-center rounded-lg border border-dashed border-dark-border bg-dark-bg/40 px-6 text-center">
+        <div className="max-w-md space-y-2">
+          <p className="text-sm font-medium text-slate-200">No realized production forecast errors yet</p>
+          <p className="text-xs leading-relaxed text-slate-400">
+            Errors appear only after ForecastPH&apos;s previously issued prediction can be matched to the
+            actual close for that trading session.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const renderTooltip = ({ active, payload }: any) => {
     if (!active || !payload || !payload.length) return null;
@@ -202,6 +217,7 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel }: Er
             onMouseLeave={chart.handleMouseUp}
           >
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
+            {liveStartDate && <ReferenceLine x={liveStartDate} stroke="#34d399" strokeDasharray="4 4" label={{ value: "Live forecast begins", fill: "#6ee7b7", fontSize: 10, position: "top" }} />}
             <XAxis
               dataKey="step"
               tick={{ fill: "#94a3b8", fontSize: 11 }}
@@ -267,7 +283,7 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel }: Er
                   stroke={MODEL_COLORS[name] ?? "#94a3b8"}
                   strokeWidth={isSelected ? 2.5 : 1.5}
                   strokeDasharray={isNaive ? "4 4" : undefined}
-                  dot={false}
+                  dot={data.length === 1 ? { r: 4 } : false}
                   activeDot={{ r: 4 }}
                 />
               );

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "symbol": "APX",
+  "records": [
+    {
+      "target_date": "2026-09-02",
+      "issued_at": "2026-09-01T22:28:21+08:00",
+      "data_as_of": "2026-09-01",
+      "predictions": {
+        "Lag-Informed Regression": 15.92,
+        "ARIMA": 15.84,
+        "LSTM": 15.85
+      },
+      "actual": 16.0,
+      "reconciled_at": "2026-09-02T16:01:44+08:00"
+    },
+    {
+      "target_date": "2026-09-03",
+      "issued_at": "2026-09-02T16:01:44+08:00",
+      "data_as_of": "2026-09-02",
+      "predictions": {
+        "Lag-Informed Regression": 16.09,
+        "ARIMA": 16.02,
+        "LSTM": 16.03
+      },
+      "actual": null,
+      "reconciled_at": null
+    }
+  ]
+}

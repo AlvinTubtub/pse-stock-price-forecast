@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   Legend,
+  ReferenceLine,
   ReferenceArea,
 } from "recharts";
 import { useInteractiveChart } from "./useInteractiveChart";
@@ -59,6 +60,7 @@ export interface PredictionChartProps {
   actual: number[];
   byModel: Record<string, number[]>;
   selectedModel?: string;
+  liveStartDate?: string;
 }
 
 export default function PredictionChart({
@@ -66,6 +68,7 @@ export default function PredictionChart({
   actual,
   byModel,
   selectedModel,
+  liveStartDate,
 }: PredictionChartProps) {
   const data = actual.map((value, i) => {
     const rawDate = dates?.[i] || `Day ${i + 1}`;
@@ -83,6 +86,20 @@ export default function PredictionChart({
 
   const seriesNames = ["Actual", ...Object.keys(byModel)];
   const chart = useInteractiveChart({ data, xKey: "step" });
+
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[360px] items-center justify-center rounded-lg border border-dashed border-dark-border bg-dark-bg/40 px-6 text-center">
+        <div className="max-w-md space-y-2">
+          <p className="text-sm font-medium text-slate-200">Waiting for the first realized production forecast</p>
+          <p className="text-xs leading-relaxed text-slate-400">
+            ForecastPH will add a point here after a forecast is issued and the corresponding trading
+            session&apos;s closing price becomes available. Historical research backtests are kept separate.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const renderTooltip = ({ active, payload }: any) => {
     if (!active || !payload || !payload.length) return null;
@@ -184,6 +201,7 @@ export default function PredictionChart({
             onMouseLeave={chart.handleMouseUp}
           >
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
+            {liveStartDate && <ReferenceLine x={liveStartDate} stroke="#34d399" strokeDasharray="4 4" label={{ value: "Live forecast begins", fill: "#6ee7b7", fontSize: 10, position: "top" }} />}
             <XAxis
               dataKey="step"
               tick={{ fill: "#94a3b8", fontSize: 11 }}
@@ -235,7 +253,7 @@ export default function PredictionChart({
                   stroke={MODEL_COLORS[name] ?? "#94a3b8"}
                   strokeWidth={isActual ? 2.5 : isSelected ? 2.5 : 1.5}
                   strokeDasharray={isNaive ? "4 4" : undefined}
-                  dot={false}
+                  dot={data.length === 1 ? { r: 4 } : false}
                   activeDot={{ r: 4 }}
                 />
               );

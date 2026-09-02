@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "symbol": "GLO",
+  "records": [
+    {
+      "target_date": "2026-09-02",
+      "issued_at": "2026-09-01T22:28:21+08:00",
+      "data_as_of": "2026-09-01",
+      "predictions": {
+        "Lag-Informed Regression": 1600.83,
+        "ARIMA": 1600.66,
+        "LSTM": 1600.63
+      },
+      "actual": 1592.0,
+      "reconciled_at": "2026-09-02T16:01:44+08:00"
+    },
+    {
+      "target_date": "2026-09-03",
+      "issued_at": "2026-09-02T16:01:44+08:00",
+      "data_as_of": "2026-09-02",
+      "predictions": {
+        "Lag-Informed Regression": 1591.83,
+        "ARIMA": 1591.65,
+        "LSTM": 1591.85
+      },
+      "actual": null,
+      "reconciled_at": null
+    }
+  ]
+}

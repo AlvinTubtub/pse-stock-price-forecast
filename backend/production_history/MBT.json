@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "symbol": "MBT",
+  "records": [
+    {
+      "target_date": "2026-09-02",
+      "issued_at": "2026-09-01T22:28:21+08:00",
+      "data_as_of": "2026-09-01",
+      "predictions": {
+        "Lag-Informed Regression": 66.42,
+        "ARIMA": 66.33,
+        "LSTM": 66.4
+      },
+      "actual": 65.3,
+      "reconciled_at": "2026-09-02T16:01:44+08:00"
+    },
+    {
+      "target_date": "2026-09-03",
+      "issued_at": "2026-09-02T16:01:44+08:00",
+      "data_as_of": "2026-09-02",
+      "predictions": {
+        "Lag-Informed Regression": 65.41,
+        "ARIMA": 65.44,
+        "LSTM": 65.4
+      },
+      "actual": null,
+      "reconciled_at": null
+    }
+  ]
+}

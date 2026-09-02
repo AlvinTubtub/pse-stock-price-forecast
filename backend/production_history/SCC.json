@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "symbol": "SCC",
+  "records": [
+    {
+      "target_date": "2026-09-02",
+      "issued_at": "2026-09-01T22:28:21+08:00",
+      "data_as_of": "2026-09-01",
+      "predictions": {
+        "Lag-Informed Regression": 16.6,
+        "ARIMA": 16.58,
+        "LSTM": 16.49
+      },
+      "actual": 16.2,
+      "reconciled_at": "2026-09-02T16:01:44+08:00"
+    },
+    {
+      "target_date": "2026-09-03",
+      "issued_at": "2026-09-02T16:01:44+08:00",
+      "data_as_of": "2026-09-02",
+      "predictions": {
+        "Lag-Informed Regression": 16.2,
+        "ARIMA": 16.18,
+        "LSTM": 16.08
+      },
+      "actual": null,
+      "reconciled_at": null
+    }
+  ]
+}
