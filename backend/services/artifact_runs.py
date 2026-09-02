@@ -30,6 +30,10 @@ class FormalRunIntegrityError(ValueError):
     """Raised when a formal run is incomplete or its evidence is inconsistent."""
 
 
+class DeploymentConfigurationError(ValueError):
+    """Raised when deployment refresh lacks explicit approved metadata."""
+
+
 def _json_default(value: object) -> str:
     if isinstance(value, (datetime, pd.Timestamp)):
         return value.isoformat()
@@ -97,8 +101,16 @@ def deployment_current_dir(base_dir: Path) -> Path:
     return base_dir / "models" / "deployment" / "current"
 
 
-def write_deployment_manifest(base_dir: Path, artifacts: dict[str, dict[str, str]]) -> Path:
+def write_deployment_manifest(
+    base_dir: Path,
+    artifacts: dict[str, dict[str, str]],
+    *,
+    approved_configurations: dict[str, dict[str, object]] | None = None,
+    operation: str = "refresh",
+) -> Path:
     """Write the mutable deployment manifest without touching formal evidence."""
+    if operation not in {"refresh", "retune"}:
+        raise ValueError("Deployment operation must be 'refresh' or 'retune'.")
     target = deployment_current_dir(base_dir)
     target.mkdir(parents=True, exist_ok=True)
     path = target / "deployment_manifest.json"
@@ -106,10 +118,55 @@ def write_deployment_manifest(base_dir: Path, artifacts: dict[str, dict[str, str
         "mode": RunMode.DEPLOYMENT,
         "created_at": datetime.now(timezone.utc),
         "artifact_layout": "deployment/current",
+        "operation": operation,
         "artifacts": artifacts,
     }
+    if approved_configurations is not None:
+        payload["approved_configurations"] = approved_configurations
     path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default))
     return path
+
+
+def load_approved_deployment_configurations(
+    base_dir: Path,
+    symbols: list[str] | tuple[str, ...],
+) -> dict[str, dict[str, object]]:
+    """Load the explicit approval boundary used by deployment refresh.
+
+    Configuration is never reconstructed from a moving dataset and never
+    sourced implicitly from formal-run directories.
+    """
+    manifest_path = deployment_current_dir(base_dir) / "deployment_manifest.json"
+    if not manifest_path.is_file():
+        raise DeploymentConfigurationError(
+            f"Deployment refresh requires {manifest_path}; no formal-evaluation fallback is allowed."
+        )
+    try:
+        payload = json.loads(manifest_path.read_text())
+        approved = payload["approved_configurations"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise DeploymentConfigurationError(
+            f"{manifest_path} does not contain approved_configurations; run manual deployment retuning and approval first."
+        ) from exc
+    if not isinstance(approved, dict):
+        raise DeploymentConfigurationError(
+            f"{manifest_path} approved_configurations must be a per-symbol object."
+        )
+    requested = [symbol.upper() for symbol in symbols]
+    missing = sorted(set(requested) - set(approved))
+    if missing:
+        raise DeploymentConfigurationError(
+            "Deployment refresh lacks approved configuration metadata for: " + ", ".join(missing)
+        )
+    required_models = {"lag_reg", "arima", "lstm"}
+    for symbol in requested:
+        config = approved[symbol]
+        absent = sorted(required_models - set(config)) if isinstance(config, dict) else sorted(required_models)
+        if absent:
+            raise DeploymentConfigurationError(
+                f"{symbol}: approved deployment metadata lacks model configuration(s): {', '.join(absent)}."
+            )
+    return {symbol: approved[symbol] for symbol in requested}
 
 
 @dataclass

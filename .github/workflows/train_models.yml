@@ -2,7 +2,7 @@ name: PSE Weekly Model Training
 
 # Weekly model retraining is intentionally separate from the Fast Pipeline.
 # The Fast Pipeline runs daily inference against these persisted artifacts.
-# This workflow retrains all three models for the canonical 15-ticker universe,
+# This workflow refits approved configurations for the canonical 15-ticker universe,
 # validates the generated artifacts, exports the frontend JSON, then commits the
 # complete training result only after every ticker succeeds.
 
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   train:
-    name: Train all 15 PSE tickers
+    name: Refresh all 15 PSE tickers
     runs-on: ubuntu-latest
     timeout-minutes: 240
 
@@ -56,15 +56,16 @@ jobs:
           print("joblib", joblib.__version__)
           PY
 
-      - name: Train all models strictly
+      - name: Refresh approved deployment models strictly
         working-directory: backend
         run: |
-          python -m services.model_selector --strict
+          python -m services.model_selector --mode deployment-refresh --strict
 
       - name: Verify all persisted model artifacts
         working-directory: backend
         run: |
           python - <<'PY'
+          import json
           from pathlib import Path
           from services.pdf_pipeline.config import TARGET_COMPANIES
 
@@ -92,6 +93,13 @@ jobs:
           deployment_manifest = root / "models" / "deployment" / "current" / "deployment_manifest.json"
           if not deployment_manifest.is_file():
               raise SystemExit("deployment_manifest.json was not generated")
+          manifest = json.loads(deployment_manifest.read_text())
+          if manifest.get("operation") != "refresh":
+              raise SystemExit("deployment_manifest.json does not record deployment refresh")
+          approved = manifest.get("approved_configurations", {})
+          missing_approved = sorted(set(tickers) - set(approved))
+          if missing_approved:
+              raise SystemExit(f"approved configuration metadata missing for: {missing_approved}")
           print(f"Universe: {len(tickers)}/{len(tickers)} tickers")
           PY
 
@@ -111,10 +119,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add \
-            backend/models \
+            backend/models/deployment/current \
             backend/prediction_cache \
-            backend/best_models.json \
-            backend/statistical_tests.json \
             frontend/public/forecasts
 
           if git diff --cached --quiet; then

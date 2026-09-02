@@ -29,13 +29,54 @@ def _plan_and_forecasts(n: int = 20) -> tuple:
     return plan, forecasts
 
 
+def _valid_arima_diagnostics() -> dict:
+    attempt = {
+        "attempt_number": 1,
+        "method": "statespace",
+        "maxiter": 500,
+        "fit_completed": True,
+        "converged": True,
+        "failure_reason": None,
+    }
+    return {
+        "selected_order": [1, 1, 0],
+        "selected_trend": "n",
+        "selected_configuration": {"order": [1, 1, 0], "trend": "n"},
+        "optimizer_retry_policy": [{"method": "statespace", "maxiter": 500}],
+        "cv_fold_results": [
+            {
+                "fold_number": fold,
+                "successful": True,
+                "converged": True,
+                "validation_rmse": 0.1,
+                "optimizer_attempts": [attempt],
+            }
+            for fold in range(1, 6)
+        ],
+        "all_cv_folds_converged": True,
+        "final_fit_converged": True,
+        "final_fit_attempts": [attempt],
+        "candidate_cv": [
+            {
+                "configuration": {"order": [1, 1, 0], "trend": "n"},
+                "valid": True,
+            }
+        ],
+    }
+
+
 def _complete_writer(tmp_path: Path) -> FormalRunWriter:
     plan, forecasts = _plan_and_forecasts()
     writer = FormalRunWriter(tmp_path, "controlled_run")
     writer.create()
     writer.write_split_manifest({"BPI": plan})
     writer.write_data_manifest({"BPI": {"source_path": "data/raw/BPI.csv", "sha256": "synthetic", "row_count": 20, "first_date": "2025-01-01", "last_date": "2025-01-20"}})
-    writer.write_company("BPI", forecasts, {model: {"rmse": 0.0} for model in forecasts}, {})
+    writer.write_company(
+        "BPI",
+        forecasts,
+        {model: {"rmse": 0.0} for model in forecasts},
+        {"arima": _valid_arima_diagnostics()},
+    )
     writer.write_methodology_manifest("2025-01-20", ["BPI"])
     writer.write_statistics({"per_company": {}})
     return writer
@@ -88,7 +129,17 @@ def test_formal_orchestration_never_writes_deployment_or_dashboard_state(tmp_pat
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
     (raw_dir / "BPI.csv").write_text("Date,Close\n2025-01-01,1\n")
-    payload = {"plan": plan, "forecasts": forecasts, "metrics": {model: {"rmse": 0.0} for model in forecasts}, "diagnostics": {model: {} for model in ("lag_reg", "arima", "lstm")}, "development_close": [1.0, 2.0]}
+    payload = {
+        "plan": plan,
+        "forecasts": forecasts,
+        "metrics": {model: {"rmse": 0.0} for model in forecasts},
+        "diagnostics": {
+            "lag_reg": {},
+            "arima": _valid_arima_diagnostics(),
+            "lstm": {},
+        },
+        "development_close": [1.0, 2.0],
+    }
     monkeypatch.setattr(model_selector, "BASE_DIR", tmp_path)
     source = pd.DataFrame({"Date": pd.date_range("2025-01-01", periods=2), "Close": [1.0, 2.0]})
     statistics = {"per_company": {"BPI": {"dm_squared_error": {"stage1_vs_naive": [{"model_a": model, "beats_naive_rmse": True, "significantly_beats_naive": False} for model in ("lag_reg", "arima", "lstm")]}}}}
@@ -152,3 +203,13 @@ def test_formal_orchestration_rejects_a_dirty_git_worktree(tmp_path):
     with patch.object(model_selector, "git_worktree_is_dirty", return_value=True):
         with pytest.raises(RuntimeError, match="clean Git worktree"):
             model_selector.run_formal_evaluation(raw_dir=tmp_path, symbols=["BPI"], run_id="dirty")
+
+
+def test_formal_finalization_rejects_unconfirmed_arima_diagnostics(tmp_path):
+    writer = _complete_writer(tmp_path)
+    diagnostics_path = writer.path / "per_company" / "BPI" / "diagnostics.json"
+    diagnostics = json.loads(diagnostics_path.read_text())
+    diagnostics["arima"]["cv_fold_results"][2]["converged"] = None
+    diagnostics_path.write_text(json.dumps(diagnostics))
+    with pytest.raises(FormalRunIntegrityError, match="fold 3"):
+        writer.finalize()

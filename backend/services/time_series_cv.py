@@ -151,14 +151,42 @@ def create_development_cv_date_plan(
     if len(plan.development_target_dates) != len(plan.development_origin_dates):
         raise FormalEvaluationPlanError(f"{plan.symbol}: development origin and target dates are misaligned.")
 
-    common_origins = plan.development_origin_dates[maximum_lookback:]
-    common_targets = plan.development_target_dates[maximum_lookback:]
+    return create_cv_date_plan_from_forecast_dates(
+        plan.symbol,
+        plan.development_origin_dates,
+        plan.development_target_dates,
+        maximum_lookback=maximum_lookback,
+        fold_count=fold_count,
+        forbidden_target_dates=plan.holdout_target_dates,
+    )
+
+
+def create_cv_date_plan_from_forecast_dates(
+    symbol: str,
+    origin_dates: tuple[pd.Timestamp, ...],
+    target_dates: tuple[pd.Timestamp, ...],
+    *,
+    maximum_lookback: int = 30,
+    fold_count: int = DEFAULT_N_SPLITS,
+    forbidden_target_dates: tuple[pd.Timestamp, ...] = (),
+) -> DevelopmentCVDatePlan:
+    """Create one explicit expanding-fold plan from a caller's date universe.
+
+    Formal evaluation and manually invoked deployment challenger tuning share
+    this date-plan implementation without sharing orchestration or artifacts.
+    """
+    if len(origin_dates) != len(target_dates):
+        raise FormalEvaluationPlanError(f"{symbol}: CV origin and target dates are misaligned.")
+    if maximum_lookback < 1 or fold_count < 2:
+        raise FormalEvaluationPlanError("CV lookback and fold count are invalid.")
+    common_origins = origin_dates[maximum_lookback:]
+    common_targets = target_dates[maximum_lookback:]
     if len(common_targets) <= fold_count:
         raise FormalEvaluationPlanError(
-            f"{plan.symbol}: {len(common_targets)} common development targets cannot produce {fold_count} folds."
+            f"{symbol}: {len(common_targets)} common development targets cannot produce {fold_count} folds."
         )
-    if set(common_targets).intersection(plan.holdout_target_dates):
-        raise FormalEvaluationPlanError(f"{plan.symbol}: development CV target dates overlap the formal holdout.")
+    if set(common_targets).intersection(forbidden_target_dates):
+        raise FormalEvaluationPlanError(f"{symbol}: development CV target dates overlap forbidden targets.")
 
     splitter = TimeSeriesSplit(n_splits=fold_count)
     folds: list[DevelopmentCVFold] = []
@@ -170,7 +198,7 @@ def create_development_cv_date_plan(
         training_origins = tuple(common_origins[index] for index in training_indices)
         validation_origins = tuple(common_origins[index] for index in validation_indices)
         if not training_targets or not validation_targets or training_targets[-1] >= validation_targets[0]:
-            raise FormalEvaluationPlanError(f"{plan.symbol}: development CV fold {fold_number} is not chronological.")
+            raise FormalEvaluationPlanError(f"{symbol}: development CV fold {fold_number} is not chronological.")
         folds.append(DevelopmentCVFold(
             fold_number=fold_number,
             training_origin_dates=training_origins,
@@ -180,7 +208,7 @@ def create_development_cv_date_plan(
         ))
 
     return DevelopmentCVDatePlan(
-        symbol=plan.symbol,
+        symbol=symbol.upper(),
         maximum_lookback=maximum_lookback,
         fold_count=fold_count,
         common_origin_dates=tuple(common_origins),

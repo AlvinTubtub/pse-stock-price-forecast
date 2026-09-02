@@ -41,15 +41,15 @@ Cron-job.org (Mon–Fri, 4:00 PM PHT)         GitHub Actions cron (Sun, 8:00 AM 
 .github/workflows/update_pipeline.yml       .github/workflows/train_models.yml
         │  ("Fast Pipeline")                          │  ("Heavy Training")
         ▼                                             ▼
-run_pipeline.py --no-train                  services.model_selector.train_and_select_all()
-  1. Download latest PSE EDGE disclosures      1. Feature engineering
-  2. Extract and validate PDF tables           2. Retrain Lag-Informed Regression, ARIMA, LSTM
-  3. Update OHLCV datasets                     3. Evaluate (RMSE, MAE, MASE, R²)
-     (data/raw/<SYMBOL>.csv)                   4. Statistical significance suite (DM/HLN,
-  4. Update latest_processed.json                 Friedman, Wilcoxon-Holm, consistency check)
-        │                                       5. Select the best model per company
-        ▼                                       6. Update prediction_cache/ + best_models.json
-Commit changed artifacts only                    + statistical_tests.json
+run_pipeline.py --no-train                  model_selector --mode deployment-refresh --strict
+  1. Download latest PSE EDGE disclosures      1. Load approved configurations
+  2. Extract and validate PDF tables           2. Refit Lag Regression, ARIMA, and LSTM
+  3. Update OHLCV datasets                        without retuning or formal evaluation
+     (data/raw/<SYMBOL>.csv)                   3. Preserve approved model families and metrics
+  4. Update latest_processed.json              4. Update deployment models + operational cache
+        │
+        ▼
+Commit changed artifacts only
 (idempotent — no-op if nothing changed)               │
         │                                             ▼
         │                                    Commit changed artifacts only
@@ -133,43 +133,28 @@ differenced/scaled target.
   Holm-Bonferroni correction, a Friedman rank test and Holm-adjusted
   Wilcoxon signed-rank post-hoc tests (across companies), and a
   best-model consistency check (lowest RMSE on >=8 of 15 companies).
-- `services/model_selector.py` — orchestrates training all three models
-  per ticker, saves them under `models/`, caches predictions under
-  `prediction_cache/`, writes `best_models.json`, and — once every ticker
-  is trained — runs and saves the statistical-significance suite to
-  `statistical_tests.json`.
+- `services/model_selector.py` — keeps formal evaluation, scheduled
+  deployment refresh, and manual challenger retuning as explicit operations.
+  Refresh reads approved configuration metadata and never reruns formal tests.
 
-Training is now decoupled from data ingestion: `train_and_select_all()`
-is called directly by `.github/workflows/train_models.yml` (Heavy
-Training, weekly), *not* by every run of
+Deployment refresh is decoupled from data ingestion:
+`refresh_deployment_all()` is called directly by
+`.github/workflows/train_models.yml` (weekly), *not* by every run of
 `services/pdf_pipeline/pipeline.py`/`run_pipeline.py` (Fast Pipeline,
 Monday-Friday — see "Automated Pipeline" below for the full split and
 why). `run_pipeline.py` still supports training inline via its
 `train_models=True` default, for local/manual use:
 
 ```bash
-python -m services.model_selector          # train + save models for every data/raw/*.csv, no ingestion
+python -m services.model_selector --mode deployment-refresh  # refit approved configurations
+python -m services.model_selector --mode deployment-retune --symbols BPI  # manual challenger only
 python run_pipeline.py                     # ingest + train in one go (local/dev; CI never does both together)
 python run_pipeline.py --no-train           # ingest new data only, skip retraining (what the Fast Pipeline runs)
 ```
 
-**Runtime**: the CV-based ARIMA order search and the 48-configuration
-LSTM grid are considerably more expensive than the models this pipeline
-originally shipped with. Measured on real PSE data (~1,600 trading days):
-ARIMA's order search is the dominant cost at roughly 7 minutes/ticker,
-the LSTM grid roughly 3 minutes/ticker, and the regression well under a
-second — around 10 minutes/ticker, so ~2.5 hours for all 15 tickers.
-`train_and_select_all()` retrains *every* ticker in `data/raw/` on every
-call (not just ones with new data), which is exactly why it now runs
-weekly (Heavy Training) rather than on every data update (Fast
-Pipeline) — see "Automated Pipeline" below. If weekly still isn't often
-enough, or ~2.5h/week stops being acceptable, the straightforward options
-are: (a) only retrain tickers that changed since the last training run,
-(b) fan the 15 tickers out across a GitHub Actions matrix job, or (c)
-narrow the CV/grid-search space — none of which this refactor does by
-default, to keep the implementation an exact match for the paper's
-specified search
-spaces.
+The expensive ARIMA and LSTM searches run only during explicitly requested
+manual challenger retuning or formal research. The Sunday workflow performs
+refresh only and fails if approved configuration metadata is unavailable.
 
 ## Project Structure
 
@@ -246,12 +231,12 @@ run daily:
 
 | | `.github/workflows/update_pipeline.yml` ("Fast Pipeline") | `.github/workflows/train_models.yml` ("Heavy Training") |
 |---|---|---|
-| Does | PDF ingestion -> `backend/data/raw/` CSVs only (`python backend/run_pipeline.py --no-train`) | Retrains all 3 models on current `backend/data/raw/` (`python -m services.model_selector`, run from `backend/`) |
+| Does | PDF ingestion -> `backend/data/raw/` CSVs only (`python backend/run_pipeline.py --no-train`) | Refits approved configurations (`python -m services.model_selector --mode deployment-refresh --strict`) |
 | Schedule | Monday-Friday, 4:00 PM Philippine Time | Sunday, 8:00 AM Philippine Time |
 | Trigger | External: [Cron-job.org](https://cron-job.org) `repository_dispatch` (no GitHub-native cron) | GitHub Actions' own `schedule: cron` |
 | Dependencies | `backend/requirements-fast.txt` (pandas/numpy/pdfplumber/requests) | `backend/requirements-pipeline.txt` (adds scikit-learn/statsmodels/torch) |
-| Typical runtime | A couple of minutes | ~2.5 hours (see "Model Training Pipeline" above) |
-| Commits | `backend/data/raw/`, `backend/latest_processed.json`, `frontend/public/forecasts/` | `backend/models/`, `backend/prediction_cache/`, `backend/best_models.json`, `backend/statistical_tests.json`, `frontend/public/forecasts/` |
+| Typical runtime | A couple of minutes | Refit-dependent; no scheduled ARIMA/LSTM grid search |
+| Commits | `backend/data/raw/`, `backend/latest_processed.json`, `frontend/public/forecasts/` | `backend/models/deployment/current/`, `backend/prediction_cache/`, `frontend/public/forecasts/` |
 
 Both share the `pse-pipeline` concurrency group, so they queue instead of
 racing each other if a run overlaps. Since PSE doesn't trade weekends,
@@ -299,10 +284,10 @@ not for the Fast Pipeline's tighter Monday-Friday schedule.
 **Heavy Training** (Sunday):
 
 1. Checks out the repo (already current through Friday, via the week's Fast Pipeline commits) and installs `backend/requirements-pipeline.txt`.
-2. Runs `python -m services.model_selector --strict` (from `backend/`), which retrains all three models for every ticker in `data/raw/`, evaluates them, selects the best model per company, runs the cross-model statistical-significance suite, and writes `prediction_cache/`, `best_models.json`, and `statistical_tests.json`.
+2. Runs `python -m services.model_selector --mode deployment-refresh --strict` (from `backend/`), which refits each approved configuration and preserves existing formal metrics and model-family choices.
 3. Verifies `backend/best_models.json` and `backend/prediction_cache/` were actually populated.
 4. Runs `python backend/scripts/export_forecast_artifacts.py`, which writes `frontend/public/forecasts/*.json`.
-5. Stages `backend/models/`, `backend/prediction_cache/`, `backend/best_models.json`, `backend/statistical_tests.json`, and `frontend/public/forecasts/`, then checks `git diff --cached` — same idempotency guarantee as the Fast Pipeline.
+5. Stages `backend/models/deployment/current/`, `backend/prediction_cache/`, and `frontend/public/forecasts/`, then checks `git diff --cached` — same idempotency guarantee as the Fast Pipeline.
 6. If something changed, commits and pushes; Vercel redeploys automatically.
 
 Both workflows are granted only `contents: write` — nothing else.
@@ -324,7 +309,7 @@ python backend/run_pipeline.py                     # fetch new reports, process,
 python backend/run_pipeline.py --no-download       # only process what's already in backend/data/pdf_reports/
 python backend/run_pipeline.py --no-train          # skip retraining (only refresh backend/data/raw/ CSVs)
 python backend/run_pipeline.py --start-date 2026-07-01 --end-date 2026-07-27
-cd backend && python -m services.model_selector    # train + save models for every data/raw/*.csv, no ingestion
+cd backend && python -m services.model_selector --mode deployment-refresh  # refresh approved models
 python backend/scripts/export_forecast_artifacts.py  # refresh frontend/public/forecasts/ from whatever's on disk
 ```
 
@@ -365,8 +350,8 @@ against a naive (yesterday's close) baseline, using:
 Cross-model significance is assessed with Diebold-Mariano (Newey-West HAC
 variance, HLN small-sample correction) within each company, and a
 Friedman rank test with Holm-adjusted Wilcoxon signed-rank post-hoc tests
-across all companies — see `statistical_tests.json`, written by
-`services/model_selector.py` on every pipeline run.
+across all companies — see `statistical_tests.json`, written only by an
+explicit formal-evaluation run.
 
 ## Disclaimer
 

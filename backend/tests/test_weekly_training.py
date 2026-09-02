@@ -8,7 +8,9 @@ REPO_ROOT = BACKEND.parent
 def test_weekly_workflow_exists_and_is_strict():
     workflow = (REPO_ROOT / ".github" / "workflows" / "train_models.yml").read_text()
     assert 'cron: "0 0 * * 0"' in workflow
-    assert "python -m services.model_selector --strict" in workflow
+    assert "python -m services.model_selector --mode deployment-refresh --strict" in workflow
+    assert "--mode deployment-retune" not in workflow
+    assert "--mode formal" not in workflow
     assert "python scripts/export_forecast_artifacts.py" in workflow
     assert "python scripts/validate_exports.py" in workflow
     assert "contents: write" in workflow

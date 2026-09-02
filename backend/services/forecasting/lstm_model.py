@@ -31,7 +31,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 from services.evaluation import compute_metrics
 from services.feature_engineering import build_full_features, reconstruct_price
-from services.time_series_cv import DevelopmentCVDatePlan, FormalEvaluationPlan, create_development_cv_date_plan, development_ohlcv_for_plan
+from services.time_series_cv import DevelopmentCVDatePlan, FormalEvaluationPlan, create_cv_date_plan_from_forecast_dates, create_development_cv_date_plan, development_ohlcv_for_plan
 
 log = logging.getLogger(__name__)
 
@@ -650,8 +650,15 @@ def train(df: pd.DataFrame):
 def train_deployment_lstm(df: pd.DataFrame, config: LSTMConfig) -> dict:
     """Fresh all-data univariate deployment refit using a frozen formal config."""
     if not HAS_TORCH:
-        return None
+        raise RuntimeError("PyTorch is required for deployment LSTM refresh.")
     model, scaler, _samples, _epoch_info = _fit_final_formal(df, config)
+    log.info(
+        "Deployment refresh LSTM: lookback=%d, hidden=%d, learning_rate=%g, batch=%d.",
+        config.lookback,
+        config.hidden_size,
+        config.learning_rate,
+        config.batch_size,
+    )
     return {
         "artifact_version": 2,
         "input_design": FORMAL_INPUT_DESIGN,
@@ -659,7 +666,49 @@ def train_deployment_lstm(df: pd.DataFrame, config: LSTMConfig) -> dict:
         "input_size": 1,
         "seq_len": config.lookback,
         "hidden_size": config.hidden_size,
+        "learning_rate": config.learning_rate,
+        "batch_size": config.batch_size,
         "delta_scaler": scaler,
+    }
+
+
+def deployment_config_from_artifact(artifact: dict) -> LSTMConfig:
+    """Read the complete approved LSTM configuration or fail migration loudly."""
+    try:
+        return LSTMConfig(
+            lookback=int(artifact["seq_len"]),
+            hidden_size=int(artifact["hidden_size"]),
+            learning_rate=float(artifact["learning_rate"]),
+            batch_size=int(artifact["batch_size"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            "Persisted LSTM artifact lacks complete approved configuration metadata."
+        ) from exc
+
+
+def retune_deployment_lstm(
+    df: pd.DataFrame,
+    symbol: str,
+) -> tuple[dict, LSTMConfig, dict[str, object]]:
+    """Manually tune a full-history challenger without formal holdout output."""
+    dates = tuple(pd.Timestamp(date) for date in pd.to_datetime(df["Date"], errors="raise"))
+    cv_plan = create_cv_date_plan_from_forecast_dates(
+        symbol,
+        dates[:-1],
+        dates[1:],
+        maximum_lookback=max(LOOKBACK_GRID),
+        fold_count=5,
+    )
+    config, mean_rmse, rmse_std, folds = _select_formal_config(df, cv_plan)
+    log.info("Deployment retuning LSTM challenger for %s selected %s.", symbol, config)
+    artifact = train_deployment_lstm(df, config)
+    return artifact, config, {
+        "mean_validation_rmse": mean_rmse,
+        "validation_rmse_std": rmse_std,
+        "folds": folds,
+        "target_start": cv_plan.common_target_dates[0],
+        "target_end": cv_plan.common_target_dates[-1],
     }
 
 

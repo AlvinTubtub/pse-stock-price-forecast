@@ -472,7 +472,7 @@ def train_formal_arima(df: pd.DataFrame, plan: FormalEvaluationPlan) -> FormalAR
 
 
 def train_deployment_arima(df: pd.DataFrame):
-    """Fit the persisted operational model on all available approved Close data."""
+    """Legacy/manual retuning API; scheduled refresh uses explicit configuration."""
     close = df["Close"].astype(float).reset_index(drop=True)
     if not HAS_STATSMODELS:
         return None, DEPLOYMENT_FALLBACK_ORDER
@@ -489,6 +489,50 @@ def train_deployment_arima(df: pd.DataFrame):
         trend=configuration.trend,
     ).fit()
     return model, configuration.order
+
+
+def refit_deployment_arima(
+    df: pd.DataFrame,
+    configuration: ARIMAConfiguration,
+):
+    """Refit an approved operational configuration without selection or fallback."""
+    p, d, q = configuration.order
+    if not (0 <= p <= MAX_P and 0 <= d <= MAX_D and 0 <= q <= MAX_Q):
+        raise ValueError(f"Unsupported approved ARIMA order: {configuration.order}.")
+    if configuration.trend not in _trends_for_d(configuration.order[1]):
+        raise ValueError(
+            f"Approved ARIMA trend {configuration.trend!r} is invalid for order {configuration.order}."
+        )
+    close = df["Close"].astype(float).reset_index(drop=True)
+    model = ARIMA(
+        close,
+        order=configuration.order,
+        trend=configuration.trend,
+    ).fit(method="statespace", method_kwargs={"maxiter": 2_000})
+    convergence = _fit_convergence_status(model)
+    if convergence is not True:
+        raise RuntimeError(
+            "Deployment refresh ARIMA fit lacks confirmed optimizer convergence "
+            f"for order={configuration.order}, trend={configuration.trend!r}; status={convergence}."
+        )
+    log.info(
+        "Deployment refresh ARIMA: order=%s, trend=%s, convergence confirmed.",
+        configuration.order,
+        configuration.trend,
+    )
+    return model
+
+
+def retune_deployment_arima(df: pd.DataFrame) -> tuple[object, ARIMAConfiguration]:
+    """Manually tune an operational challenger without formal-run output."""
+    close = df["Close"].astype(float).reset_index(drop=True)
+    configuration, _candidates = _select_formal_configuration(close)
+    log.info(
+        "Deployment retuning ARIMA challenger selected order=%s, trend=%s.",
+        configuration.order,
+        configuration.trend,
+    )
+    return refit_deployment_arima(df, configuration), configuration
 
 
 def train(df: pd.DataFrame):

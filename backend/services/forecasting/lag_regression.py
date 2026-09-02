@@ -38,6 +38,15 @@ class LagRegressionArtifact:
     alpha: float = 0.0
 
 
+@dataclass(frozen=True)
+class LagRegressionDeploymentConfig:
+    """Frozen Lag Regression policy approved for operational refitting."""
+
+    alpha: float
+    candidate_features: tuple[str, ...]
+    pacf_selected_lags: tuple[int, ...]
+
+
 @dataclass
 class FormalLagRegressionResult:
     """Development-only formal fit and exact date-indexed hold-out rows."""
@@ -111,6 +120,46 @@ def _fit_final(features: pd.DataFrame, alpha: float) -> LagRegressionArtifact:
     return LagRegressionArtifact(scaler, model, columns, lags, selected, alpha)
 
 
+def deployment_config_from_artifact(
+    artifact: LagRegressionArtifact,
+) -> LagRegressionDeploymentConfig:
+    """Capture the exact approved policy needed for a later refresh."""
+    return LagRegressionDeploymentConfig(
+        alpha=float(artifact.alpha),
+        candidate_features=tuple(artifact.candidate_features),
+        pacf_selected_lags=tuple(int(lag) for lag in artifact.pacf_selected_lags),
+    )
+
+
+def refit_deployment_lag_regression(
+    df: pd.DataFrame,
+    config: LagRegressionDeploymentConfig,
+) -> LagRegressionArtifact:
+    """Refit on current data without PACF, feature, or alpha retuning."""
+    features = _usable_features(df)
+    columns = list(config.candidate_features)
+    if not columns or len(columns) != len(set(columns)):
+        raise ValueError("Approved Lag Regression candidate_features must be non-empty and unique.")
+    unknown = sorted(set(columns) - set(REGRESSION_FEATURE_COLUMNS))
+    if unknown:
+        raise ValueError(f"Approved Lag Regression features are unsupported: {unknown}.")
+    if not np.isfinite(config.alpha) or config.alpha <= 0:
+        raise ValueError("Approved Lag Regression alpha must be a positive finite number.")
+    scaler = StandardScaler().fit(features[columns])
+    model = Lasso(alpha=config.alpha, max_iter=50_000, tol=1e-3, random_state=42)
+    model.fit(scaler.transform(features[columns]), features["target_delta"].to_numpy(dtype=float))
+    selected = [name for name, coefficient in zip(columns, model.coef_) if coefficient != 0]
+    log.info("Deployment refresh Lag Regression: alpha=%g, candidate_features=%d.", config.alpha, len(columns))
+    return LagRegressionArtifact(
+        scaler,
+        model,
+        columns,
+        list(config.pacf_selected_lags),
+        selected,
+        config.alpha,
+    )
+
+
 def _formal_forecast_rows(df: pd.DataFrame, plan: FormalEvaluationPlan, artifact: LagRegressionArtifact) -> pd.DataFrame:
     features = build_full_features(df)
     rows = features.loc[features["target_date"].isin(plan.holdout_target_dates)].copy()
@@ -147,7 +196,7 @@ def train_formal_lag_regression(df: pd.DataFrame, plan: FormalEvaluationPlan) ->
 
 
 def train_deployment_lag_regression(df: pd.DataFrame) -> LagRegressionArtifact:
-    """Fit the persisted next-day artifact on all currently approved data."""
+    """Legacy/manual retuning API; scheduled refresh uses explicit policy."""
     features = _usable_features(df)
     return _fit_final(features, _select_alpha(features))
 
