@@ -4,8 +4,10 @@ from __future__ import annotations
 import sys
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -16,8 +18,8 @@ from services.artifact_runs import FormalRunIntegrityError, FormalRunWriter, Run
 from services.time_series_cv import create_formal_evaluation_plan
 
 
-def _plan_and_forecasts() -> tuple:
-    df = pd.DataFrame({"Date": pd.date_range("2025-01-01", periods=20), "Close": range(20)})
+def _plan_and_forecasts(n: int = 20) -> tuple:
+    df = pd.DataFrame({"Date": pd.date_range("2025-01-01", periods=n), "Close": range(n)})
     plan = create_formal_evaluation_plan(df, "BPI")
     actual = list(range(100, 100 + plan.holdout_count))
     forecasts = {}
@@ -96,6 +98,54 @@ def test_formal_orchestration_never_writes_deployment_or_dashboard_state(tmp_pat
     assert not (tmp_path / "models" / "deployment" / "current").exists()
     assert not (tmp_path / "prediction_cache").exists()
     assert not (tmp_path / "best_models.json").exists()
+
+
+def test_evaluate_formal_symbol_replaces_model_specific_metrics_with_canonical_values(monkeypatch):
+    plan, forecasts = _plan_and_forecasts(100)
+    df = pd.DataFrame({"Date": pd.date_range("2025-01-01", periods=100), "Close": range(100)})
+    stale_metrics = {"rmse": 999.0, "mae": 999.0, "mase": 999.0, "r2": 999.0}
+    lag = SimpleNamespace(
+        forecasts=forecasts["lag_reg"],
+        metrics=stale_metrics,
+        artifact=SimpleNamespace(
+            alpha=0.1,
+            selected_features=[],
+            candidate_features=[],
+            model=SimpleNamespace(coef_=np.array([])),
+        ),
+        backtest=[],
+    )
+    arima = SimpleNamespace(
+        forecasts=forecasts["arima"],
+        metrics={**stale_metrics, "ljung_box_pvalue": 0.75},
+        diagnostics={},
+        backtest=[],
+    )
+    lstm = SimpleNamespace(
+        forecasts=forecasts["lstm"],
+        metrics=stale_metrics,
+        metadata={},
+        selected_config=SimpleNamespace(lookback=30),
+        backtest=[],
+    )
+
+    monkeypatch.setattr(model_selector.lag_regression, "train_formal_lag_regression", lambda *_args: lag)
+    monkeypatch.setattr(model_selector.arima_model, "train_formal_arima", lambda *_args: arima)
+    monkeypatch.setattr(model_selector.lstm_model, "train_formal_lstm", lambda *_args: lstm)
+    monkeypatch.setattr(model_selector, "build_naive_formal_forecasts", lambda *_args: forecasts["naive"])
+    monkeypatch.setattr(model_selector, "evaluate_naive", lambda *_args, **_kwargs: stale_metrics)
+    monkeypatch.setattr(model_selector, "run_formal_residual_diagnostics", lambda *_args, **_kwargs: {})
+
+    result = model_selector.evaluate_formal_symbol("BPI", df)
+
+    assert result["development_cv_plan"].fold_count == 5
+    assert result["mase_denominator"] == pytest.approx(1.0)
+    for model in ("lag_reg", "arima", "lstm", "naive"):
+        assert result["metrics"][model]["rmse"] == pytest.approx(0.0)
+        assert result["metrics"][model]["mae"] == pytest.approx(0.0)
+        assert result["metrics"][model]["mase"] == pytest.approx(0.0)
+        assert isinstance(result["metrics"][model]["r2"], float)
+    assert result["metrics"]["arima"]["ljung_box_pvalue"] == 0.75
 
 
 def test_formal_orchestration_rejects_a_dirty_git_worktree(tmp_path):

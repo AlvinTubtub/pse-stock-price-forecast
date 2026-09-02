@@ -45,10 +45,10 @@ from services.artifact_runs import (
     write_deployment_manifest,
 )
 from services.pdf_pipeline.config import TARGET_COMPANIES
-from services.evaluation import build_naive_formal_forecasts, evaluate_naive, run_formal_residual_diagnostics, run_formal_statistical_tests, select_best_model
+from services.evaluation import build_naive_formal_forecasts, compute_canonical_formal_metrics, evaluate_naive, run_formal_residual_diagnostics, run_formal_statistical_tests, select_best_model
 from services.formal_evaluation import validate_formal_holdout_alignment
 from services.forecasting import MODEL_LABELS, arima_model, lag_regression, lstm_model
-from services.time_series_cv import FormalEvaluationPlan, create_formal_evaluation_plan
+from services.time_series_cv import FormalEvaluationPlan, create_development_cv_date_plan, create_formal_evaluation_plan
 
 log = logging.getLogger(__name__)
 
@@ -107,10 +107,25 @@ def evaluate_formal_symbol(symbol: str, df: pd.DataFrame) -> dict:
     """Evaluate a symbol without writing deployment, cache, or frontend artifacts."""
     log.info("Formal evaluation for %s (%d rows).", symbol, len(df))
     plan = create_formal_evaluation_plan(df, symbol)
+    development_cv_plan = create_development_cv_date_plan(plan)
     lag = lag_regression.train_formal_lag_regression(df, plan)
     arima = arima_model.train_formal_arima(df, plan)
     lstm = lstm_model.train_formal_lstm(df, plan)
     forecasts = validate_formal_holdout_alignment({"lag_reg": lag.forecasts, "arima": arima.forecasts, "lstm": lstm.forecasts, "naive": build_naive_formal_forecasts(df, plan)}, plan)
+    development_close = df.loc[
+        pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"
+    ].to_numpy(dtype=float)
+    mase_denominator, metrics = compute_canonical_formal_metrics(
+        forecasts,
+        development_close,
+        existing_metrics={
+            "lag_reg": lag.metrics,
+            "arima": arima.metrics,
+            "lstm": lstm.metrics,
+            "naive": evaluate_naive(df, plan=plan),
+        },
+    )
+    log.info("Formal evaluation for %s uses canonical MASE denominator %.12g.", symbol, mase_denominator)
     lag_metadata = {
         "selected_alpha": lag.artifact.alpha,
         "selected_features": lag.artifact.selected_features,
@@ -118,7 +133,7 @@ def evaluate_formal_symbol(symbol: str, df: pd.DataFrame) -> dict:
         **run_formal_residual_diagnostics(forecasts["lag_reg"]["error"], include_ljung_box=True),
     }
     lstm_metadata = {"training_metadata": lstm.metadata, **run_formal_residual_diagnostics(forecasts["lstm"]["error"])}
-    return {"plan": plan, "forecasts": forecasts, "metrics": {"lag_reg": lag.metrics, "arima": arima.metrics, "lstm": lstm.metrics, "naive": evaluate_naive(df, plan=plan)}, "diagnostics": {"lag_reg": lag_metadata, "arima": arima.diagnostics, "lstm": lstm_metadata}, "development_close": df.loc[pd.to_datetime(df["Date"]) <= plan.development_end_date, "Close"].to_numpy(dtype=float), "lstm_config": lstm.selected_config, "backtests": {"lag_reg": lag.backtest, "arima": arima.backtest, "lstm": lstm.backtest}}
+    return {"plan": plan, "development_cv_plan": development_cv_plan, "forecasts": forecasts, "metrics": metrics, "diagnostics": {"lag_reg": lag_metadata, "arima": arima.diagnostics, "lstm": lstm_metadata}, "development_close": development_close, "mase_denominator": mase_denominator, "lstm_config": lstm.selected_config, "backtests": {"lag_reg": lag.backtest, "arima": arima.backtest, "lstm": lstm.backtest}}
 
 
 def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, np.ndarray]]:

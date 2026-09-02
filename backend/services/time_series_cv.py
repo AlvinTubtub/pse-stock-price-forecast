@@ -1,8 +1,8 @@
 """Shared expanding-window rolling-origin time-series cross-validation.
 
-Used by both the Lag-Informed Regression model (LASSO lambda selection)
-and the ARIMA order search, so both follow the exact same validation
-scheme the capstone paper specifies — one implementation, no drift.
+Used by formal model preparation so chronological split policy and explicit
+validation target dates have one implementation rather than model-local
+positional splits.
 
 ``sklearn.model_selection.TimeSeriesSplit`` already *is* expanding-window
 rolling-origin CV: each fold's training set grows to include everything
@@ -49,6 +49,34 @@ class FormalEvaluationPlan:
     holdout_count: int
     split_ratio: float
     total_forecast_rows: int
+
+
+@dataclass(frozen=True)
+class DevelopmentCVFold:
+    """One explicit chronological development fold keyed by forecast dates."""
+
+    fold_number: int
+    training_origin_dates: tuple[pd.Timestamp, ...]
+    training_target_dates: tuple[pd.Timestamp, ...]
+    validation_origin_dates: tuple[pd.Timestamp, ...]
+    validation_target_dates: tuple[pd.Timestamp, ...]
+
+
+@dataclass(frozen=True)
+class DevelopmentCVDatePlan:
+    """Common formal-development folds usable by every approved lookback.
+
+    The common date universe starts only after ``maximum_lookback`` forecast
+    pairs.  A model may use fewer history values inside each sequence, but it
+    must select and score rows using these frozen target-date folds.
+    """
+
+    symbol: str
+    maximum_lookback: int
+    fold_count: int
+    common_origin_dates: tuple[pd.Timestamp, ...]
+    common_target_dates: tuple[pd.Timestamp, ...]
+    folds: tuple[DevelopmentCVFold, ...]
 
 
 def create_formal_evaluation_plan(
@@ -100,6 +128,64 @@ def create_formal_evaluation_plan(
         holdout_count=holdout_count,
         split_ratio=1.0 - holdout_fraction,
         total_forecast_rows=total,
+    )
+
+
+def create_development_cv_date_plan(
+    plan: FormalEvaluationPlan,
+    *,
+    maximum_lookback: int = 30,
+    fold_count: int = DEFAULT_N_SPLITS,
+) -> DevelopmentCVDatePlan:
+    """Freeze common expanding-window CV dates inside formal development.
+
+    The formal 85/15 plan remains untouched.  Leading development targets are
+    excluded only to guarantee that the largest approved lookback can form a
+    complete sequence.  Five folds are required by default; insufficient data
+    raises instead of silently reducing the formal fold count.
+    """
+    if maximum_lookback < 1:
+        raise FormalEvaluationPlanError("maximum_lookback must be at least one forecast pair.")
+    if fold_count < 2:
+        raise FormalEvaluationPlanError("Development CV requires at least two folds.")
+    if len(plan.development_target_dates) != len(plan.development_origin_dates):
+        raise FormalEvaluationPlanError(f"{plan.symbol}: development origin and target dates are misaligned.")
+
+    common_origins = plan.development_origin_dates[maximum_lookback:]
+    common_targets = plan.development_target_dates[maximum_lookback:]
+    if len(common_targets) <= fold_count:
+        raise FormalEvaluationPlanError(
+            f"{plan.symbol}: {len(common_targets)} common development targets cannot produce {fold_count} folds."
+        )
+    if set(common_targets).intersection(plan.holdout_target_dates):
+        raise FormalEvaluationPlanError(f"{plan.symbol}: development CV target dates overlap the formal holdout.")
+
+    splitter = TimeSeriesSplit(n_splits=fold_count)
+    folds: list[DevelopmentCVFold] = []
+    for fold_number, (training_indices, validation_indices) in enumerate(
+        splitter.split(common_targets), start=1
+    ):
+        training_targets = tuple(common_targets[index] for index in training_indices)
+        validation_targets = tuple(common_targets[index] for index in validation_indices)
+        training_origins = tuple(common_origins[index] for index in training_indices)
+        validation_origins = tuple(common_origins[index] for index in validation_indices)
+        if not training_targets or not validation_targets or training_targets[-1] >= validation_targets[0]:
+            raise FormalEvaluationPlanError(f"{plan.symbol}: development CV fold {fold_number} is not chronological.")
+        folds.append(DevelopmentCVFold(
+            fold_number=fold_number,
+            training_origin_dates=training_origins,
+            training_target_dates=training_targets,
+            validation_origin_dates=validation_origins,
+            validation_target_dates=validation_targets,
+        ))
+
+    return DevelopmentCVDatePlan(
+        symbol=plan.symbol,
+        maximum_lookback=maximum_lookback,
+        fold_count=fold_count,
+        common_origin_dates=tuple(common_origins),
+        common_target_dates=tuple(common_targets),
+        folds=tuple(folds),
     )
 
 

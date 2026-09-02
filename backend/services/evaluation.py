@@ -102,6 +102,36 @@ def compute_metrics(y_true, y_pred, y_train=None, mase_denominator: float | None
     }
 
 
+def compute_canonical_formal_metrics(
+    forecasts: dict[str, pd.DataFrame],
+    development_close,
+    *,
+    existing_metrics: dict[str, dict] | None = None,
+) -> tuple[float, dict[str, dict]]:
+    """Score aligned formal forecasts with one company-level MASE scale.
+
+    Callers must validate target-date alignment before using this helper.
+    Existing non-core metric fields are retained for compatibility, while the
+    canonical RMSE, MAE, MASE, and R² values are always recomputed from the
+    date-indexed formal rows at full numeric precision.
+    """
+    denominator = common_mase_denominator(development_close)
+    prior = existing_metrics or {}
+    canonical: dict[str, dict] = {}
+    for model, frame in forecasts.items():
+        missing = {"actual_close", "predicted_close"} - set(frame.columns)
+        if missing:
+            raise ValueError(f"{model}: formal metrics require columns {sorted(missing)}.")
+        values = dict(prior.get(model, {}))
+        values.update(compute_metrics(
+            frame["actual_close"],
+            frame["predicted_close"],
+            mase_denominator=denominator,
+        ))
+        canonical[model] = values
+    return denominator, canonical
+
+
 def build_naive_formal_forecasts(df: pd.DataFrame, plan: FormalEvaluationPlan) -> pd.DataFrame:
     """Build one naive prediction per required formal hold-out target date.
 
