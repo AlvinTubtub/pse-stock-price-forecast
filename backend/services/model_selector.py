@@ -1,9 +1,9 @@
-"""Explicitly separated formal, deployment-refresh, and retuning workflows.
+"""Separated formal, deployment-refresh, retuning, and approval workflows.
 
 Scheduled deployment refresh reads approved configurations, refits on current
 validated data, and preserves prior research metrics and model-family choices.
-Formal evaluation and manual challenger retuning have separate entrypoints and
-artifact destinations.
+Formal evaluation, manual challenger retuning, and manually confirmed approval
+have separate entrypoints and artifact destinations.
 
 Directory layout produced:
 
@@ -19,6 +19,11 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import os
+import re
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -30,6 +35,7 @@ from services.artifact_runs import (
     FormalRunWriter,
     create_run_id,
     deployment_current_dir,
+    file_sha256,
     git_worktree_is_dirty,
     load_approved_deployment_configurations,
     source_data_manifest,
@@ -55,6 +61,14 @@ BEST_MODELS_PATH = BASE_DIR / "best_models.json"
 STATISTICAL_TESTS_PATH = BASE_DIR / "statistical_tests.json"
 
 EXPECTED_TICKERS = tuple(sorted(TARGET_COMPANIES.keys()))
+
+_SAFE_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
+_SAFE_SYMBOL = re.compile(r"[A-Z0-9][A-Z0-9.-]{0,31}")
+_DEPLOYMENT_ARTIFACTS = {
+    "lag_regression": ("lag_reg", ".pkl"),
+    "arima": ("arima", ".pkl"),
+    "lstm": ("lstm", ".pth"),
+}
 
 
 def _ensure_dirs() -> None:
@@ -162,6 +176,39 @@ def _parse_approved_configuration(symbol: str, payload: dict[str, object]) -> tu
         ) from exc
     if len(arima_config.order) != 3:
         raise DeploymentConfigurationError(f"{symbol}: approved ARIMA order must contain p, d, and q.")
+    if not math.isfinite(lag_config.alpha) or lag_config.alpha <= 0:
+        raise DeploymentConfigurationError(
+            f"{symbol}: approved Lag Regression alpha must be a positive finite number."
+        )
+    if not lag_config.candidate_features or len(set(lag_config.candidate_features)) != len(
+        lag_config.candidate_features
+    ):
+        raise DeploymentConfigurationError(
+            f"{symbol}: approved Lag Regression features must be non-empty and unique."
+        )
+    unsupported_features = sorted(
+        set(lag_config.candidate_features) - set(lag_regression.REGRESSION_FEATURE_COLUMNS)
+    )
+    if unsupported_features:
+        raise DeploymentConfigurationError(
+            f"{symbol}: approved Lag Regression features are unsupported: {unsupported_features}."
+        )
+    if any(lag <= 0 for lag in lag_config.pacf_selected_lags) or len(
+        set(lag_config.pacf_selected_lags)
+    ) != len(lag_config.pacf_selected_lags):
+        raise DeploymentConfigurationError(
+            f"{symbol}: approved PACF lags must be positive and unique."
+        )
+    p, d, q = arima_config.order
+    allowed_trends = {0: {"n", "c"}, 1: {"n", "t"}, 2: {"n"}}
+    if p not in range(4) or d not in range(3) or q not in range(4):
+        raise DeploymentConfigurationError(
+            f"{symbol}: approved ARIMA order is outside the supported candidate grid."
+        )
+    if arima_config.trend not in allowed_trends[d]:
+        raise DeploymentConfigurationError(
+            f"{symbol}: approved ARIMA trend is invalid for differencing order {d}."
+        )
     if (
         lstm_config.lookback not in lstm_model.LOOKBACK_GRID
         or lstm_config.hidden_size not in lstm_model.HIDDEN_UNITS_GRID
@@ -189,6 +236,283 @@ def _approved_configuration_payload(lag_config, arima_config, lstm_config) -> di
             "batch_size": lstm_config.batch_size,
         },
     }
+
+
+def _load_json_without_duplicates(path: Path, description: str) -> dict[str, object]:
+    """Load a JSON object and reject duplicate keys at every nesting level."""
+    def reject_duplicate_keys(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise DeploymentConfigurationError(
+                    f"{description} contains duplicate key {key!r}."
+                )
+            result[key] = value
+        return result
+
+    try:
+        payload = json.loads(path.read_text(), object_pairs_hook=reject_duplicate_keys)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DeploymentConfigurationError(f"Cannot read valid {description} at {path}.") from exc
+    if not isinstance(payload, dict):
+        raise DeploymentConfigurationError(f"{description} must be a JSON object.")
+    return payload
+
+
+def _validate_challenger_run_id(run_id: str) -> str:
+    """Return a safe challenger run ID that cannot escape its parent directory."""
+    if not isinstance(run_id, str) or not _SAFE_RUN_ID.fullmatch(run_id) or run_id in {".", ".."}:
+        raise DeploymentConfigurationError(
+            "Challenger run ID must be one safe path component containing only letters, "
+            "numbers, dots, underscores, or hyphens."
+        )
+    return run_id
+
+
+def _validate_approval_inputs(
+    challenger_run_id: str,
+    symbols: list[str] | None,
+) -> dict[str, object]:
+    """Validate a complete challenger approval before deployment state can change."""
+    safe_run_id = _validate_challenger_run_id(challenger_run_id)
+    challengers_root = BASE_DIR / "models" / "deployment" / "challengers"
+    challenger_dir = challengers_root / safe_run_id
+    if challenger_dir.resolve().parent != challengers_root.resolve():
+        raise DeploymentConfigurationError("Challenger run path escapes the challengers directory.")
+    manifest_path = challenger_dir / "challenger_manifest.json"
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        raise DeploymentConfigurationError(
+            f"Challenger run {safe_run_id} lacks a regular challenger_manifest.json."
+        )
+    manifest = _load_json_without_duplicates(manifest_path, "challenger manifest")
+    required_identity = {
+        "mode": "deployment",
+        "operation": "retune",
+        "status": "challenger_only",
+        "automatic_promotion": False,
+    }
+    for field, expected in required_identity.items():
+        if manifest.get(field) != expected or (
+            field == "automatic_promotion" and manifest.get(field) is not False
+        ):
+            raise DeploymentConfigurationError(
+                f"Challenger manifest requires {field}={expected!r}."
+            )
+    configurations = manifest.get("configurations")
+    if not isinstance(configurations, dict) or not configurations:
+        raise DeploymentConfigurationError(
+            "Challenger manifest requires a non-empty per-symbol configurations object."
+        )
+    available = list(configurations)
+    invalid_available = sorted(
+        symbol for symbol in available
+        if not isinstance(symbol, str) or not _SAFE_SYMBOL.fullmatch(symbol)
+    )
+    if invalid_available:
+        raise DeploymentConfigurationError(
+            "Challenger manifest contains malformed or unexpected symbol(s): "
+            + ", ".join(map(str, invalid_available))
+        )
+    unexpected_available = sorted(set(available) - set(EXPECTED_TICKERS))
+    if unexpected_available:
+        raise DeploymentConfigurationError(
+            "Challenger manifest contains unexpected deployment symbol(s): "
+            + ", ".join(unexpected_available)
+        )
+    for artifact_name, (_configuration_name, suffix) in _DEPLOYMENT_ARTIFACTS.items():
+        artifact_dir = challenger_dir / artifact_name
+        if artifact_dir.exists() and not artifact_dir.is_dir():
+            raise DeploymentConfigurationError(
+                f"Challenger {artifact_name} artifact location must be a directory."
+            )
+        artifact_symbols = {path.stem for path in artifact_dir.glob(f"*{suffix}")}
+        unexpected_artifacts = sorted(artifact_symbols - set(available))
+        if unexpected_artifacts:
+            raise DeploymentConfigurationError(
+                f"Challenger {artifact_name} directory contains unexpected symbol artifact(s): "
+                + ", ".join(unexpected_artifacts)
+            )
+    if symbols is None:
+        requested = sorted(available)
+    else:
+        requested = [symbol.upper() for symbol in symbols]
+        if not requested:
+            raise DeploymentConfigurationError("Deployment approval symbol list cannot be empty.")
+        if len(set(requested)) != len(requested):
+            raise DeploymentConfigurationError("Deployment approval symbol list contains duplicates.")
+        invalid_requested = sorted(symbol for symbol in requested if not _SAFE_SYMBOL.fullmatch(symbol))
+        if invalid_requested:
+            raise DeploymentConfigurationError(
+                "Deployment approval contains malformed symbol(s): " + ", ".join(invalid_requested)
+            )
+        missing = sorted(set(requested) - set(available))
+        if missing:
+            raise DeploymentConfigurationError(
+                "Requested symbol(s) are absent from the challenger manifest: " + ", ".join(missing)
+            )
+
+    normalized_configurations: dict[str, dict[str, object]] = {}
+    source_artifacts: dict[str, dict[str, Path]] = {}
+    challenger_root = challenger_dir.resolve()
+    for symbol in requested:
+        raw_configuration = configurations[symbol]
+        if not isinstance(raw_configuration, dict):
+            raise DeploymentConfigurationError(f"{symbol}: challenger configuration must be an object.")
+        lag_config, arima_config, lstm_config = _parse_approved_configuration(symbol, raw_configuration)
+        normalized_configurations[symbol] = _approved_configuration_payload(
+            lag_config, arima_config, lstm_config
+        )
+        source_artifacts[symbol] = {}
+        for artifact_name, (_configuration_name, suffix) in _DEPLOYMENT_ARTIFACTS.items():
+            source = challenger_dir / artifact_name / f"{symbol}{suffix}"
+            try:
+                source_resolved = source.resolve(strict=True)
+            except OSError as exc:
+                raise DeploymentConfigurationError(
+                    f"{symbol}: challenger {artifact_name} artifact is missing."
+                ) from exc
+            if source.is_symlink() or not source_resolved.is_file() or challenger_root not in source_resolved.parents:
+                raise DeploymentConfigurationError(
+                    f"{symbol}: challenger {artifact_name} artifact is not a safe regular file."
+                )
+            if source_resolved.stat().st_size == 0:
+                raise DeploymentConfigurationError(
+                    f"{symbol}: challenger {artifact_name} artifact is empty."
+                )
+            source_artifacts[symbol][artifact_name] = source_resolved
+
+    if not BEST_MODELS_PATH.is_file() or BEST_MODELS_PATH.is_symlink():
+        raise DeploymentConfigurationError(
+            "Deployment approval requires the existing approved best_models.json mapping."
+        )
+    approved_families = _load_json_without_duplicates(BEST_MODELS_PATH, "best-model family mapping")
+    missing_families = sorted(set(requested) - set(approved_families))
+    allowed_families = {"Lag-Informed Regression", "ARIMA", "LSTM"}
+    malformed_families = sorted(
+        symbol for symbol in requested
+        if symbol in approved_families
+        and approved_families[symbol] not in allowed_families
+    )
+    if missing_families or malformed_families:
+        details = []
+        if missing_families:
+            details.append("missing: " + ", ".join(missing_families))
+        if malformed_families:
+            details.append("malformed: " + ", ".join(malformed_families))
+        raise DeploymentConfigurationError(
+            "Approval cannot preserve the existing approved model family (" + "; ".join(details) + ")."
+        )
+
+    current_manifest_path = DEPLOYMENT_CURRENT_DIR / "deployment_manifest.json"
+    if current_manifest_path.exists():
+        if not current_manifest_path.is_file() or current_manifest_path.is_symlink():
+            raise DeploymentConfigurationError("Current deployment manifest must be a regular file.")
+        current_manifest = _load_json_without_duplicates(
+            current_manifest_path, "current deployment manifest"
+        )
+    else:
+        current_manifest = {}
+    existing_artifacts = current_manifest.get("artifacts", {})
+    existing_configurations = current_manifest.get("approved_configurations", {})
+    if not isinstance(existing_artifacts, dict) or not isinstance(existing_configurations, dict):
+        raise DeploymentConfigurationError(
+            "Current deployment manifest has malformed artifacts or approved_configurations."
+        )
+    return {
+        "run_id": safe_run_id,
+        "requested": requested,
+        "source_artifacts": source_artifacts,
+        "approved_configurations": {**existing_configurations, **normalized_configurations},
+        "artifacts": dict(existing_artifacts),
+    }
+
+
+def approve_deployment_challenger(
+    challenger_run_id: str,
+    *,
+    symbols: list[str] | None = None,
+    confirmed: bool = False,
+) -> Path:
+    """Manually promote validated challenger artifacts without changing model families."""
+    if not confirmed:
+        raise DeploymentConfigurationError(
+            "Deployment approval requires the explicit --confirm-approved flag."
+        )
+    plan = _validate_approval_inputs(challenger_run_id, symbols)
+    requested = plan["requested"]
+    log.info(
+        "Starting manually confirmed deployment approval for challenger %s: %s.",
+        plan["run_id"], requested,
+    )
+    deployment_root = BASE_DIR / "models" / "deployment"
+    deployment_root.mkdir(parents=True, exist_ok=True)
+    staging_dir = Path(tempfile.mkdtemp(prefix=".approval-", dir=deployment_root))
+    staged: dict[Path, Path] = {}
+    backups: dict[Path, Path | None] = {}
+    replaced: list[Path] = []
+    try:
+        # Copy and hash-check every artifact before deployment-current is modified.
+        for symbol in requested:
+            plan["artifacts"][symbol] = {}
+            for artifact_name, (_configuration_name, suffix) in _DEPLOYMENT_ARTIFACTS.items():
+                source = plan["source_artifacts"][symbol][artifact_name]
+                destination = DEPLOYMENT_CURRENT_DIR / artifact_name / f"{symbol}{suffix}"
+                staged_path = staging_dir / "new" / artifact_name / f"{symbol}{suffix}"
+                staged_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, staged_path)
+                if staged_path.stat().st_size == 0 or file_sha256(staged_path) != file_sha256(source):
+                    raise DeploymentConfigurationError(
+                        f"{symbol}: staged {artifact_name} artifact failed integrity validation."
+                    )
+                staged[destination] = staged_path
+                plan["artifacts"][symbol][artifact_name] = str(destination.relative_to(BASE_DIR))
+
+        for index, destination in enumerate(staged):
+            if destination.is_symlink():
+                raise DeploymentConfigurationError(
+                    f"Refusing to replace symbolic-link deployment artifact: {destination}."
+                )
+            if destination.exists():
+                backup = staging_dir / "backup" / str(index)
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(destination, backup)
+                backups[destination] = backup
+            else:
+                backups[destination] = None
+
+        for destination, staged_path in staged.items():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged_path, destination)
+            replaced.append(destination)
+
+        manifest_path = write_deployment_manifest(
+            BASE_DIR,
+            plan["artifacts"],
+            approved_configurations=plan["approved_configurations"],
+            operation="approval",
+            source_challenger_run_id=plan["run_id"],
+            approved_symbols=requested,
+            manually_approved=True,
+        )
+        log.info(
+            "Manual deployment approval completed for challenger %s; model-family choices were preserved.",
+            plan["run_id"],
+        )
+        return manifest_path
+    except Exception:
+        for destination in reversed(replaced):
+            backup = backups[destination]
+            if backup is None:
+                destination.unlink(missing_ok=True)
+            else:
+                os.replace(backup, destination)
+        log.exception(
+            "Deployment approval for challenger %s failed; promoted artifacts were rolled back.",
+            plan["run_id"],
+        )
+        raise
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def refresh_deployment_symbol(
@@ -434,15 +758,36 @@ def run_formal_evaluation(
 if __name__ == "__main__":  # pragma: no cover
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run deployment refresh/retuning or formal evaluation.")
+    parser = argparse.ArgumentParser(
+        description="Run deployment refresh, retuning, manual approval, or formal evaluation."
+    )
     parser.add_argument(
         "--mode",
-        choices=("deployment", "deployment-refresh", "deployment-retune", "formal"),
+        choices=(
+            "deployment",
+            "deployment-refresh",
+            "deployment-retune",
+            "deployment-approve",
+            "formal",
+        ),
         default="deployment-refresh",
         help="'deployment' remains a compatibility alias for deployment-refresh.",
     )
-    parser.add_argument("--symbols", nargs="+", help="Required for formal and deployment-retune modes.")
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        help="Required for formal/retune; optional for approval (defaults to the challenger universe).",
+    )
     parser.add_argument("--run-id", help="Optional formal or challenger-run identifier.")
+    parser.add_argument(
+        "--challenger-run-id",
+        help="Required source challenger run identifier for deployment-approve.",
+    )
+    parser.add_argument(
+        "--confirm-approved",
+        action="store_true",
+        help="Required explicit confirmation for deployment-approve.",
+    )
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -454,18 +799,35 @@ if __name__ == "__main__":  # pragma: no cover
     if args.mode == "formal":
         if args.strict:
             parser.error("--strict is a deployment-only option.")
+        if args.challenger_run_id or args.confirm_approved:
+            parser.error("Challenger approval options are valid only for deployment-approve.")
         finalized = run_formal_evaluation(symbols=args.symbols or [], run_id=args.run_id)
         print(finalized)
     elif args.mode == "deployment-retune":
         if args.strict:
             parser.error("--strict is not supported for manual challenger retuning.")
+        if args.challenger_run_id or args.confirm_approved:
+            parser.error("Challenger approval options are valid only for deployment-approve.")
         challenger = retune_deployment_challengers(
             symbols=args.symbols or [],
             run_id=args.run_id,
         )
         print(challenger)
+    elif args.mode == "deployment-approve":
+        if args.strict or args.run_id:
+            parser.error("--strict and --run-id are not deployment-approve options.")
+        if not args.challenger_run_id:
+            parser.error("deployment-approve requires --challenger-run-id.")
+        if not args.confirm_approved:
+            parser.error("deployment-approve requires --confirm-approved.")
+        manifest = approve_deployment_challenger(
+            args.challenger_run_id,
+            symbols=args.symbols,
+            confirmed=args.confirm_approved,
+        )
+        print(manifest)
     else:
-        if args.symbols or args.run_id:
-            parser.error("--symbols and --run-id are not deployment-refresh options.")
+        if args.symbols or args.run_id or args.challenger_run_id or args.confirm_approved:
+            parser.error("Approval, symbol, and run-ID options are not deployment-refresh options.")
         mapping = refresh_deployment_all(strict=args.strict)
         print(json.dumps(mapping, indent=2, sort_keys=True))

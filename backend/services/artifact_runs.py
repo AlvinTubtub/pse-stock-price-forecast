@@ -4,7 +4,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import subprocess
+import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -107,10 +109,21 @@ def write_deployment_manifest(
     *,
     approved_configurations: dict[str, dict[str, object]] | None = None,
     operation: str = "refresh",
+    source_challenger_run_id: str | None = None,
+    approved_symbols: list[str] | None = None,
+    manually_approved: bool = False,
 ) -> Path:
-    """Write the mutable deployment manifest without touching formal evidence."""
-    if operation not in {"refresh", "retune"}:
-        raise ValueError("Deployment operation must be 'refresh' or 'retune'.")
+    """Atomically write mutable deployment metadata without touching formal evidence."""
+    if operation not in {"refresh", "retune", "approval"}:
+        raise ValueError("Deployment operation must be 'refresh', 'retune', or 'approval'.")
+    if operation == "approval":
+        if not source_challenger_run_id or not approved_symbols or not manually_approved:
+            raise ValueError(
+                "Deployment approval requires a source challenger run, approved symbols, "
+                "and explicit manual approval."
+            )
+    elif source_challenger_run_id is not None or approved_symbols is not None or manually_approved:
+        raise ValueError("Approval metadata is valid only for the deployment approval operation.")
     target = deployment_current_dir(base_dir)
     target.mkdir(parents=True, exist_ok=True)
     path = target / "deployment_manifest.json"
@@ -123,7 +136,24 @@ def write_deployment_manifest(
     }
     if approved_configurations is not None:
         payload["approved_configurations"] = approved_configurations
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=_json_default))
+    if operation == "approval":
+        payload.update({
+            "approval_timestamp": datetime.now(timezone.utc),
+            "source_challenger_run_id": source_challenger_run_id,
+            "approved_symbols": approved_symbols,
+            "manually_invoked": True,
+        })
+    serialized = json.dumps(payload, indent=2, sort_keys=True, default=_json_default)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".deployment_manifest.", suffix=".tmp", dir=target
+    )
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
+    try:
+        temporary_path.write_text(serialized)
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
     return path
 
 
