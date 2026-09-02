@@ -2,10 +2,10 @@
   "symbol": "JFC",
   "name": "Jollibee Foods Corporation",
   "sector": "Industrial",
-  "previousClose": 152.8,
-  "predictedClose": 152.35,
-  "pesoChange": -0.45,
-  "pctChange": -0.29,
+  "previousClose": 152.0,
+  "predictedClose": 151.57,
+  "pesoChange": -0.43,
+  "pctChange": -0.28,
   "direction": "bearish",
   "model": "LSTM",
   "confidence": 98.3,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 152.77,
-    "arima": 153.15,
-    "lstm": 152.35
+    "lag": 151.97,
+    "arima": 152.35,
+    "lstm": 151.57
   },
   "ohlcv": [
     {
@@ -13041,6 +13041,14 @@
       "low": 149.6,
       "close": 152.8,
       "volume": 97848957
+    },
+    {
+      "date": "2026-09-02",
+      "open": 152.0,
+      "high": 152.4,
+      "low": 146.7,
+      "close": 152.0,
+      "volume": 100382791
     }
   ],
   "backtestDates": [
@@ -13422,7 +13430,7 @@
     "alignment": "common_target_date",
     "window": 60
   },
-  "forecastDate": "2026-09-02",
-  "dataAsOf": "2026-09-01",
-  "inferenceAt": "2026-09-01T22:28:21+08:00"
+  "forecastDate": "2026-09-03",
+  "dataAsOf": "2026-09-02",
+  "inferenceAt": "2026-09-02T16:01:44+08:00"
 }

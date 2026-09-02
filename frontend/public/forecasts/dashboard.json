@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-01T22:28:23.186211+08:00",
-  "forecastDate": "2026-09-02",
-  "lastRunAt": "2026-09-01T14:28:19+00:00",
+  "generatedAt": "2026-09-02T16:01:46.679275+08:00",
+  "forecastDate": "2026-09-03",
+  "lastRunAt": "2026-09-02T08:01:42+00:00",
   "status": "ok",
   "totalCompanies": 15,
   "missingCompanies": [],
@@ -29,31 +29,31 @@
   ],
   "marketSummary": {
     "gainers": 5,
-    "losers": 8,
-    "unchanged": 2
+    "losers": 9,
+    "unchanged": 1
   },
   "topGainer": {
     "symbol": "APX",
     "name": "Apex Mining Co., Inc.",
     "sector": "Mining and Oil",
-    "latestClose": 15.84,
-    "predictedClose": 15.92,
-    "pctChange": 0.51,
+    "latestClose": 16.0,
+    "predictedClose": 16.09,
+    "pctChange": 0.56,
     "direction": "bullish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 96.3,
-    "forecastDate": "2026-09-02"
+    "forecastDate": "2026-09-03"
   },
   "topLoser": {
-    "symbol": "BPI",
-    "name": "Bank of the Philippine Islands",
-    "sector": "Financials",
-    "latestClose": 105.5,
-    "predictedClose": 105.01,
-    "pctChange": -0.46,
+    "symbol": "MER",
+    "name": "Manila Electric Company",
+    "sector": "Industrial",
+    "latestClose": 456.0,
+    "predictedClose": 454.55,
+    "pctChange": -0.32,
     "direction": "bearish",
-    "bestModel": "ARIMA",
+    "bestModel": "Lag-Informed Regression",
     "confidence": 93.8,
-    "forecastDate": "2026-09-02"
+    "forecastDate": "2026-09-03"
   }
 }
