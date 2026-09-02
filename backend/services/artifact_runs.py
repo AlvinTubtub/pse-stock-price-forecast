@@ -206,6 +206,7 @@ class FormalRunWriter:
                 validate_formal_holdout_alignment(self._read_company_forecasts(company_dir / "holdout_predictions.csv"), plan)
             except Exception as exc:
                 raise FormalRunIntegrityError(f"{symbol}: invalid formal holdout evidence: {exc}") from exc
+            self._validate_arima_diagnostics(symbol, company_dir / "diagnostics.json")
         evidence_files = [path for path in self.path.rglob("*") if path.is_file() and path.name != "finalized.json"]
         self._write("finalized.json", {
             "run_id": self.run_id,
@@ -242,6 +243,72 @@ class FormalRunWriter:
         if missing:
             raise FormalRunIntegrityError(f"{path}: missing prediction columns: {sorted(missing)}.")
         return {model: frame.copy() for model, frame in rows.groupby("model", sort=False)}
+
+    @staticmethod
+    def _validate_arima_diagnostics(symbol: str, path: Path) -> None:
+        """Require auditable convergence evidence before formal finalization."""
+        try:
+            diagnostics = json.loads(path.read_text())["arima"]
+            selected = diagnostics["selected_configuration"]
+            selected_order = selected["order"]
+            selected_trend = selected["trend"]
+            folds = diagnostics["cv_fold_results"]
+            final_attempts = diagnostics["final_fit_attempts"]
+            retry_policy = diagnostics["optimizer_retry_policy"]
+            candidates = diagnostics["candidate_cv"]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise FormalRunIntegrityError(
+                f"{symbol}: ARIMA diagnostics lack required configuration or convergence evidence."
+            ) from exc
+
+        if selected_order != diagnostics.get("selected_order") or selected_trend != diagnostics.get("selected_trend"):
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA selected-configuration diagnostics disagree.")
+        if diagnostics.get("all_cv_folds_converged") is not True:
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA does not confirm convergence for every CV fold.")
+        if diagnostics.get("final_fit_converged") is not True:
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA final development fit is not confirmed converged.")
+        if not isinstance(folds, list) or len(folds) != 5:
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA must contain exactly five CV fold diagnostics.")
+        for expected_fold, fold in enumerate(folds, start=1):
+            try:
+                rmse = float(fold["validation_rmse"])
+                attempts = fold["optimizer_attempts"]
+            except (KeyError, TypeError, ValueError) as exc:
+                raise FormalRunIntegrityError(
+                    f"{symbol}: ARIMA fold {expected_fold} diagnostics are incomplete."
+                ) from exc
+            if (
+                fold.get("fold_number") != expected_fold
+                or fold.get("successful") is not True
+                or fold.get("converged") is not True
+                or not math.isfinite(rmse)
+                or not isinstance(attempts, list)
+                or not attempts
+                or attempts[-1].get("converged") is not True
+            ):
+                raise FormalRunIntegrityError(
+                    f"{symbol}: ARIMA fold {expected_fold} lacks finite, confirmed-converged evidence."
+                )
+        if not isinstance(final_attempts, list) or not final_attempts or final_attempts[-1].get("converged") is not True:
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA final-fit attempts do not confirm convergence.")
+        if not isinstance(retry_policy, list) or not retry_policy:
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA optimizer retry policy is missing.")
+        maxiters = [attempt.get("maxiter") for attempt in retry_policy]
+        if (
+            any(not isinstance(maxiter, int) or maxiter <= 0 for maxiter in maxiters)
+            or maxiters != sorted(set(maxiters))
+        ):
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA optimizer retry policy is not deterministic and increasing.")
+        if not isinstance(candidates, list) or not candidates:
+            raise FormalRunIntegrityError(f"{symbol}: ARIMA candidate diagnostics are missing.")
+        selected_candidates = [
+            candidate for candidate in candidates
+            if candidate.get("configuration") == selected and candidate.get("valid") is True
+        ]
+        if len(selected_candidates) != 1:
+            raise FormalRunIntegrityError(
+                f"{symbol}: ARIMA selected configuration lacks one valid candidate record."
+            )
 
     @staticmethod
     def _plan_payload(plan: FormalEvaluationPlan) -> dict[str, Any]:

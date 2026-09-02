@@ -1,4 +1,4 @@
-"""Phase 3 strict formal-ARIMA tests, isolated from local statsmodels ABI issues."""
+"""Fast tests for strict audited formal ARIMA behavior (no real model search)."""
 from __future__ import annotations
 
 import importlib.util
@@ -26,6 +26,7 @@ def _load_arima_module():
 
 
 arima = _load_arima_module()
+CONFIG = arima.ARIMAConfiguration((1, 1, 0), "n")
 
 
 def _df(n: int = 80) -> pd.DataFrame:
@@ -34,119 +35,184 @@ def _df(n: int = 80) -> pd.DataFrame:
     return pd.DataFrame({"Date": dates, "Close": close})
 
 
-def test_candidates_are_bounded_and_adf_only_prioritizes_d():
-    orders = arima._candidate_orders(1)
-    assert orders[0][1] == 1
-    assert all(0 <= p <= 3 and 0 <= d <= 2 and 0 <= q <= 3 for p, d, q in orders)
+def _fold_result(number: int = 1, rmse: float = 0.1):
+    attempt = arima.ARIMAFitAttempt(number, "statespace", 500, True, True)
+    return arima.ARIMAFoldResult(number, True, True, rmse, (attempt,))
 
 
-def test_failed_fold_invalidates_entire_candidate(monkeypatch):
-    close = pd.Series(np.arange(70.0))
-    arima.HAS_STATSMODELS = True
+def _candidate(configuration=CONFIG, *, valid: bool = True, rmse: float | None = 0.1):
+    folds = tuple(_fold_result(number) for number in range(1, 6)) if valid else ()
+    return arima.ARIMACandidateResult(
+        configuration=configuration,
+        required_fold_count=5,
+        successful_fold_count=5 if valid else 0,
+        valid=valid,
+        mean_validation_rmse=rmse if valid else None,
+        failure_reasons=() if valid else ("incomplete",),
+        fold_results=folds,
+    )
+
+
+def test_candidate_grid_includes_zero_orders_and_exact_allowed_trends():
+    configurations = arima._candidate_configurations(1)
+    identities = {(item.order, item.trend) for item in configurations}
+    assert ((0, 0, 0), "n") in identities
+    assert ((0, 0, 0), "c") in identities
+    assert ((0, 1, 0), "n") in identities
+    assert ((0, 1, 0), "t") in identities
+    assert ((0, 2, 0), "n") in identities
+    for configuration in configurations:
+        assert configuration.trend in {0: {"n", "c"}, 1: {"n", "t"}, 2: {"n"}}[configuration.order[1]]
+
+
+def test_successful_retry_uses_only_predeclared_increasing_maxiter(monkeypatch):
+    attempts = []
 
     class Fit:
-        def forecast(self, steps): return pd.Series([1.0])
+        def __init__(self, converged): self.mle_retvals = {"converged": converged}
+
+    class Factory:
+        def __init__(self, values, order, trend):
+            assert order == CONFIG.order and trend == CONFIG.trend
+
+        def fit(self, method, method_kwargs):
+            attempts.append((method, method_kwargs["maxiter"]))
+            return Fit(len(attempts) == 2)
+
+    monkeypatch.setattr(arima, "ARIMA", Factory, raising=False)
+    fit, evidence = arima._fit_with_formal_retries(pd.Series(np.arange(40.0)), CONFIG, context="test")
+    assert fit is not None
+    assert attempts == [("statespace", 500), ("statespace", 2_000)]
+    assert [item.converged for item in evidence] == [False, True]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected_status"),
+    [({"converged": False}, False), ({}, None)],
+    ids=["confirmed-non-convergence", "unavailable-convergence-metadata"],
+)
+def test_unconfirmed_convergence_invalidates_candidate(monkeypatch, metadata, expected_status):
+    class Fit:
+        mle_retvals = metadata
+
+    class Factory:
+        def __init__(self, values, order, trend): pass
+        def fit(self, method, method_kwargs): return Fit()
+
+    monkeypatch.setattr(arima, "ARIMA", Factory, raising=False)
+    result = arima._evaluate_candidate(pd.Series(np.arange(70.0)), CONFIG)
+    assert result.valid is False
+    assert result.successful_fold_count == 0
+    assert all(fold.converged is expected_status for fold in result.fold_results)
+    assert all(len(fold.attempts) == len(arima.FORMAL_OPTIMIZER_ATTEMPTS) for fold in result.fold_results)
+
+
+def test_non_finite_predictions_invalidate_candidate(monkeypatch):
+    class Fit:
+        mle_retvals = {"converged": True}
+        def forecast(self, steps): return pd.Series([np.nan])
         def append(self, actual, refit=False): return self
 
     class Factory:
-        def __init__(self, values, order): self.values = values
-        def fit(self):
-            if len(self.values) > 40:
-                raise RuntimeError("forced final-fold failure")
-            return Fit()
+        def __init__(self, values, order, trend): pass
+        def fit(self, method, method_kwargs): return Fit()
 
     monkeypatch.setattr(arima, "ARIMA", Factory, raising=False)
-    result = arima._evaluate_candidate(close, (1, 1, 0))
-    assert not result.valid
-    assert result.successful_fold_count < result.required_fold_count
-    assert result.mean_validation_rmse is None
+    result = arima._evaluate_candidate(pd.Series(np.arange(70.0)), CONFIG)
+    assert result.valid is False
+    assert result.successful_fold_count == 0
+    assert all("non-finite" in (fold.failure_reason or "") for fold in result.fold_results)
 
 
-def test_nonconverged_but_finite_fold_is_recorded_under_current_rule(monkeypatch):
-    close = pd.Series(np.arange(70.0))
+def test_incomplete_candidate_cannot_win_and_all_incomplete_raise(monkeypatch):
     arima.HAS_STATSMODELS = True
-
-    class Fit:
-        mle_retvals = {"converged": False}
-        def forecast(self, steps): return pd.Series([1.0])
-        def append(self, actual, refit=False): return self
-
-    class Factory:
-        def __init__(self, values, order): self.values = values
-        def fit(self): return Fit()
-
-    monkeypatch.setattr(arima, "ARIMA", Factory, raising=False)
-    result = arima._evaluate_candidate(close, (1, 1, 0))
-    assert result.valid is True
-    assert result.cv_fold_convergence == (False,) * result.required_fold_count
-    assert arima._candidate_diagnostics(result)["all_cv_folds_converged"] is False
-
-
-def test_all_failed_candidates_raise_without_out_of_range_fallback(monkeypatch):
-    arima.HAS_STATSMODELS = True
-    monkeypatch.setattr(arima, "is_stationary", lambda _series: False)
-    monkeypatch.setattr(arima, "_evaluate_candidate", lambda _close, order: arima.ARIMACandidateResult(order, 5, 0, False, None, ("failed",)))
-    with pytest.raises(arima.ARIMAFormalSelectionError):
-        arima._select_formal_order(pd.Series(np.arange(70.0)))
-    assert arima.DEPLOYMENT_FALLBACK_ORDER != (5, 1, 0)
-
-
-def test_lowest_full_precision_valid_candidate_wins(monkeypatch):
-    arima.HAS_STATSMODELS = True
-    monkeypatch.setattr(arima, "_candidate_orders", lambda _d: [(1, 0, 0), (1, 1, 0)])
+    winner = arima.ARIMAConfiguration((1, 0, 0), "c")
+    incomplete = arima.ARIMAConfiguration((0, 0, 0), "n")
     monkeypatch.setattr(arima, "is_stationary", lambda _series: True)
-    values = {(1, 0, 0): 0.100004, (1, 1, 0): 0.100003}
-    monkeypatch.setattr(arima, "_evaluate_candidate", lambda _close, order: arima.ARIMACandidateResult(order, 5, 5, True, values[order]))
-    selected, _ = arima._select_formal_order(pd.Series(np.arange(70.0)))
-    assert selected == (1, 1, 0)
+    monkeypatch.setattr(arima, "_candidate_configurations", lambda _d: [incomplete, winner])
+    monkeypatch.setattr(
+        arima,
+        "_evaluate_candidate",
+        lambda _close, configuration: _candidate(winner, rmse=2.0) if configuration == winner else _candidate(incomplete, valid=False),
+    )
+    selected, _ = arima._select_formal_configuration(pd.Series(np.arange(70.0)))
+    assert selected == winner
+
+    monkeypatch.setattr(arima, "_evaluate_candidate", lambda _close, configuration: _candidate(configuration, valid=False))
+    with pytest.raises(arima.ARIMAFormalSelectionError, match="No ARIMA candidate"):
+        arima._select_formal_configuration(pd.Series(np.arange(70.0)))
+
+
+def test_lowest_full_precision_candidate_wins_with_deterministic_tie_break(monkeypatch):
+    arima.HAS_STATSMODELS = True
+    first = arima.ARIMAConfiguration((1, 0, 0), "c")
+    second = arima.ARIMAConfiguration((1, 1, 0), "n")
+    monkeypatch.setattr(arima, "is_stationary", lambda _series: True)
+    monkeypatch.setattr(arima, "_candidate_configurations", lambda _d: [first, second])
+    values = {first: 0.100004, second: 0.100003}
+    monkeypatch.setattr(arima, "_evaluate_candidate", lambda _close, configuration: _candidate(configuration, rmse=values[configuration]))
+    selected, _ = arima._select_formal_configuration(pd.Series(np.arange(70.0)))
+    assert selected == second
+
+
+def test_final_development_fit_non_convergence_rejects_formal_symbol(monkeypatch):
+    df = _df()
+    plan = create_formal_evaluation_plan(df, "BPI")
+    monkeypatch.setattr(arima, "_select_formal_configuration", lambda _close: (CONFIG, [_candidate()]))
+    failed = arima.ARIMAFitAttempt(2, "statespace", 2_000, True, False, "optimizer_not_converged")
+    monkeypatch.setattr(arima, "_fit_with_formal_retries", lambda *_args, **_kwargs: (None, (failed,)))
+    with pytest.raises(arima.ARIMAFormalSelectionError, match="final development fit"):
+        arima.train_formal_arima(df, plan)
+
+
+def test_formal_selection_has_no_deployment_fallback(monkeypatch):
+    df = _df()
+    plan = create_formal_evaluation_plan(df, "BPI")
+    monkeypatch.setattr(
+        arima,
+        "_select_formal_configuration",
+        lambda _close: (_ for _ in ()).throw(arima.ARIMAFormalSelectionError("all candidates failed")),
+    )
+    with pytest.raises(arima.ARIMAFormalSelectionError, match="all candidates failed"):
+        arima.train_formal_arima(df, plan)
 
 
 def test_walk_forward_appends_actuals_after_each_forecast_with_refit_false():
     calls = []
+
     class Fit:
         def __init__(self, next_value=10.0): self.next_value = next_value
         def forecast(self, steps): return pd.Series([self.next_value])
         def append(self, actual, refit=False):
             calls.append((list(actual), refit))
             return Fit(self.next_value + 1)
+
     predictions = arima._walk_forward_forecast(Fit(), np.array([11.0, 12.0, 13.0]))
     assert predictions.tolist() == [10.0, 11.0, 12.0]
     assert calls == [([11.0], False), ([12.0], False), ([13.0], False)]
 
 
-def test_formal_output_uses_exact_plan_dates_and_holdout_ljung_box(monkeypatch):
+def test_formal_output_keeps_exact_dates_and_json_safe_diagnostics(monkeypatch):
     df = _df()
     plan = create_formal_evaluation_plan(df, "BPI")
-    arima.HAS_STATSMODELS = True
 
     class Fit:
         mle_retvals = {"converged": True}
         def forecast(self, steps): return pd.Series([101.0])
         def append(self, actual, refit=False): return self
-    class Factory:
-        def __init__(self, values, order): self.values = values
-        def fit(self): return Fit()
 
-    seen = {}
-    selected_on = {}
-    monkeypatch.setattr(arima, "ARIMA", Factory, raising=False)
-    def select_order(development):
-        selected_on["close"] = development.copy()
-        return (1, 1, 0), [arima.ARIMACandidateResult((1, 1, 0), 5, 5, True, .1, (), (True,) * 5)]
-    monkeypatch.setattr(arima, "_select_formal_order", select_order)
-    monkeypatch.setattr(arima, "_holdout_ljung_box", lambda errors: seen.setdefault("errors", np.asarray(errors)) or {})
-    # Return a concrete diagnostic instead of a truth-value-ambiguous ndarray.
+    attempts = (arima.ARIMAFitAttempt(1, "statespace", 500, True, True),)
+    monkeypatch.setattr(arima, "_select_formal_configuration", lambda _close: (CONFIG, [_candidate()]))
+    monkeypatch.setattr(arima, "_fit_with_formal_retries", lambda *_args, **_kwargs: (Fit(), attempts))
     monkeypatch.setattr(arima, "_holdout_ljung_box", lambda errors: {"diagnostic_target": "holdout_forecast_errors", "lags": [1], "n_errors": len(errors), "statistic": 1.0, "p_value": 0.5})
+
     formal = arima.train_formal_arima(df, plan)
     validated = validate_formal_holdout_alignment({"arima": formal.forecasts}, plan, required_models=("arima",))
     assert list(validated["arima"]["target_date"]) == list(plan.holdout_target_dates)
-    assert len(selected_on["close"]) == plan.development_count + 1
-    assert selected_on["close"].iloc[-1] == df.loc[df["Date"] == plan.development_end_date, "Close"].iloc[0]
-    assert formal.backtest == list(formal.forecasts["predicted_close"])
-    assert formal.diagnostics["diagnostic_target"] == "holdout_forecast_errors"
-    assert formal.diagnostics["cv_fold_convergence"] == [True] * 5
-    assert formal.diagnostics["all_cv_folds_converged"] is True
-    assert formal.diagnostics["final_fit_converged"] is True
+    assert formal.trend == "n"
+    assert formal.diagnostics["selected_configuration"] == {"order": [1, 1, 0], "trend": "n"}
+    assert len(formal.diagnostics["cv_fold_results"]) == 5
+    assert formal.diagnostics["final_fit_attempts"][0]["converged"] is True
 
 
 def test_wrong_date_is_rejected_even_when_prediction_count_matches():
@@ -155,7 +221,8 @@ def test_wrong_date_is_rejected_even_when_prediction_count_matches():
     frame = pd.DataFrame({
         "symbol": "BPI", "model": "arima", "origin_date": plan.holdout_origin_dates,
         "target_date": list(plan.holdout_target_dates[:-1]) + [plan.holdout_target_dates[-1] + pd.Timedelta(days=1)],
-        "actual_close": [1.0] * plan.holdout_count, "predicted_close": [1.0] * plan.holdout_count, "error": [0.0] * plan.holdout_count,
+        "actual_close": [1.0] * plan.holdout_count, "predicted_close": [1.0] * plan.holdout_count,
+        "error": [0.0] * plan.holdout_count,
     })
     with pytest.raises(FormalHoldoutAlignmentError):
         validate_formal_holdout_alignment({"arima": frame}, plan, required_models=("arima",))
