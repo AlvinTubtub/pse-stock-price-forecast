@@ -212,6 +212,23 @@ def main() -> int:
     # ------------------------------------------------------------------
     inference_result = None
     if args.run_inference and result["status"] in INFERENCE_ELIGIBLE_STATUSES:
+        # Reconcile first: this reads only forecasts issued on earlier runs
+        # and the newly ingested actual close. It does not run inference or
+        # alter the audited deployment-backtest evaluation.
+        from scripts.daily_inference import reconcile_production_history, run_daily_inference
+        reconciliation_result = reconcile_production_history()
+        print(
+            "Production reconciliation: "
+            f"{reconciliation_result['status']} "
+            f"({reconciliation_result['records_reconciled']} record(s) reconciled)"
+        )
+        if reconciliation_result["symbols_failed"]:
+            result["status"] = "error"
+            result["error"] = (
+                "Production-history reconciliation failed for: "
+                + ", ".join(sorted(reconciliation_result["symbols_failed"]))
+            )
+            return 1
         # Don't rely on merge_summaries alone to decide whether inference
         # runs — a day with no new PDF (status "no_files") can still have
         # raw data that's newer than the cache (e.g. a previous inference
@@ -227,7 +244,6 @@ def main() -> int:
             )
             print("Running daily inference...")
             try:
-                from scripts.daily_inference import run_daily_inference
                 inference_result = run_daily_inference()
                 print(f"Daily inference: {inference_result['status']} "
                       f"({len(inference_result['symbols_processed'])} OK, "

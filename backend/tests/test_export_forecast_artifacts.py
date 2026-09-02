@@ -9,7 +9,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.export_forecast_artifacts import aligned_deployment_backtest_60
+from scripts import export_forecast_artifacts
+from scripts.export_forecast_artifacts import aligned_deployment_backtest_60, reconciled_production_backtest_60
+from services.production_history import record_issued_forecast, reconcile_history
 
 
 def _cache(count: int = 75) -> dict:
@@ -58,3 +60,19 @@ def test_export_rejects_any_series_that_cannot_be_proven_aligned(mutation: str):
 
     with pytest.raises(ValueError):
         aligned_deployment_backtest_60(cache, "BPI")
+
+
+def test_production_export_includes_only_realized_issued_forecasts_and_keeps_them_aligned(tmp_path, monkeypatch):
+    history_dir = tmp_path / "production_history"
+    monkeypatch.setattr(export_forecast_artifacts, "PRODUCTION_HISTORY_DIR", history_dir)
+    predictions = {"Lag-Informed Regression": 10.1, "ARIMA": 10.2, "LSTM": 10.3}
+    record_issued_forecast(history_dir, "BPI", target_date="2026-09-01", issued_at="2026-08-31T16:00:00+08:00", data_as_of="2026-08-31", predictions=predictions)
+    later = {key: value + 1 for key, value in predictions.items()}
+    record_issued_forecast(history_dir, "BPI", target_date="2026-09-02", issued_at="2026-09-01T16:00:00+08:00", data_as_of="2026-09-01", predictions=later)
+    reconcile_history(history_dir, "BPI", pd.DataFrame({"Date": pd.to_datetime(["2026-09-01"]), "Close": [10.0]}), "2026-09-01T16:01:00+08:00")
+
+    dates, actual, by_model = reconciled_production_backtest_60("BPI")
+
+    assert dates == ["2026-09-01"]
+    assert actual == [10.0]
+    assert by_model == {key: [value] for key, value in predictions.items()}

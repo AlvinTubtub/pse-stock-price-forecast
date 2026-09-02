@@ -43,6 +43,8 @@ class TestDailyInference(unittest.TestCase):
         daily_inference.ARIMA_MODELS_DIR = daily_inference.MODELS_DIR / "arima"
         daily_inference.LSTM_MODELS_DIR = daily_inference.MODELS_DIR / "lstm"
         daily_inference.PREDICTION_CACHE_DIR = self.temp_path / "prediction_cache"
+        self._orig_production_history = daily_inference.PRODUCTION_HISTORY_DIR
+        daily_inference.PRODUCTION_HISTORY_DIR = self.temp_path / "production_history"
 
         for d in (
             daily_inference.RAW_DIR,
@@ -96,6 +98,7 @@ class TestDailyInference(unittest.TestCase):
     def tearDown(self):
         daily_inference.BASE_DIR = self._orig_base_dir
         daily_inference.DEPLOYMENT_CURRENT_DIR = self._orig_deployment_current
+        daily_inference.PRODUCTION_HISTORY_DIR = self._orig_production_history
         shutil.rmtree(self._temp_dir, ignore_errors=True)
 
     # ------------------------------------------------------------------
@@ -320,6 +323,9 @@ class TestDailyInference(unittest.TestCase):
             cache = json.loads((daily_inference.PREDICTION_CACHE_DIR / f"{sym}.json").read_text())
             self.assertIn("inference_metadata", cache)
             self.assertEqual(cache["next_close"]["lag"], 101.0)
+            history = json.loads((daily_inference.PRODUCTION_HISTORY_DIR / f"{sym}.json").read_text())
+            self.assertEqual(len(history["records"]), 1)
+            self.assertIsNone(history["records"][0]["actual"])
 
     def test_run_daily_inference_missing_csv(self):
         """Missing CSV should be reported as failure, not crash."""

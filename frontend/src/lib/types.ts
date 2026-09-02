@@ -47,6 +47,9 @@ export interface CompanyDetail {
   backtestDates?: string[];
   backtestActual: number[];
   backtestByModel: Record<string, number[]>;
+  productionBacktestDates?: string[];
+  productionBacktestActual?: number[];
+  productionBacktestByModel?: Record<string, number[]>;
   forecastDate?: string;
   dataAsOf?: string | null;
   inferenceAt?: string | null;

@@ -43,9 +43,11 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from services.pse_calendar import get_calendar
+from services.production_history import MODEL_LABELS as PRODUCTION_MODEL_LABELS, load_history
 REPO_ROOT = BASE_DIR.parent  # pse-stock-price-forecast-dashboard/
 DATA_DIR = BASE_DIR / "data" / "raw"
 CACHE_DIR = BASE_DIR / "prediction_cache"
+PRODUCTION_HISTORY_DIR = BASE_DIR / "production_history"
 BEST_MODELS_PATH = BASE_DIR / "best_models.json"
 LATEST_PROCESSED_PATH = BASE_DIR / "latest_processed.json"
 STAT_TESTS_PATH = BASE_DIR / "statistical_tests.json"
@@ -193,6 +195,26 @@ def aligned_deployment_backtest_60(cache: dict, symbol: str) -> tuple[list[str],
     return dates[start:], actual_values[start:], {label: values[start:] for label, values in model_values.items()}
 
 
+def reconciled_production_backtest_60(symbol: str) -> tuple[list[str], list[float], dict[str, list[float]]]:
+    """Return only actualized, previously-issued production forecasts.
+
+    This deliberately does not read ``deployment_backtest`` or raw OHLCV.
+    The ledger preserves the forecast available before the target close; any
+    missing record remains absent rather than being reconstructed.
+    """
+    history = load_history(PRODUCTION_HISTORY_DIR, symbol)
+    records = [record for record in history["records"] if record["actual"] is not None]
+    records.sort(key=lambda record: record["target_date"])
+    records = records[-BACKTEST_WINDOW:]
+    dates = [record["target_date"] for record in records]
+    actual = [float(record["actual"]) for record in records]
+    by_model = {
+        label: [float(record["predictions"][label]) for record in records]
+        for label in PRODUCTION_MODEL_LABELS
+    }
+    return dates, actual, by_model
+
+
 def main() -> None:
     COMPANY_OUT_DIR.mkdir(parents=True, exist_ok=True)
     HISTORY_OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -247,10 +269,12 @@ def main() -> None:
         history = ohlcv_records(df)
 
         backtest_dates_60, backtest_actual_60, backtest_by_model_60 = aligned_deployment_backtest_60(cache, symbol)
+        production_dates_60, production_actual_60, production_by_model_60 = reconciled_production_backtest_60(symbol)
         print(
             f"[export] {symbol}: selected {len(backtest_dates_60)} aligned OOS sessions "
             f"({backtest_dates_60[0]} to {backtest_dates_60[-1]})."
         )
+        print(f"[export] {symbol}: selected {len(production_dates_60)} reconciled production session(s).")
 
         # Determine forecast date from inference metadata if available
         forecast_date = _get_forecast_date(cache, latest_processed)
@@ -278,6 +302,9 @@ def main() -> None:
                 "alignment": "common_target_date",
                 "window": len(backtest_dates_60),
             },
+            "productionBacktestDates": production_dates_60,
+            "productionBacktestActual": production_actual_60,
+            "productionBacktestByModel": production_by_model_60,
             "forecastDate": forecast_date,
             "dataAsOf": cache.get("inference_metadata", {}).get("data_as_of"),
             "inferenceAt": cache.get("inference_metadata", {}).get("inference_at"),

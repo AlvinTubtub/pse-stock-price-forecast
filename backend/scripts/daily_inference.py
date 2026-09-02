@@ -30,6 +30,7 @@ from services.data_validator import CSVValidationError, validate_ohlcv_csv
 from services.forecasting import arima_model, lag_regression, lstm_model
 from services.pdf_pipeline.config import TARGET_COMPANIES
 from services.pse_calendar import get_calendar
+from services.production_history import record_issued_forecast, reconcile_history
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ LAG_MODELS_DIR = MODELS_DIR / "lag_regression"
 ARIMA_MODELS_DIR = MODELS_DIR / "arima"
 LSTM_MODELS_DIR = MODELS_DIR / "lstm"
 PREDICTION_CACHE_DIR = BASE_DIR / "prediction_cache"
+PRODUCTION_HISTORY_DIR = BASE_DIR / "production_history"
 
 PHT = timezone(timedelta(hours=8))  # Philippine Time (UTC+8, no DST)
 MODEL_SOURCE = "weekly_persisted_artifacts"
@@ -229,6 +231,56 @@ def infer_symbol(
     return cache
 
 
+def reconcile_symbol_history(symbol: str, df: pd.DataFrame, reconciled_at: datetime | None = None) -> int:
+    """Reconcile earlier issued forecasts before the next forecast is made."""
+    when = reconciled_at or datetime.now(PHT)
+    changed = reconcile_history(PRODUCTION_HISTORY_DIR, symbol, df, when.isoformat(timespec="seconds"))
+    if changed:
+        log.info("%s production history: reconciled %d realized forecast(s)", symbol, changed)
+    return changed
+
+
+def reconcile_production_history(
+    raw_dir: Path = RAW_DIR,
+    symbols: list[str] | None = None,
+) -> dict[str, Any]:
+    """Reconcile all available issued forecasts immediately after ingestion."""
+    symbols = list(EXPECTED_TICKERS if symbols is None else symbols)
+    result: dict[str, Any] = {"status": "ok", "symbols_reconciled": [], "symbols_failed": {}, "records_reconciled": 0}
+    when = datetime.now(PHT)
+    for symbol in symbols:
+        csv_path = raw_dir / f"{symbol}.csv"
+        if not csv_path.exists():
+            result["symbols_failed"][symbol] = "CSV not found"
+            continue
+        try:
+            df = validate_ohlcv_csv(csv_path)
+            result["records_reconciled"] += reconcile_symbol_history(symbol, df, reconciled_at=when)
+            result["symbols_reconciled"].append(symbol)
+        except Exception as exc:
+            log.exception("Production-history reconciliation failed for %s", symbol)
+            result["symbols_failed"][symbol] = str(exc)
+    if result["symbols_failed"]:
+        result["status"] = "partial_failure" if result["symbols_reconciled"] else "failure"
+    return result
+
+
+def _record_issued_forecast(symbol: str, cache: dict) -> bool:
+    meta = cache["inference_metadata"]
+    return record_issued_forecast(
+        PRODUCTION_HISTORY_DIR,
+        symbol,
+        target_date=meta["forecast_for"],
+        issued_at=meta["inference_at"],
+        data_as_of=meta["data_as_of"],
+        predictions={
+            "Lag-Informed Regression": cache["next_close"]["lag"],
+            "ARIMA": cache["next_close"]["arima"],
+            "LSTM": cache["next_close"]["lstm"],
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Batch inference
 # ---------------------------------------------------------------------------
@@ -290,7 +342,11 @@ def run_daily_inference(
             continue
 
         try:
+            # Retain this idempotent guard for direct CLI use; the normal
+            # pipeline has already performed the batch reconciliation first.
+            reconcile_symbol_history(symbol, df, reconciled_at=inference_at)
             updated_cache = infer_symbol(symbol, df, inference_at=inference_at)
+            issued = _record_issued_forecast(symbol, updated_cache)
             _write_cache(symbol, updated_cache)
             results["symbols_processed"].append(symbol)
             log.info(
@@ -302,6 +358,7 @@ def run_daily_inference(
                 updated_cache["inference_metadata"]["data_as_of"],
                 updated_cache["inference_metadata"]["forecast_for"],
             )
+            log.info("%s production history: forecast %s", symbol, "issued" if issued else "already recorded")
         except Exception as exc:
             log.exception("Daily inference failed for %s", symbol)
             results["symbols_failed"][symbol] = str(exc)

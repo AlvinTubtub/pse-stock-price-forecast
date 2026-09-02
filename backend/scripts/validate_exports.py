@@ -32,6 +32,7 @@ from services.pdf_pipeline.config import TARGET_COMPANIES  # noqa: E402
 
 EXPECTED_TICKERS = sorted(TARGET_COMPANIES.keys())
 BACKTEST_MODELS = {"Lag-Informed Regression", "ARIMA", "LSTM", "Naive baseline"}
+PRODUCTION_BACKTEST_MODELS = {"Lag-Informed Regression", "ARIMA", "LSTM"}
 
 
 def _load(path: Path) -> dict | list | None:
@@ -109,6 +110,17 @@ def main() -> int:
             errors.append(f"{symbol}: a model prediction series does not align with backtestDates")
         if methodology != {"source": "audited_oos_holdout", "alignment": "common_target_date", "window": 60}:
             errors.append(f"{symbol}: backtest methodology metadata is missing or invalid")
+        production_dates = detail.get("productionBacktestDates")
+        production_actual = detail.get("productionBacktestActual")
+        production_by_model = detail.get("productionBacktestByModel")
+        if not isinstance(production_dates, list) or production_dates != sorted(production_dates) or len(production_dates) != len(set(production_dates)) or len(production_dates) > 60:
+            errors.append(f"{symbol}: production backtest dates must be unique, chronological, and no longer than 60 sessions")
+        elif not isinstance(production_actual, list) or len(production_actual) != len(production_dates):
+            errors.append(f"{symbol}: production actuals do not align with production dates")
+        elif not isinstance(production_by_model, dict) or set(production_by_model) != PRODUCTION_BACKTEST_MODELS:
+            errors.append(f"{symbol}: production predictions must contain exactly the three production models")
+        elif any(not isinstance(values, list) or len(values) != len(production_dates) for values in production_by_model.values()):
+            errors.append(f"{symbol}: production prediction series do not align with production dates")
 
     print("=" * 60)
     print("Validating exported frontend artifacts...")

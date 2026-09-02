@@ -81,6 +81,7 @@ jobs:
           git add \
             backend/data/raw/*.csv \
             backend/prediction_cache/*.json \
+            backend/production_history \
             backend/latest_processed.json \
             frontend/public/forecasts
 

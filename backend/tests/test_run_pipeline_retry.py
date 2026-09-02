@@ -148,6 +148,8 @@ class TestUniverseEnforcement(unittest.TestCase):
         daily_inference.ARIMA_MODELS_DIR = daily_inference.MODELS_DIR / "arima"
         daily_inference.LSTM_MODELS_DIR = daily_inference.MODELS_DIR / "lstm"
         daily_inference.PREDICTION_CACHE_DIR = self.temp_path / "prediction_cache"
+        self._orig_production_history = daily_inference.PRODUCTION_HISTORY_DIR
+        daily_inference.PRODUCTION_HISTORY_DIR = self.temp_path / "production_history"
 
         for d in (
             daily_inference.RAW_DIR,
@@ -176,6 +178,7 @@ class TestUniverseEnforcement(unittest.TestCase):
     def tearDown(self):
         daily_inference.BASE_DIR = self._orig_base_dir
         daily_inference.EXPECTED_TICKERS = self._orig_expected
+        daily_inference.PRODUCTION_HISTORY_DIR = self._orig_production_history
         shutil.rmtree(self._temp_dir, ignore_errors=True)
 
     def test_missing_ticker_fails_the_batch(self):

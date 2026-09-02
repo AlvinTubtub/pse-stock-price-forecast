@@ -200,12 +200,13 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
           Backtest: Predicted vs. Actual (Last 60 Sessions)
         </h2>
         <p className="text-sm text-slate-400 mb-4">
-          Historical backtest comparing each model&apos;s predictions with the actual closing price.
+          Latest realized ForecastPH predictions compared with actual closing prices for up to the most
+          recent 60 trading sessions.
         </p>
         <PredictionChart
-          dates={company.backtestDates}
-          actual={company.backtestActual}
-          byModel={company.backtestByModel}
+          dates={company.productionBacktestDates ?? []}
+          actual={company.productionBacktestActual ?? []}
+          byModel={company.productionBacktestByModel ?? {}}
           selectedModel={company.model}
         />
       </section>
@@ -214,13 +215,13 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
       <section className="bg-dark-card border border-dark-border rounded-xl p-6">
         <h2 className="text-lg font-semibold text-white mb-1">Forecast Error Over Time</h2>
         <p className="text-sm text-slate-400 mb-4">
-          Forecast error over the 60-session backtest window, calculated as predicted close minus
-          actual close (₱).
+          Production forecast error for up to the latest 60 realized trading sessions, calculated as
+          predicted close minus actual close (₱).
         </p>
         <ErrorChart
-          dates={company.backtestDates}
-          actual={company.backtestActual}
-          byModel={company.backtestByModel}
+          dates={company.productionBacktestDates ?? []}
+          actual={company.productionBacktestActual ?? []}
+          byModel={company.productionBacktestByModel ?? {}}
           selectedModel={company.model}
         />
       </section>
