@@ -1,6 +1,6 @@
-name: PSE Weekly Model Training
+name: PSE Scheduled Model Refresh
 
-# Weekly model retraining is intentionally separate from the Fast Pipeline.
+# Scheduled model refresh is intentionally separate from the Fast Pipeline.
 # The Fast Pipeline runs daily inference against these persisted artifacts.
 # This workflow refits approved configurations for the canonical 15-ticker universe,
 # validates the generated artifacts, exports the frontend JSON, then commits the
@@ -8,8 +8,9 @@ name: PSE Weekly Model Training
 
 on:
   schedule:
-    # Sunday 00:00 UTC = Sunday 08:00 Philippine Time (UTC+8).
-    - cron: "0 0 * * 0"
+    # Every November 3 at 00:00 UTC = 08:00 Philippine Time (UTC+8).
+    # Manual execution remains available through workflow_dispatch.
+    - cron: "0 0 3 11 *"
   workflow_dispatch: {}
 
 concurrency:
