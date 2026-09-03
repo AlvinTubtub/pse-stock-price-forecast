@@ -11,11 +11,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
   Legend,
-  ReferenceArea,
 } from "recharts";
 import type { OhlcvPoint } from "@/lib/types";
-import { useInteractiveChart } from "./useInteractiveChart";
-import InteractiveChartToolbar from "./InteractiveChartToolbar";
 
 /**
  * Calendar-aware subtraction of months from a YYYY-MM-DD date string.
@@ -55,7 +52,7 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
     return oneYearAgo < earliestAvailableDate ? earliestAvailableDate : oneYearAgo;
   }, [latestAvailableDate, earliestAvailableDate]);
 
-  // Applied date filters (base dataset for chart & zoom)
+  // Applied date filters for the chart.
   const [appliedStartDate, setAppliedStartDate] = useState<string>(defaultStartDate);
   const [appliedEndDate, setAppliedEndDate] = useState<string>(latestAvailableDate);
 
@@ -135,9 +132,6 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
     return data.filter((p) => p.date >= appliedStartDate && p.date <= appliedEndDate);
   }, [data, appliedStartDate, appliedEndDate]);
 
-  // Interactive chart hook operates strictly on the filtered period dataset
-  const chart = useInteractiveChart({ data: filteredData, xKey: "date" });
-
   const [visibleSeries, setVisibleSeries] = useState({
     open: true,
     high: true,
@@ -150,8 +144,8 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
     setVisibleSeries((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const visibleStartDate = chart.visibleData[0]?.date;
-  const visibleEndDate = chart.visibleData[chart.visibleData.length - 1]?.date;
+  const visibleStartDate = filteredData[0]?.date;
+  const visibleEndDate = filteredData[filteredData.length - 1]?.date;
 
   return (
     <div className="w-full select-none space-y-3.5">
@@ -246,7 +240,7 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
         <div className="text-slate-400 text-[11px] font-mono whitespace-nowrap ml-auto">
           {visibleStartDate && visibleEndDate ? `${visibleStartDate} – ${visibleEndDate}` : null}{" "}
           <span className="text-slate-500">
-            ({chart.visibleCount.toLocaleString()}/{chart.totalCount.toLocaleString()} pts)
+            ({filteredData.length.toLocaleString()} pts)
           </span>
         </div>
       </div>
@@ -337,36 +331,11 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
           </p>
         </div>
       ) : (
-        <div
-          ref={chart.containerRef}
-          className={`w-full relative ${
-            chart.isBoxZoomActive
-              ? "cursor-crosshair"
-              : chart.isPanModeActive
-              ? "cursor-grab active:cursor-grabbing"
-              : "cursor-grab"
-          }`}
-        >
-          {/* Floating Control Toolbar overlaid inside top-right of chart */}
-          <InteractiveChartToolbar
-            onZoomIn={chart.zoomIn}
-            onZoomOut={chart.zoomOut}
-            onResetView={chart.resetView}
-            isBoxZoomActive={chart.isBoxZoomActive}
-            onToggleBoxZoom={chart.toggleBoxZoom}
-            isPanModeActive={chart.isPanModeActive}
-            onTogglePanMode={chart.togglePanMode}
-            className="absolute top-2 right-4 z-20"
-          />
-
+        <div className="w-full">
           <ResponsiveContainer width="100%" height={430}>
             <ComposedChart
-              data={chart.visibleData}
+              data={filteredData}
               margin={{ top: 15, right: 10, left: 0, bottom: 0 }}
-              onMouseDown={(e) => e && e.activeLabel && chart.handleMouseDown(e.activeLabel)}
-              onMouseMove={(e) => e && e.activeLabel && chart.handleMouseMove(e.activeLabel)}
-              onMouseUp={chart.handleMouseUp}
-              onMouseLeave={chart.handleMouseUp}
             >
               <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 11 }} minTickGap={35} />
@@ -453,19 +422,6 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
                   stroke="#60a5fa"
                   dot={false}
                   strokeWidth={2}
-                />
-              )}
-
-              {/* Box Zoom Highlight Area */}
-              {chart.refAreaLeft && chart.refAreaRight && (
-                <ReferenceArea
-                  yAxisId="price"
-                  x1={chart.refAreaLeft}
-                  x2={chart.refAreaRight}
-                  stroke="#60a5fa"
-                  strokeOpacity={0.8}
-                  fill="#3b82f6"
-                  fillOpacity={0.25}
                 />
               )}
             </ComposedChart>

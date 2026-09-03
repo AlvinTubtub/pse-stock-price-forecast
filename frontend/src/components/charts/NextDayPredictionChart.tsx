@@ -204,8 +204,8 @@ export default function NextDayPredictionChart({
         cx={cx}
         cy={cy}
         r={isLatest ? 5.5 : 3.5}
-        fill={isLatest ? "#38bdf8" : "#ffffff"}
-        stroke={isLatest ? "#ffffff" : "#0f172a"}
+        fill={isLatest ? "#38bdf8" : "var(--chart-actual-dot-fill)"}
+        stroke={isLatest ? "var(--chart-actual-line)" : "var(--chart-actual-dot-stroke)"}
         strokeWidth={isLatest ? 2 : 1}
       />
     );
@@ -316,7 +316,7 @@ export default function NextDayPredictionChart({
               type="linear"
               dataKey="actualClose"
               name="Actual close (latest)"
-              stroke="#ffffff"
+              stroke="var(--chart-actual-line)"
               strokeWidth={2.5}
               dot={renderActualDot}
               activeDot={{ r: 5 }}

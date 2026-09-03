@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { message, route, symbol, history } = body || {};
+    const { message, route, symbol, watchlist, history } = body || {};
 
     // 1. Validate message
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Build page-aware context & system prompt
-    const contextData = await buildContextForRequest({ route, symbol });
+    const contextData = await buildContextForRequest({ route, symbol, watchlist });
     const systemPrompt = buildSystemPrompt(contextData);
 
     // 3. Format conversational contents for Gemini API

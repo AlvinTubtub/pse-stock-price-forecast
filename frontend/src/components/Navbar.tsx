@@ -8,9 +8,10 @@ import type { CompanySummary } from "@/lib/types";
 
 const LINKS = [
   { href: "/", label: "Home" },
-  { href: "/companies", label: "Company List" },
-  { href: "/compare", label: "Model Performance" },
-  { href: "/learn", label: "Learn Stocks" },
+  { href: "/companies", label: "Companies" },
+  { href: "/watchlist", label: "My Watchlist" },
+  { href: "/compare", label: "Models" },
+  { href: "/learn-stocks", label: "Learn Stocks" },
   { href: "/about", label: "About" },
 ];
 

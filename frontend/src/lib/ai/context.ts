@@ -10,6 +10,7 @@ import { formatPeso, formatPct, formatNum } from "@/lib/format";
 export interface ContextOptions {
   route?: string;
   symbol?: string;
+  watchlist?: string[];
 }
 
 /**
@@ -141,6 +142,79 @@ All Tracked Companies Overview:
 ${companiesList}`;
 }
 
+export async function buildCompaniesContext(): Promise<string> {
+  const companies = await getCompanies();
+  const directory = companies
+    .map((company) => `- ${company.symbol}: ${company.name} (${company.sector}), forecast ${formatPeso(company.predictedClose)} (${formatPct(company.pctChange)}), selected model ${company.bestModel}`)
+    .join("\n");
+
+  return `[Context: Companies Directory]
+- This page lists the PSE companies currently tracked by ForecastPH.
+- Users can open a company for its detailed prediction, charts, and evaluation metrics, or add up to five companies to a browser-only watchlist.
+
+Current Company Directory:
+${directory}`;
+}
+
+export async function buildWatchlistContext(watchlist?: string[]): Promise<string> {
+  const [companies, metrics] = await Promise.all([getCompanies(), getMetrics()]);
+  const requested = Array.isArray(watchlist) ? watchlist.map((symbol) => symbol.toUpperCase().trim()) : [];
+  const selected = companies.filter((company) => requested.includes(company.symbol));
+
+  if (selected.length === 0) {
+    return `[Context: My Watchlist]
+- The watchlist is stored only in the user's current browser and device, with a maximum of five companies.
+- No company is currently selected in the supplied browser watchlist.
+- The page can compare expected percentage change and selected-model metrics once companies are added.`;
+  }
+
+  const rows = selected.map((company) => {
+    const modelMetrics = metrics?.perCompany[company.symbol];
+    const modelLabels: Record<string, string> = {
+      lag_reg: "Lag-Informed Regression",
+      arima: "ARIMA",
+      lstm: "LSTM",
+      naive: "Naive baseline",
+    };
+    const selectedMetric = Object.entries(modelMetrics?.metrics ?? {}).find(
+      ([key]) => modelLabels[key] === company.bestModel
+    )?.[1];
+    return `- ${company.symbol}: previous ${formatPeso(company.latestClose)}, forecast ${formatPeso(company.predictedClose)} (${formatPct(company.pctChange)}), selected model ${company.bestModel}, RMSE ${selectedMetric ? formatNum(selectedMetric.rmse) : "unavailable"}, MASE ${selectedMetric ? formatNum(selectedMetric.mase) : "unavailable"}`;
+  }).join("\n");
+
+  return `[Context: My Watchlist]
+- The watchlist is stored only in the user's current browser and device, with a maximum of five companies.
+- Currently watching ${selected.length} company or companies.
+- Expected Change comparison uses each selected company's next-session forecast percentage. It is not investment advice.
+
+Selected Watchlist Companies:
+${rows}`;
+}
+
+export function buildLearnStocksContext(): string {
+  return `[Context: Learn Stocks]
+- This page is a beginner-focused educational guide to Philippine stock trading and ForecastPH interpretation.
+- Topics include Stock Trading 101, PSE trading basics, trading terms, forecast interpretation, RMSE/MAE/MASE/R², chart reading, official PSE educational videos, broker-directory guidance, and ForecastPH research methodology.
+- PSE schedules and broker participation may change; users should verify current details directly with the PSE, SEC, and the relevant broker.
+- ForecastPH forecasts are educational statistical estimates, not investment advice or buy/sell recommendations.`;
+}
+
+export function buildAboutContext(): string {
+  return `[Context: About ForecastPH]
+- ForecastPH is an educational academic project for next-session Philippine stock price forecasting.
+- It compares ARIMA, Lag-Informed Regression, and LSTM against a naive baseline using held-out historical data.
+- Company-level model selection uses lowest test-set RMSE. Forecasts are not guarantees or investment advice.`;
+}
+
+export async function buildLiveContext(): Promise<string> {
+  const [latest, dashboard] = await Promise.all([getLatest(), getDashboard()]);
+  return `[Context: Live Forecast Status]
+- Latest forecast target date: ${latest?.forecastDate || dashboard?.forecastDate || "unavailable"}.
+- Latest pipeline run: ${latest?.lastRunAt || dashboard?.lastRunAt || "unavailable"}.
+- Status: ${latest?.status || dashboard?.status || "unavailable"}.
+- Live forecasts supplement the fixed research evaluation; they do not alter the formal backtest metrics.`;
+}
+
 /**
  * Builds a compact context string for Model Performance & Comparison (/compare).
  */
@@ -246,9 +320,15 @@ export async function buildContextForRequest(options?: ContextOptions): Promise<
     return buildCompareContext();
   }
 
-  if (route === "/" || route === "/companies" || route === "") {
+  if (route === "/" || route === "") {
     return buildHomeContext();
   }
+
+  if (route === "/companies") return buildCompaniesContext();
+  if (route === "/watchlist") return buildWatchlistContext(options?.watchlist);
+  if (route === "/learn" || route === "/learn-stocks") return buildLearnStocksContext();
+  if (route === "/about") return buildAboutContext();
+  if (route === "/live") return buildLiveContext();
 
   return buildGeneralContext();
 }

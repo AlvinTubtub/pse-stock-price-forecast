@@ -7,6 +7,7 @@ import ErrorChart from "@/components/charts/ErrorChart";
 import ChangeBadge from "@/components/ChangeBadge";
 import CompanyLogo from "@/components/CompanyLogo";
 import StatCard from "@/components/StatCard";
+import WatchlistStar from "@/components/watchlist/WatchlistStar";
 import { getAllSymbols, getCompanyDetail } from "@/lib/data";
 import { formatDate, formatNum, formatPeso, formatPct } from "@/lib/format";
 
@@ -67,11 +68,12 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
           <div className="flex items-center gap-3.5">
             <CompanyLogo symbol={company.symbol} name={company.name} size="lg" />
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-3xl font-bold text-white tracking-tight">{company.symbol}</h1>
                 <span className="text-xs px-2.5 py-1 rounded-md bg-dark-bg border border-dark-border text-slate-300 font-medium">
                   {company.sector}
                 </span>
+                <WatchlistStar symbol={company.symbol} showLabel size="md" />
               </div>
               <p className="text-sm text-slate-400 mt-0.5">{company.name}</p>
             </div>
@@ -195,7 +197,9 @@ export default async function CompanyDetailPage({ params }: { params: { symbol: 
 
       {/* 5. Next-Day Prediction */}
       <section className="bg-dark-card border border-dark-border rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-1">Next-Day Prediction</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+          <h2 className="text-lg font-semibold text-white">Next-Day Prediction</h2>
+        </div>
         <p className="text-sm text-slate-400 mb-4">
           Latest actual close with model predictions for the next trading session.
         </p>

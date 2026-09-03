@@ -130,7 +130,68 @@ export default async function HomePage() {
         </p>
       </section>
 
-      {/* 5. Company Preview Section */}
+      {/* 5. Beginner Guide Section */}
+      <section className="bg-dark-card border border-dark-border rounded-2xl p-6 sm:p-7 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="inline-block px-2.5 py-0.5 text-[11px] font-semibold text-brand-400 bg-brand-500/10 border border-brand-500/20 rounded-full mb-1">
+              Beginner Guide
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              New to Stock Forecasting?
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Three quick rules for interpreting automated machine learning stock predictions.
+            </p>
+          </div>
+          <Link
+            href="/learn-stocks#trading-101"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs sm:text-sm font-semibold transition-all shrink-0 self-start sm:self-auto shadow-md shadow-brand-500/20"
+          >
+            Start with Stock Trading 101 →
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-dark-bg/80 border border-dark-border/80 rounded-xl p-4.5 space-y-2">
+            <div className="flex items-center gap-2.5 text-brand-400 text-base font-semibold">
+              <span className="w-7 h-7 rounded-lg bg-brand-500/15 border border-brand-500/30 flex items-center justify-center text-xs font-bold">
+                1
+              </span>
+              <h3 className="text-sm font-bold text-white">Understand the Forecast</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ForecastPH predicts the estimated next trading-day closing price based on numerical historical market data. Predictions are statistical estimates and are not guaranteed.
+            </p>
+          </div>
+
+          <div className="bg-dark-bg/80 border border-dark-border/80 rounded-xl p-4.5 space-y-2">
+            <div className="flex items-center gap-2.5 text-amber-400 text-base font-semibold">
+              <span className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xs font-bold">
+                2
+              </span>
+              <h3 className="text-sm font-bold text-white">Check Historical Accuracy</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Always review the Backtest, Forecast Error, RMSE, MAE, MASE, and R² to see how accurately each model has performed historically before interpreting a forecast.
+            </p>
+          </div>
+
+          <div className="bg-dark-bg/80 border border-dark-border/80 rounded-xl p-4.5 space-y-2">
+            <div className="flex items-center gap-2.5 text-emerald-400 text-base font-semibold">
+              <span className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-xs font-bold">
+                3
+              </span>
+              <h3 className="text-sm font-bold text-white">Learn Before You Trade</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Build a strong foundation in Philippine stock market fundamentals, risk management, and order types before making financial decisions.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Company Preview Section */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-white">All Companies</h2>

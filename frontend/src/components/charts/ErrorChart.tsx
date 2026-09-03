@@ -11,10 +11,7 @@ import {
   CartesianGrid,
   Legend,
   ReferenceLine,
-  ReferenceArea,
 } from "recharts";
-import { useInteractiveChart } from "./useInteractiveChart";
-import InteractiveChartToolbar from "./InteractiveChartToolbar";
 
 const MODEL_COLORS: Record<string, string> = {
   ARIMA: "#f59e0b",
@@ -99,7 +96,6 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
   }, [data, byModel]);
 
   const seriesNames = Object.keys(byModel);
-  const chart = useInteractiveChart({ data, xKey: "step" });
 
   if (data.length === 0) {
     return (
@@ -176,48 +172,32 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
     <div className="w-full select-none space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
         <span className="text-slate-400">
-          Showing {chart.visibleCount} of {chart.totalCount} trading sessions &middot; Positive =
+          Showing {data.length} trading sessions &middot; Positive =
           Overprediction, Negative = Underprediction
         </span>
-        <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-slate-500">
-            Wheel = Zoom &middot; Drag = Pan &middot; Double-click = Reset
+        {liveStartDate && (
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-teal-400/40 bg-teal-400/10 px-2 py-1 font-semibold text-teal-100">
+            <span className="h-3 border-l-2 border-dashed border-teal-300" aria-hidden="true" />
+            Live forecast begins
           </span>
-          <InteractiveChartToolbar
-            onZoomIn={() => chart.zoomIn(0.2)}
-            onZoomOut={() => chart.zoomOut(0.2)}
-            onResetView={chart.resetView}
-            isBoxZoomActive={chart.isBoxZoomActive}
-            onToggleBoxZoom={chart.toggleBoxZoom}
-            isPanModeActive={chart.isPanModeActive}
-            onTogglePanMode={chart.togglePanMode}
-          />
-        </div>
+        )}
       </div>
 
-      <div
-        ref={chart.containerRef}
-        onDoubleClick={chart.resetView}
-        className={`w-full relative ${
-          chart.isBoxZoomActive
-            ? "cursor-crosshair"
-            : chart.isPanModeActive || chart.isDragging
-            ? "cursor-grabbing"
-            : "cursor-grab"
-        }`}
-        title="Scroll mouse wheel to zoom · Drag horizontally to pan · Double-click to reset view"
-      >
+      <div className="w-full">
         <ResponsiveContainer width="100%" height={360}>
           <LineChart
-            data={chart.visibleData}
+            data={data}
             margin={{ top: 10, right: 15, left: 10, bottom: 5 }}
-            onMouseDown={(e) => e && e.activeLabel && chart.handleMouseDown(e.activeLabel)}
-            onMouseMove={(e) => e && e.activeLabel && chart.handleMouseMove(e.activeLabel)}
-            onMouseUp={chart.handleMouseUp}
-            onMouseLeave={chart.handleMouseUp}
           >
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
-            {liveStartDate && <ReferenceLine x={liveStartDate} stroke="#34d399" strokeDasharray="4 4" label={{ value: "Live forecast begins", fill: "#6ee7b7", fontSize: 10, position: "top" }} />}
+            {liveStartDate && (
+              <ReferenceLine
+                x={liveStartDate}
+                stroke="#2dd4bf"
+                strokeWidth={2.5}
+                strokeDasharray="7 4"
+              />
+            )}
             <XAxis
               dataKey="step"
               tick={{ fill: "#94a3b8", fontSize: 11 }}
@@ -288,17 +268,6 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
                 />
               );
             })}
-
-            {/* Box zoom reference selection area */}
-            {chart.isBoxZoomActive && chart.refAreaLeft && chart.refAreaRight && (
-              <ReferenceArea
-                x1={chart.refAreaLeft}
-                x2={chart.refAreaRight}
-                strokeOpacity={0.3}
-                fill="#38bdf8"
-                fillOpacity={0.2}
-              />
-            )}
           </LineChart>
         </ResponsiveContainer>
       </div>

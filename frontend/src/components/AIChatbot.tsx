@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { usePathname } from "next/navigation";
+import { useWatchlist } from "@/context/WatchlistContext";
 
 interface Message {
   id: string;
@@ -11,13 +12,65 @@ interface Message {
   isError?: boolean;
 }
 
-const STARTER_QUESTIONS = [
-  "What does the forecasted price mean?",
-  "How accurate is this stock prediction?",
-  "What do RMSE, MAE, and R² mean?",
-  "Why was this model chosen?",
-  "What is the Backtest chart showing?",
-];
+function getPageAssistantContent(pathname: string, symbol?: string) {
+  if (symbol) {
+    return {
+      label: `Context: ${symbol}`,
+      description: `Ask about ${symbol}'s forecast, selected model, metrics, or charts.`,
+      questions: [
+        `What does the forecasted close for ${symbol} mean?`,
+        `Why was this model selected for ${symbol}?`,
+        `How should I interpret ${symbol}'s RMSE and MASE?`,
+        `What does the backtest show for ${symbol}?`,
+      ],
+    };
+  }
+
+  const pages: Record<string, { label: string; description: string; questions: string[] }> = {
+    "/": {
+      label: "Context: Market Overview",
+      description: "Ask about the dashboard, tracked companies, and next-session forecasts.",
+      questions: ["Which companies have the largest expected moves?", "What does a next-session forecast mean?", "How are ForecastPH models selected?", "What should I check before interpreting a forecast?"],
+    },
+    "/companies": {
+      label: "Context: Companies Directory",
+      description: "Ask about tracked companies, sectors, forecasts, or adding a watchlist item.",
+      questions: ["Which sectors are tracked by ForecastPH?", "How do I add a company to My Watchlist?", "What does Forecasted Close mean?", "Where can I see a company's detailed metrics?"],
+    },
+    "/watchlist": {
+      label: "Context: My Watchlist",
+      description: "Ask about your selected companies and their forecast comparisons.",
+      questions: ["How is Expected Change (%) calculated?", "How should I compare my watched companies?", "What does MASE below 1 mean?", "Why is my watchlist saved only on this device?"],
+    },
+    "/compare": {
+      label: "Context: Models",
+      description: "Ask about ARIMA, Lag-Informed Regression, LSTM, and evaluation metrics.",
+      questions: ["How is the best model selected?", "What is the difference between RMSE and MAE?", "Why is MASE compared with a naive baseline?", "What does R² tell me here?"],
+    },
+    "/learn": {
+      label: "Context: Learn Stocks",
+      description: "Ask about PSE basics, trading terms, brokers, or forecast interpretation.",
+      questions: ["What is a stock?", "How do I read a ForecastPH prediction?", "What is the difference between bid and ask?", "How should I verify a broker?"],
+    },
+    "/learn-stocks": {
+      label: "Context: Learn Stocks",
+      description: "Ask about PSE basics, trading terms, brokers, or forecast interpretation.",
+      questions: ["What is a stock?", "How do I read a ForecastPH prediction?", "What is the difference between bid and ask?", "How should I verify a broker?"],
+    },
+    "/about": {
+      label: "Context: About ForecastPH",
+      description: "Ask about the research scope, methodology, or project limitations.",
+      questions: ["What is ForecastPH designed to do?", "Which forecasting models are evaluated?", "What are the project's limitations?", "Why is this not investment advice?"],
+    },
+    "/live": {
+      label: "Context: Live Forecast Status",
+      description: "Ask about the live forecast refresh and how it relates to research evaluation.",
+      questions: ["When is the latest forecast for?", "What does the live forecast status mean?", "Do live forecasts change backtest metrics?", "Why can a forecast differ from the actual close?"],
+    },
+  };
+
+  return pages[pathname] ?? pages["/"];
+}
 
 /**
  * Lightweight helper to render formatted text (bold, inline code, bullets, paragraphs).
@@ -97,6 +150,7 @@ export default function AIChatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { watchlist } = useWatchlist();
 
   const pathname = usePathname() || "/";
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -111,14 +165,11 @@ export default function AIChatbot() {
     return undefined;
   }, [pathname]);
 
-  const pageContextLabel = useMemo(() => {
-    if (currentSymbol) return `Context: ${currentSymbol}`;
-    if (pathname === "/compare") return "Context: Model Performance";
-    if (pathname === "/learn") return "Context: Educational Guide";
-    if (pathname === "/live") return "Context: Live Pipeline Status";
-    if (pathname === "/about") return "Context: About Project";
-    return "Context: Market Overview";
-  }, [pathname, currentSymbol]);
+  const pageAssistant = useMemo(
+    () => getPageAssistantContent(pathname, currentSymbol),
+    [pathname, currentSymbol]
+  );
+  const pageContextLabel = pageAssistant.label;
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -176,6 +227,7 @@ export default function AIChatbot() {
           message: promptText,
           route: pathname,
           symbol: currentSymbol,
+          watchlist: pathname === "/watchlist" ? watchlist : undefined,
           history: historyPayload,
         }),
       });
@@ -330,7 +382,7 @@ export default function AIChatbot() {
                   </div>
                   <h4 className="text-xs font-semibold text-white">How can I assist you?</h4>
                   <p className="text-[11px] text-slate-400 max-w-[280px] mx-auto">
-                    Ask questions about stock forecasts, model metrics (RMSE, MAE, MASE, R²), or chart interpretations.
+                    {pageAssistant.description}
                   </p>
                 </div>
 
@@ -340,7 +392,7 @@ export default function AIChatbot() {
                     Starter Questions
                   </p>
                   <div className="space-y-1.5">
-                    {STARTER_QUESTIONS.map((q, idx) => (
+                    {pageAssistant.questions.map((q, idx) => (
                       <button
                         key={idx}
                         type="button"
