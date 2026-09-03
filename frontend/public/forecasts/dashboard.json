@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-02T16:59:19.816034+08:00",
-  "forecastDate": "2026-09-03",
-  "lastRunAt": "2026-09-02T08:47:26+00:00",
-  "status": "no_files",
+  "generatedAt": "2026-09-03T16:01:54.411453+08:00",
+  "forecastDate": "2026-09-04",
+  "lastRunAt": "2026-09-03T08:01:48+00:00",
+  "status": "ok",
   "totalCompanies": 15,
   "missingCompanies": [],
   "sectors": [
@@ -28,32 +28,32 @@
     }
   ],
   "marketSummary": {
-    "gainers": 5,
-    "losers": 9,
-    "unchanged": 1
+    "gainers": 3,
+    "losers": 10,
+    "unchanged": 2
   },
   "topGainer": {
     "symbol": "APX",
     "name": "Apex Mining Co., Inc.",
     "sector": "Mining and Oil",
-    "latestClose": 16.0,
-    "predictedClose": 16.09,
-    "pctChange": 0.56,
+    "latestClose": 17.18,
+    "predictedClose": 17.27,
+    "pctChange": 0.52,
     "direction": "bullish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 96.3,
-    "forecastDate": "2026-09-03"
+    "forecastDate": "2026-09-04"
   },
   "topLoser": {
-    "symbol": "MER",
-    "name": "Manila Electric Company",
+    "symbol": "JFC",
+    "name": "Jollibee Foods Corporation",
     "sector": "Industrial",
-    "latestClose": 456.0,
-    "predictedClose": 454.55,
-    "pctChange": -0.32,
+    "latestClose": 154.0,
+    "predictedClose": 153.64,
+    "pctChange": -0.23,
     "direction": "bearish",
-    "bestModel": "Lag-Informed Regression",
-    "confidence": 93.8,
-    "forecastDate": "2026-09-03"
+    "bestModel": "LSTM",
+    "confidence": 98.3,
+    "forecastDate": "2026-09-04"
   }
 }
