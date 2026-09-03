@@ -18,13 +18,13 @@ from services.artifact_runs import FormalRunIntegrityError, FormalRunWriter, Run
 from services.time_series_cv import create_formal_evaluation_plan
 
 
-def _plan_and_forecasts(n: int = 20) -> tuple:
+def _plan_and_forecasts(n: int = 20, symbol: str = "BPI") -> tuple:
     df = pd.DataFrame({"Date": pd.date_range("2025-01-01", periods=n), "Close": range(n)})
-    plan = create_formal_evaluation_plan(df, "BPI")
+    plan = create_formal_evaluation_plan(df, symbol)
     actual = list(range(100, 100 + plan.holdout_count))
     forecasts = {}
     for model in ("lag_reg", "arima", "lstm", "naive"):
-        frame = pd.DataFrame({"symbol": "BPI", "model": model, "origin_date": plan.holdout_origin_dates, "target_date": plan.holdout_target_dates, "actual_close": actual, "predicted_close": actual, "error": [0.0] * plan.holdout_count})
+        frame = pd.DataFrame({"symbol": symbol, "model": model, "origin_date": plan.holdout_origin_dates, "target_date": plan.holdout_target_dates, "actual_close": actual, "predicted_close": actual, "error": [0.0] * plan.holdout_count})
         forecasts[model] = frame
     return plan, forecasts
 
@@ -213,3 +213,165 @@ def test_formal_finalization_rejects_unconfirmed_arima_diagnostics(tmp_path):
     diagnostics_path.write_text(json.dumps(diagnostics))
     with pytest.raises(FormalRunIntegrityError, match="fold 3"):
         writer.finalize()
+
+
+def test_formal_frozen_source_preflight_fails_before_creating_run(tmp_path, monkeypatch):
+    raw_dir = tmp_path / "frozen"
+    raw_dir.mkdir()
+    (raw_dir / "BPI.csv").write_text("Date,Close\n2025-01-01,1\n")
+    source = pd.DataFrame({
+        "Date": pd.date_range("2025-01-01", periods=20),
+        "Close": range(20),
+    })
+    monkeypatch.setattr(model_selector, "BASE_DIR", tmp_path)
+    with patch.object(model_selector, "git_worktree_is_dirty", return_value=False), patch.object(
+        model_selector, "validate_ohlcv_csv", return_value=source
+    ):
+        with pytest.raises(ValueError, match="expected frozen cutoff"):
+            model_selector.run_formal_evaluation(
+                raw_dir=raw_dir,
+                symbols=["BPI"],
+                run_id="wrong_cutoff",
+                expected_data_cutoff="2025-01-19",
+                expected_row_count=20,
+            )
+    assert not (tmp_path / "results" / "formal" / "wrong_cutoff").exists()
+
+
+def test_formal_run_resumes_only_missing_company_checkpoint(tmp_path, monkeypatch):
+    raw_dir = tmp_path / "frozen"
+    raw_dir.mkdir()
+    for symbol in ("BPI", "ALI"):
+        (raw_dir / f"{symbol}.csv").write_text("Date,Close\n2025-01-01,1\n")
+    source = pd.DataFrame({
+        "Date": pd.date_range("2025-01-01", periods=20),
+        "Close": range(20),
+    })
+
+    def payload_for(symbol):
+        plan, forecasts = _plan_and_forecasts(symbol=symbol)
+        return {
+            "plan": plan,
+            "forecasts": forecasts,
+            "metrics": {model: {"rmse": 0.0} for model in forecasts},
+            "diagnostics": {
+                "lag_reg": {},
+                "arima": _valid_arima_diagnostics(),
+                "lstm": {},
+            },
+            "development_close": [float(value) for value in range(17)],
+        }
+
+    statistics = {
+        "per_company": {
+            symbol: {
+                "dm_squared_error": {
+                    "stage1_vs_naive": [
+                        {
+                            "model_a": model,
+                            "beats_naive_rmse": True,
+                            "significantly_beats_naive": False,
+                        }
+                        for model in ("lag_reg", "arima", "lstm")
+                    ]
+                }
+            }
+            for symbol in ("BPI", "ALI")
+        }
+    }
+    monkeypatch.setattr(model_selector, "BASE_DIR", tmp_path)
+    common_patches = (
+        patch.object(model_selector, "git_worktree_is_dirty", return_value=False),
+        patch.object(model_selector, "git_repository_commit", return_value="fixed-commit"),
+        patch.object(model_selector, "validate_ohlcv_csv", return_value=source),
+        patch.object(model_selector, "run_formal_statistical_tests", return_value=statistics),
+    )
+
+    first_calls = []
+    def fail_on_ali(symbol, _df):
+        first_calls.append(symbol)
+        if symbol == "ALI":
+            raise RuntimeError("simulated interruption")
+        return payload_for(symbol)
+
+    with common_patches[0], common_patches[1], common_patches[2], common_patches[3], patch.object(
+        model_selector, "evaluate_formal_symbol", side_effect=fail_on_ali
+    ):
+        with pytest.raises(RuntimeError, match="simulated interruption"):
+            model_selector.run_formal_evaluation(
+                raw_dir=raw_dir,
+                symbols=["BPI", "ALI"],
+                run_id="resumable",
+                expected_data_cutoff="2025-01-20",
+                expected_row_count=20,
+            )
+    assert first_calls == ["BPI", "ALI"]
+    assert (tmp_path / "results" / "formal" / "resumable" / ".checkpoints" / "BPI" / "complete.json").is_file()
+
+    resumed_calls = []
+    def finish_ali(symbol, _df):
+        resumed_calls.append(symbol)
+        return payload_for(symbol)
+
+    with patch.object(model_selector, "git_worktree_is_dirty", return_value=False), patch.object(
+        model_selector, "git_repository_commit", return_value="fixed-commit"
+    ), patch.object(model_selector, "validate_ohlcv_csv", return_value=source), patch.object(
+        model_selector, "run_formal_statistical_tests", return_value=statistics
+    ), patch.object(model_selector, "evaluate_formal_symbol", side_effect=finish_ali):
+        finalized = model_selector.run_formal_evaluation(
+            raw_dir=raw_dir,
+            symbols=["BPI", "ALI"],
+            run_id="resumable",
+            expected_data_cutoff="2025-01-20",
+            expected_row_count=20,
+            resume=True,
+        )
+    assert resumed_calls == ["ALI"]
+    assert finalized.is_file()
+    assert not (tmp_path / "models" / "deployment").exists()
+
+
+def test_formal_resume_rejects_changed_frozen_source(tmp_path, monkeypatch):
+    raw_dir = tmp_path / "frozen"
+    raw_dir.mkdir()
+    source_path = raw_dir / "BPI.csv"
+    source_path.write_text("original frozen bytes")
+    source = pd.DataFrame({
+        "Date": pd.date_range("2025-01-01", periods=20),
+        "Close": range(20),
+    })
+    monkeypatch.setattr(model_selector, "BASE_DIR", tmp_path)
+    writer = FormalRunWriter(tmp_path, "source_changed")
+    original_provenance = model_selector.source_data_manifest(source_path, source)
+    writer.create_or_resume({
+        "formal_evaluation_version": "1.0",
+        "repository_commit": "fixed-commit",
+        "symbols": ["BPI"],
+        "expected_data_cutoff": "2025-01-20",
+        "expected_row_count": 20,
+        "source_files": {
+            "BPI": {
+                "sha256": original_provenance["sha256"],
+                "row_count": 20,
+                "first_date": "2025-01-01",
+                "last_date": "2025-01-20",
+            }
+        },
+    })
+    source_path.write_text("changed frozen bytes")
+
+    with patch.object(model_selector, "git_worktree_is_dirty", return_value=False), patch.object(
+        model_selector, "git_repository_commit", return_value="fixed-commit"
+    ), patch.object(model_selector, "validate_ohlcv_csv", return_value=source), patch.object(
+        model_selector, "evaluate_formal_symbol"
+    ) as evaluate:
+        with pytest.raises(FormalRunIntegrityError, match="resume contract"):
+            model_selector.run_formal_evaluation(
+                raw_dir=raw_dir,
+                symbols=["BPI"],
+                run_id="source_changed",
+                expected_data_cutoff="2025-01-20",
+                expected_row_count=20,
+                resume=True,
+            )
+    evaluate.assert_not_called()

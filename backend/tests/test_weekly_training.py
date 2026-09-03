@@ -5,9 +5,10 @@ BACKEND = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND.parent
 
 
-def test_weekly_workflow_exists_and_is_strict():
+def test_scheduled_refresh_runs_only_on_november_3_and_is_strict():
     workflow = (REPO_ROOT / ".github" / "workflows" / "train_models.yml").read_text()
-    assert 'cron: "0 0 * * 0"' in workflow
+    assert 'cron: "0 0 3 11 *"' in workflow
+    assert 'cron: "0 0 * * 0"' not in workflow
     assert "python -m services.model_selector --mode deployment-refresh --strict" in workflow
     assert "--mode deployment-retune" not in workflow
     assert "--mode formal" not in workflow

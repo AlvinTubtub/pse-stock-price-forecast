@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import subprocess
 import tempfile
 from dataclasses import asdict, dataclass
@@ -85,6 +86,14 @@ def git_worktree_is_dirty() -> bool:
         return bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip())
     except Exception as exc:
         raise FormalRunIntegrityError("Cannot determine Git worktree state for formal run.") from exc
+
+
+def git_repository_commit() -> str:
+    """Return the exact repository commit used by a resumable formal run."""
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception as exc:
+        raise FormalRunIntegrityError("Cannot determine the Git commit for formal run.") from exc
 
 
 def create_run_id(run_id: str | None = None) -> str:
@@ -220,6 +229,154 @@ class FormalRunWriter:
             raise FileExistsError(f"Formal run {self.run_id} already exists and cannot be overwritten.")
         self.path.mkdir(parents=True)
 
+    def create_or_resume(self, resume_contract: dict[str, object]) -> bool:
+        """Create a resumable run or verify an existing incomplete run.
+
+        Returns ``True`` when resuming. The contract includes the code commit,
+        company universe, and source hashes so a checkpoint can never be
+        reused with changed code or data.
+        """
+        state_path = self.path / "run_state.json"
+        if not self.path.exists():
+            self.path.mkdir(parents=True)
+            self._write("run_state.json", {
+                "run_id": self.run_id,
+                "status": "running",
+                "created_at": datetime.now(timezone.utc),
+                "resume_contract": resume_contract,
+            })
+            return False
+        if self.finalized_path.exists():
+            raise FormalRunIntegrityError(
+                f"Formal run {self.run_id} is finalized and cannot be resumed."
+            )
+        if not state_path.is_file():
+            raise FormalRunIntegrityError(
+                f"Formal run {self.run_id} exists without resumable run_state.json."
+            )
+        try:
+            state = json.loads(state_path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise FormalRunIntegrityError(
+                f"Formal run {self.run_id} has malformed resumable state."
+            ) from exc
+        if state.get("status") not in {"running", "evaluation_complete"} or state.get(
+            "resume_contract"
+        ) != _json_safe(resume_contract):
+            raise FormalRunIntegrityError(
+                f"Formal run {self.run_id} resume contract does not match current code, data, or symbols."
+            )
+        return True
+
+    def write_company_checkpoint(
+        self,
+        symbol: str,
+        payload: dict[str, object],
+        source_provenance: dict[str, object],
+    ) -> Path:
+        """Atomically checkpoint one fully evaluated company."""
+        self._assert_mutable()
+        key = symbol.upper()
+        checkpoints = self.path / ".checkpoints"
+        checkpoints.mkdir(parents=True, exist_ok=True)
+        target = checkpoints / key
+        if target.exists():
+            self.read_company_checkpoint(key)
+            return target
+        for abandoned in checkpoints.glob(f".{key}.*.tmp"):
+            shutil.rmtree(abandoned, ignore_errors=True)
+        temporary = Path(tempfile.mkdtemp(prefix=f".{key}.", suffix=".tmp", dir=checkpoints))
+        try:
+            plan = payload["plan"]
+            forecasts = payload["forecasts"]
+            rows = pd.concat(forecasts.values(), ignore_index=True).sort_values(
+                ["model", "target_date"]
+            )
+            missing = set(FORMAL_FORECAST_COLUMNS) - set(rows.columns)
+            if missing:
+                raise FormalRunIntegrityError(
+                    f"{key}: checkpoint predictions lack required columns: {sorted(missing)}."
+                )
+            validate_formal_holdout_alignment(forecasts, plan)
+            rows.to_csv(temporary / "holdout_predictions.csv", index=False)
+            checkpoint_payloads = {
+                "plan.json": self._plan_payload(plan),
+                "metrics.json": payload["metrics"],
+                "diagnostics.json": payload["diagnostics"],
+                "development_close.json": [float(value) for value in payload["development_close"]],
+                "source_data.json": source_provenance,
+            }
+            for name, value in checkpoint_payloads.items():
+                (temporary / name).write_text(json.dumps(
+                    _json_safe(value), indent=2, sort_keys=True,
+                    default=_json_default, allow_nan=False,
+                ))
+            evidence = sorted(path for path in temporary.iterdir() if path.is_file())
+            (temporary / "complete.json").write_text(json.dumps({
+                "symbol": key,
+                "completed_at": datetime.now(timezone.utc),
+                "artifact_sha256": {path.name: file_sha256(path) for path in evidence},
+            }, indent=2, sort_keys=True, default=_json_default))
+            os.replace(temporary, target)
+            return target
+        finally:
+            shutil.rmtree(temporary, ignore_errors=True)
+
+    def read_company_checkpoint(self, symbol: str) -> dict[str, object]:
+        """Load and integrity-check one completed company checkpoint."""
+        key = symbol.upper()
+        checkpoint = self.path / ".checkpoints" / key
+        marker_path = checkpoint / "complete.json"
+        if not marker_path.is_file():
+            raise FormalRunIntegrityError(f"{key}: completed formal checkpoint is missing.")
+        try:
+            marker = json.loads(marker_path.read_text())
+            hashes = marker["artifact_sha256"]
+            if marker["symbol"] != key or not isinstance(hashes, dict):
+                raise ValueError("invalid checkpoint marker")
+            for name, expected_hash in hashes.items():
+                artifact = checkpoint / name
+                if not artifact.is_file() or file_sha256(artifact) != expected_hash:
+                    raise ValueError(f"checkpoint artifact failed hash validation: {name}")
+            plan = self._plan_from_payload(json.loads((checkpoint / "plan.json").read_text()))
+            forecasts = self._read_company_forecasts(checkpoint / "holdout_predictions.csv")
+            validate_formal_holdout_alignment(forecasts, plan)
+            development_close = json.loads((checkpoint / "development_close.json").read_text())
+            if not isinstance(development_close, list) or len(development_close) < 2:
+                raise ValueError("development close series is incomplete")
+            return {
+                "plan": plan,
+                "forecasts": forecasts,
+                "metrics": json.loads((checkpoint / "metrics.json").read_text()),
+                "diagnostics": json.loads((checkpoint / "diagnostics.json").read_text()),
+                "development_close": development_close,
+                "source_provenance": json.loads((checkpoint / "source_data.json").read_text()),
+            }
+        except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as exc:
+            raise FormalRunIntegrityError(f"{key}: formal checkpoint is invalid: {exc}") from exc
+
+    def has_company_checkpoint(self, symbol: str) -> bool:
+        """Return whether a symbol has a completed checkpoint marker."""
+        return (self.path / ".checkpoints" / symbol.upper() / "complete.json").is_file()
+
+    def mark_evaluation_complete(self) -> None:
+        """Record that every company completed before root artifacts are finalized."""
+        self._assert_mutable()
+        state_path = self.path / "run_state.json"
+        if not state_path.is_file():
+            raise FormalRunIntegrityError(
+                f"Formal run {self.run_id} lacks resumable run_state.json."
+            )
+        try:
+            state = json.loads(state_path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise FormalRunIntegrityError(
+                f"Formal run {self.run_id} has malformed resumable state."
+            ) from exc
+        state["status"] = "evaluation_complete"
+        state["evaluation_completed_at"] = datetime.now(timezone.utc)
+        self._write("run_state.json", state)
+
     def write_split_manifest(self, plans: dict[str, FormalEvaluationPlan]) -> None:
         self._assert_mutable()
         self._write("split_manifest.json", {
@@ -278,6 +435,18 @@ class FormalRunWriter:
     def finalize(self) -> Path:
         """Validate all required evidence, then permanently mark the run complete."""
         self._assert_mutable()
+        state_path = self.path / "run_state.json"
+        if state_path.is_file():
+            try:
+                state = json.loads(state_path.read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                raise FormalRunIntegrityError(
+                    f"{self.run_id}: malformed resumable run state."
+                ) from exc
+            if state.get("status") != "evaluation_complete":
+                raise FormalRunIntegrityError(
+                    f"{self.run_id}: resumable evaluation is incomplete."
+                )
         plans = self._read_plans()
         required_root = ("methodology_manifest.json", "split_manifest.json", "data_manifest.json", "statistical_tests.json")
         absent = [name for name in required_root if not (self.path / name).is_file()]
@@ -309,17 +478,10 @@ class FormalRunWriter:
             raise FormalRunIntegrityError(f"{self.run_id}: split_manifest.json is required before finalization.")
         payload = json.loads(manifest.read_text())
         try:
-            return {symbol: FormalEvaluationPlan(**{
-                **data,
-                "development_origin_dates": tuple(pd.Timestamp(d) for d in data["development_origin_dates"]),
-                "development_target_dates": tuple(pd.Timestamp(d) for d in data["development_target_dates"]),
-                "holdout_origin_dates": tuple(pd.Timestamp(d) for d in data["holdout_origin_dates"]),
-                "holdout_target_dates": tuple(pd.Timestamp(d) for d in data["holdout_target_dates"]),
-                "development_start_date": pd.Timestamp(data["development_start_date"]),
-                "development_end_date": pd.Timestamp(data["development_end_date"]),
-                "holdout_start_date": pd.Timestamp(data["holdout_start_date"]),
-                "holdout_end_date": pd.Timestamp(data["holdout_end_date"]),
-            }) for symbol, data in payload["companies"].items()}
+            return {
+                symbol: self._plan_from_payload(data)
+                for symbol, data in payload["companies"].items()
+            }
         except (KeyError, TypeError, ValueError) as exc:
             raise FormalRunIntegrityError(f"{self.run_id}: malformed split manifest.") from exc
 
@@ -401,6 +563,20 @@ class FormalRunWriter:
     def _plan_payload(plan: FormalEvaluationPlan) -> dict[str, Any]:
         payload = asdict(plan)
         return {key: [str(d) for d in value] if isinstance(value, tuple) else str(value) if isinstance(value, pd.Timestamp) else value for key, value in payload.items()}
+
+    @staticmethod
+    def _plan_from_payload(data: dict[str, object]) -> FormalEvaluationPlan:
+        return FormalEvaluationPlan(**{
+            **data,
+            "development_origin_dates": tuple(pd.Timestamp(d) for d in data["development_origin_dates"]),
+            "development_target_dates": tuple(pd.Timestamp(d) for d in data["development_target_dates"]),
+            "holdout_origin_dates": tuple(pd.Timestamp(d) for d in data["holdout_origin_dates"]),
+            "holdout_target_dates": tuple(pd.Timestamp(d) for d in data["holdout_target_dates"]),
+            "development_start_date": pd.Timestamp(data["development_start_date"]),
+            "development_end_date": pd.Timestamp(data["development_end_date"]),
+            "holdout_start_date": pd.Timestamp(data["holdout_start_date"]),
+            "holdout_end_date": pd.Timestamp(data["holdout_end_date"]),
+        })
 
     def _assert_mutable(self) -> None:
         if not self.path.is_dir():

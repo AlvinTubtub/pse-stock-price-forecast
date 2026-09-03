@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +37,7 @@ from services.artifact_runs import (
     create_run_id,
     deployment_current_dir,
     file_sha256,
+    git_repository_commit,
     git_worktree_is_dirty,
     load_approved_deployment_configurations,
     source_data_manifest,
@@ -706,36 +708,135 @@ def run_formal_evaluation(
     *,
     symbols: list[str],
     run_id: str | None = None,
+    expected_data_cutoff: str | None = None,
+    expected_row_count: int | None = None,
+    resume: bool = False,
 ) -> Path:
-    """Manually create one immutable formal run; never write deployment state.
+    """Create or resume one immutable formal run without deployment writes.
 
     A caller must explicitly name its company universe.  This prevents a
     scheduled deployment workflow from accidentally launching a full formal
-    research experiment.
+    research experiment.  All requested raw files are validated and hashed
+    before a run directory is created.  Completed company checkpoints are
+    reusable only with the same commit, source hashes, cutoff, row count, and
+    symbol universe.
     """
     if not symbols:
         raise ValueError("Formal evaluation requires an explicit symbol list (for example: BPI).")
     requested = [symbol.upper() for symbol in symbols]
     if len(set(requested)) != len(requested):
         raise ValueError("Formal evaluation symbol list contains duplicates.")
+    if expected_row_count is not None and expected_row_count <= 1:
+        raise ValueError("Expected formal source row count must be greater than one.")
+    expected_cutoff = None
+    if expected_data_cutoff is not None:
+        try:
+            expected_cutoff = pd.Timestamp(expected_data_cutoff)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Expected formal data cutoff must be a valid date.") from exc
+        if expected_cutoff.tzinfo is not None:
+            expected_cutoff = expected_cutoff.tz_localize(None)
+        expected_cutoff = expected_cutoff.normalize()
+
     git_dirty = git_worktree_is_dirty()
     if git_dirty:
         raise RuntimeError("Formal evaluation requires a clean Git worktree; commit or stash changes first.")
-    writer = FormalRunWriter(BASE_DIR, create_run_id(run_id))
-    writer.create()
-    formal_by_symbol: dict[str, dict] = {}
-    plans: dict[str, FormalEvaluationPlan] = {}
+
+    raw_dir = Path(raw_dir)
+    validated_data: dict[str, pd.DataFrame] = {}
     source_provenance: dict[str, dict[str, object]] = {}
     cutoff_dates: list[pd.Timestamp] = []
+    log.info("Formal preflight: validating %d frozen source file(s) in %s.", len(requested), raw_dir)
+    for symbol in requested:
+        csv_path = raw_dir / f"{symbol}.csv"
+        df = validate_ohlcv_csv(csv_path)
+        dates = pd.to_datetime(df["Date"], errors="raise")
+        last_date = pd.Timestamp(dates.max()).normalize()
+        if expected_row_count is not None and len(df) != expected_row_count:
+            raise ValueError(
+                f"{symbol}: expected {expected_row_count} frozen rows, found {len(df)}."
+            )
+        if expected_cutoff is not None and last_date != expected_cutoff:
+            raise ValueError(
+                f"{symbol}: expected frozen cutoff {expected_cutoff.date()}, found {last_date.date()}."
+            )
+        validated_data[symbol] = df
+        source_provenance[symbol] = source_data_manifest(csv_path, df)
+        cutoff_dates.append(last_date)
+        log.info(
+            "Formal preflight passed for %s: %d rows, cutoff %s, sha256 %s.",
+            symbol,
+            len(df),
+            last_date.date(),
+            source_provenance[symbol]["sha256"],
+        )
+
+    formal_run_id = create_run_id(run_id)
+    writer = FormalRunWriter(BASE_DIR, formal_run_id)
+    if writer.path.exists() and not resume:
+        raise FileExistsError(
+            f"Formal run {formal_run_id} already exists. Use --resume only for its unchanged inputs."
+        )
+    resume_contract = {
+        "formal_evaluation_version": "1.0",
+        "repository_commit": git_repository_commit(),
+        "symbols": requested,
+        "expected_data_cutoff": str(expected_cutoff.date()) if expected_cutoff is not None else None,
+        "expected_row_count": expected_row_count,
+        "source_files": {
+            symbol: {
+                "sha256": source_provenance[symbol]["sha256"],
+                "row_count": source_provenance[symbol]["row_count"],
+                "first_date": str(pd.Timestamp(source_provenance[symbol]["first_date"]).date()),
+                "last_date": str(pd.Timestamp(source_provenance[symbol]["last_date"]).date()),
+            }
+            for symbol in requested
+        },
+    }
+    resumed = writer.create_or_resume(resume_contract)
+    log.info(
+        "%s formal run %s with %d requested company/companies.",
+        "Resuming" if resumed else "Starting",
+        formal_run_id,
+        len(requested),
+    )
+    formal_by_symbol: dict[str, dict] = {}
+    plans: dict[str, FormalEvaluationPlan] = {}
+    started_at = time.monotonic()
     try:
-        for symbol in requested:
-            csv_path = raw_dir / f"{symbol}.csv"
-            df = validate_ohlcv_csv(csv_path)
-            payload = evaluate_formal_symbol(symbol, df)
+        for index, symbol in enumerate(requested, start=1):
+            if writer.has_company_checkpoint(symbol):
+                log.info(
+                    "Formal company %d/%d %s: loading completed checkpoint.",
+                    index,
+                    len(requested),
+                    symbol,
+                )
+                payload = writer.read_company_checkpoint(symbol)
+            else:
+                company_started_at = time.monotonic()
+                log.info(
+                    "Formal company %d/%d %s: evaluation started.",
+                    index,
+                    len(requested),
+                    symbol,
+                )
+                payload = evaluate_formal_symbol(symbol, validated_data[symbol])
+                writer.write_company_checkpoint(symbol, payload, source_provenance[symbol])
+                payload = writer.read_company_checkpoint(symbol)
+                elapsed = time.monotonic() - company_started_at
+                remaining = len(requested) - index
+                log.info(
+                    "Formal company %d/%d %s: checkpoint completed in %.1f minutes; "
+                    "rough remaining estimate %.1f minutes.",
+                    index,
+                    len(requested),
+                    symbol,
+                    elapsed / 60,
+                    (elapsed * remaining) / 60,
+                )
             plans[symbol] = payload["plan"]
-            source_provenance[symbol] = source_data_manifest(csv_path, df)
             formal_by_symbol[symbol] = payload
-            cutoff_dates.append(pd.to_datetime(df["Date"]).max())
         writer.write_split_manifest(plans)
         writer.write_data_manifest(source_provenance)
         writer.write_methodology_manifest(str(max(cutoff_dates).date()), requested, git_dirty=git_dirty)
@@ -747,11 +848,20 @@ def run_formal_evaluation(
                 formal_by_symbol[symbol]["diagnostics"][model_key].update(flags[model_key])
             writer.write_company(symbol, formal_by_symbol[symbol]["forecasts"], formal_by_symbol[symbol]["metrics"], formal_by_symbol[symbol]["diagnostics"])
         writer.write_statistics(statistics)
+        writer.mark_evaluation_complete()
         finalized = writer.finalize()
-        log.info("Finalized formal run %s", writer.path)
+        log.info(
+            "Finalized formal run %s in %.1f minutes.",
+            writer.path,
+            (time.monotonic() - started_at) / 60,
+        )
         return finalized
     except Exception:
-        log.exception("Formal run %s failed before finalization; deployment artifacts were not modified.", writer.run_id)
+        log.exception(
+            "Formal run %s failed before finalization; deployment artifacts were not modified. "
+            "After correcting the environment, rerun the same command with --resume.",
+            writer.run_id,
+        )
         raise
 
 
@@ -780,6 +890,25 @@ if __name__ == "__main__":  # pragma: no cover
     )
     parser.add_argument("--run-id", help="Optional formal or challenger-run identifier.")
     parser.add_argument(
+        "--raw-dir",
+        type=Path,
+        help="Formal-only frozen OHLCV directory; required to prevent use of moving production data.",
+    )
+    parser.add_argument(
+        "--expected-data-cutoff",
+        help="Formal-only required last trading date in YYYY-MM-DD format.",
+    )
+    parser.add_argument(
+        "--expected-row-count",
+        type=int,
+        help="Formal-only required row count for every requested company CSV.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume an incomplete formal run after verifying its code and frozen-input contract.",
+    )
+    parser.add_argument(
         "--challenger-run-id",
         help="Required source challenger run identifier for deployment-approve.",
     )
@@ -801,9 +930,22 @@ if __name__ == "__main__":  # pragma: no cover
             parser.error("--strict is a deployment-only option.")
         if args.challenger_run_id or args.confirm_approved:
             parser.error("Challenger approval options are valid only for deployment-approve.")
-        finalized = run_formal_evaluation(symbols=args.symbols or [], run_id=args.run_id)
+        if args.raw_dir is None or args.expected_data_cutoff is None or args.expected_row_count is None:
+            parser.error(
+                "formal mode requires --raw-dir, --expected-data-cutoff, and --expected-row-count."
+            )
+        finalized = run_formal_evaluation(
+            raw_dir=args.raw_dir,
+            symbols=args.symbols or [],
+            run_id=args.run_id,
+            expected_data_cutoff=args.expected_data_cutoff,
+            expected_row_count=args.expected_row_count,
+            resume=args.resume,
+        )
         print(finalized)
     elif args.mode == "deployment-retune":
+        if args.raw_dir or args.expected_data_cutoff or args.expected_row_count or args.resume:
+            parser.error("Frozen-data and resume options are valid only for formal mode.")
         if args.strict:
             parser.error("--strict is not supported for manual challenger retuning.")
         if args.challenger_run_id or args.confirm_approved:
@@ -814,6 +956,8 @@ if __name__ == "__main__":  # pragma: no cover
         )
         print(challenger)
     elif args.mode == "deployment-approve":
+        if args.raw_dir or args.expected_data_cutoff or args.expected_row_count or args.resume:
+            parser.error("Frozen-data and resume options are valid only for formal mode.")
         if args.strict or args.run_id:
             parser.error("--strict and --run-id are not deployment-approve options.")
         if not args.challenger_run_id:
@@ -827,7 +971,16 @@ if __name__ == "__main__":  # pragma: no cover
         )
         print(manifest)
     else:
-        if args.symbols or args.run_id or args.challenger_run_id or args.confirm_approved:
+        if (
+            args.symbols
+            or args.run_id
+            or args.challenger_run_id
+            or args.confirm_approved
+            or args.raw_dir
+            or args.expected_data_cutoff
+            or args.expected_row_count
+            or args.resume
+        ):
             parser.error("Approval, symbol, and run-ID options are not deployment-refresh options.")
         mapping = refresh_deployment_all(strict=args.strict)
         print(json.dumps(mapping, indent=2, sort_keys=True))
