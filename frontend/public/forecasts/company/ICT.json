@@ -2,9 +2,9 @@
   "symbol": "ICT",
   "name": "Intl. Container Terminal Services",
   "sector": "Services",
-  "previousClose": 932.5,
-  "predictedClose": 934.02,
-  "pesoChange": 1.52,
+  "previousClose": 930.5,
+  "predictedClose": 931.95,
+  "pesoChange": 1.45,
   "pctChange": 0.16,
   "direction": "bullish",
   "model": "LSTM",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 933.44,
-    "arima": 932.72,
-    "lstm": 934.02
+    "lag": 930.8,
+    "arima": 931.87,
+    "lstm": 931.95
   },
   "ohlcv": [
     {
@@ -13049,6 +13049,14 @@
       "low": 920.0,
       "close": 932.5,
       "volume": 1321906485
+    },
+    {
+      "date": "2026-09-03",
+      "open": 925.0,
+      "high": 934.0,
+      "low": 925.0,
+      "close": 930.5,
+      "volume": 555034075
     }
   ],
   "backtestDates": [
@@ -13431,23 +13439,28 @@
     "window": 60
   },
   "productionBacktestDates": [
-    "2026-09-02"
+    "2026-09-02",
+    "2026-09-03"
   ],
   "productionBacktestActual": [
-    932.5
+    932.5,
+    930.5
   ],
   "productionBacktestByModel": {
     "Lag-Informed Regression": [
-      949.18
+      949.18,
+      933.44
     ],
     "ARIMA": [
-      943.12
+      943.12,
+      932.72
     ],
     "LSTM": [
-      947.28
+      947.28,
+      934.02
     ]
   },
-  "forecastDate": "2026-09-03",
-  "dataAsOf": "2026-09-02",
-  "inferenceAt": "2026-09-02T16:01:44+08:00"
+  "forecastDate": "2026-09-04",
+  "dataAsOf": "2026-09-03",
+  "inferenceAt": "2026-09-03T16:01:51+08:00"
 }
