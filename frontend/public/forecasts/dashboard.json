@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-03T16:01:54.411453+08:00",
-  "forecastDate": "2026-09-04",
-  "lastRunAt": "2026-09-03T08:01:48+00:00",
+  "generatedAt": "2026-09-04T16:02:01.653016+08:00",
+  "forecastDate": "2026-09-07",
+  "lastRunAt": "2026-09-04T08:01:56+00:00",
   "status": "ok",
   "totalCompanies": 15,
   "missingCompanies": [],
@@ -28,32 +28,32 @@
     }
   ],
   "marketSummary": {
-    "gainers": 3,
-    "losers": 10,
+    "gainers": 4,
+    "losers": 9,
     "unchanged": 2
   },
   "topGainer": {
     "symbol": "APX",
     "name": "Apex Mining Co., Inc.",
     "sector": "Mining and Oil",
-    "latestClose": 17.18,
-    "predictedClose": 17.27,
-    "pctChange": 0.52,
+    "latestClose": 17.2,
+    "predictedClose": 17.3,
+    "pctChange": 0.58,
     "direction": "bullish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 96.3,
-    "forecastDate": "2026-09-04"
+    "forecastDate": "2026-09-07"
   },
   "topLoser": {
     "symbol": "JFC",
     "name": "Jollibee Foods Corporation",
     "sector": "Industrial",
-    "latestClose": 154.0,
-    "predictedClose": 153.64,
-    "pctChange": -0.23,
+    "latestClose": 151.0,
+    "predictedClose": 150.61,
+    "pctChange": -0.26,
     "direction": "bearish",
     "bestModel": "LSTM",
     "confidence": 98.3,
-    "forecastDate": "2026-09-04"
+    "forecastDate": "2026-09-07"
   }
 }

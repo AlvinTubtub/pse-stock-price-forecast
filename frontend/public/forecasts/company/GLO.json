@@ -2,8 +2,8 @@
   "symbol": "GLO",
   "name": "Globe Telecom, Inc.",
   "sector": "Services",
-  "previousClose": 1583.0,
-  "predictedClose": 1582.83,
+  "previousClose": 1610.0,
+  "predictedClose": 1609.83,
   "pesoChange": -0.17,
   "pctChange": -0.01,
   "direction": "bearish",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 1582.83,
-    "arima": 1582.65,
-    "lstm": 1583.0
+    "lag": 1609.83,
+    "arima": 1609.67,
+    "lstm": 1610.7
   },
   "ohlcv": [
     {
@@ -13057,6 +13057,14 @@
       "low": 1556.0,
       "close": 1583.0,
       "volume": 181368295
+    },
+    {
+      "date": "2026-09-04",
+      "open": 1591.0,
+      "high": 1615.0,
+      "low": 1591.0,
+      "close": 1610.0,
+      "volume": 73374255
     }
   ],
   "backtestDates": [
@@ -13440,27 +13448,32 @@
   },
   "productionBacktestDates": [
     "2026-09-02",
-    "2026-09-03"
+    "2026-09-03",
+    "2026-09-04"
   ],
   "productionBacktestActual": [
     1592.0,
-    1583.0
+    1583.0,
+    1610.0
   ],
   "productionBacktestByModel": {
     "Lag-Informed Regression": [
       1600.83,
-      1591.83
+      1591.83,
+      1582.83
     ],
     "ARIMA": [
       1600.66,
-      1591.65
+      1591.65,
+      1582.65
     ],
     "LSTM": [
       1600.63,
-      1591.85
+      1591.85,
+      1583.0
     ]
   },
-  "forecastDate": "2026-09-04",
-  "dataAsOf": "2026-09-03",
-  "inferenceAt": "2026-09-03T16:01:51+08:00"
+  "forecastDate": "2026-09-07",
+  "dataAsOf": "2026-09-04",
+  "inferenceAt": "2026-09-04T16:01:59+08:00"
 }

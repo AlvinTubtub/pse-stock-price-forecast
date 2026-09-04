@@ -2,10 +2,10 @@
   "symbol": "APX",
   "name": "Apex Mining Co., Inc.",
   "sector": "Mining and Oil",
-  "previousClose": 17.18,
-  "predictedClose": 17.27,
-  "pesoChange": 0.09,
-  "pctChange": 0.52,
+  "previousClose": 17.2,
+  "predictedClose": 17.3,
+  "pesoChange": 0.1,
+  "pctChange": 0.58,
   "direction": "bullish",
   "model": "Lag-Informed Regression",
   "confidence": 96.3,
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 17.27,
-    "arima": 17.23,
-    "lstm": 17.26
+    "lag": 17.3,
+    "arima": 17.13,
+    "lstm": 17.24
   },
   "ohlcv": [
     {
@@ -13057,6 +13057,14 @@
       "low": 16.04,
       "close": 17.18,
       "volume": 232966636
+    },
+    {
+      "date": "2026-09-04",
+      "open": 17.5,
+      "high": 17.94,
+      "low": 17.12,
+      "close": 17.2,
+      "volume": 228212984
     }
   ],
   "backtestDates": [
@@ -13440,27 +13448,32 @@
   },
   "productionBacktestDates": [
     "2026-09-02",
-    "2026-09-03"
+    "2026-09-03",
+    "2026-09-04"
   ],
   "productionBacktestActual": [
     16.0,
-    17.18
+    17.18,
+    17.2
   ],
   "productionBacktestByModel": {
     "Lag-Informed Regression": [
       15.92,
-      16.09
+      16.09,
+      17.27
     ],
     "ARIMA": [
       15.84,
-      16.02
+      16.02,
+      17.23
     ],
     "LSTM": [
       15.85,
-      16.03
+      16.03,
+      17.26
     ]
   },
-  "forecastDate": "2026-09-04",
-  "dataAsOf": "2026-09-03",
-  "inferenceAt": "2026-09-03T16:01:51+08:00"
+  "forecastDate": "2026-09-07",
+  "dataAsOf": "2026-09-04",
+  "inferenceAt": "2026-09-04T16:01:59+08:00"
 }

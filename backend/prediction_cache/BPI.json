@@ -27,9 +27,9 @@
     }
   },
   "next_close": {
-    "lag": 104.83,
-    "arima": 104.83,
-    "lstm": 104.68
+    "lag": 105.33,
+    "arima": 105.34,
+    "lstm": 105.21
   },
   "deployment_backtest": {
     "schema_version": 1,
@@ -1509,9 +1509,9 @@
     }
   },
   "inference_metadata": {
-    "data_as_of": "2026-09-03",
-    "forecast_for": "2026-09-04",
-    "inference_at": "2026-09-03T16:01:51+08:00",
+    "data_as_of": "2026-09-04",
+    "forecast_for": "2026-09-07",
+    "inference_at": "2026-09-04T16:01:59+08:00",
     "models_retrained": false,
     "model_source": "weekly_persisted_artifacts"
   }

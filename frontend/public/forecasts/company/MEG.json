@@ -2,8 +2,8 @@
   "symbol": "MEG",
   "name": "Megaworld Corporation",
   "sector": "Property",
-  "previousClose": 2.23,
-  "predictedClose": 2.23,
+  "previousClose": 2.25,
+  "predictedClose": 2.25,
   "pesoChange": 0.0,
   "pctChange": 0.0,
   "direction": "bullish",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 2.23,
-    "arima": 2.23,
-    "lstm": 2.23
+    "lag": 2.25,
+    "arima": 2.25,
+    "lstm": 2.25
   },
   "ohlcv": [
     {
@@ -13057,6 +13057,14 @@
       "low": 2.22,
       "close": 2.23,
       "volume": 3150800
+    },
+    {
+      "date": "2026-09-04",
+      "open": 2.24,
+      "high": 2.26,
+      "low": 2.23,
+      "close": 2.25,
+      "volume": 1907410
     }
   ],
   "backtestDates": [
@@ -13440,27 +13448,32 @@
   },
   "productionBacktestDates": [
     "2026-09-02",
-    "2026-09-03"
+    "2026-09-03",
+    "2026-09-04"
   ],
   "productionBacktestActual": [
     2.23,
-    2.23
+    2.23,
+    2.25
   ],
   "productionBacktestByModel": {
     "Lag-Informed Regression": [
       2.3,
+      2.23,
       2.23
     ],
     "ARIMA": [
       2.3,
+      2.23,
       2.23
     ],
     "LSTM": [
       2.3,
+      2.23,
       2.23
     ]
   },
-  "forecastDate": "2026-09-04",
-  "dataAsOf": "2026-09-03",
-  "inferenceAt": "2026-09-03T16:01:51+08:00"
+  "forecastDate": "2026-09-07",
+  "dataAsOf": "2026-09-04",
+  "inferenceAt": "2026-09-04T16:01:59+08:00"
 }
