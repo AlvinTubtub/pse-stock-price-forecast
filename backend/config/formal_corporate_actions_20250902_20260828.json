@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "review_status": "complete",
+  "reviewed_at": "2026-09-04",
+  "review_period": {
+    "start_date": "2025-09-02",
+    "end_date": "2026-08-28"
+  },
+  "reviewed_symbols": [
+    "ALI",
+    "APX",
+    "BPI",
+    "GLO",
+    "ICT",
+    "JFC",
+    "MBT",
+    "MEG",
+    "MER",
+    "NIKL",
+    "PGOLD",
+    "SCC",
+    "SECB",
+    "SHLPH",
+    "SMPH"
+  ],
+  "review_scope": [
+    "common-share cash and stock dividend ex-dates",
+    "common-share rights ex-dates",
+    "effective stock-split dates"
+  ],
+  "review_method": "Reviewed each issuer's PSE EDGE Dividends and Rights page for the formal holdout period. Only the listed common security used by the price series was included; preferred-share distributions were excluded. Each Rights tab returned no data. PSE EDGE and issuer disclosure searches found no effective common-share stock split in the review period.",
+  "source_template": "https://edge.pse.com.ph/companyPage/dividends_and_rights_form.do?cmpy_id={pse_company_id}",
+  "events": [
+    {
+      "symbol": "ALI",
+      "event_date": "2025-11-11",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 180, circular C07558-2025"
+    },
+    {
+      "symbol": "ALI",
+      "event_date": "2026-03-05",
+      "event_type": "regular_and_special_cash_dividend_ex_date",
+      "source": "PSE EDGE company 180, circulars C01069-2026 and C01068-2026"
+    },
+    {
+      "symbol": "APX",
+      "event_date": "2026-04-14",
+      "event_type": "combined_cash_dividend_ex_date",
+      "source": "PSE EDGE company 178, circulars C01809-2026 and C01808-2026"
+    },
+    {
+      "symbol": "BPI",
+      "event_date": "2025-12-02",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 234, circular C08209-2025"
+    },
+    {
+      "symbol": "BPI",
+      "event_date": "2026-06-03",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 234, circular C03742-2026"
+    },
+    {
+      "symbol": "GLO",
+      "event_date": "2025-11-19",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 69, circular C07779-2025"
+    },
+    {
+      "symbol": "GLO",
+      "event_date": "2026-02-16",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 69, circular C00681-2026"
+    },
+    {
+      "symbol": "GLO",
+      "event_date": "2026-05-22",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 69, circular C03384-2026"
+    },
+    {
+      "symbol": "GLO",
+      "event_date": "2026-08-17",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 69, circular C05886-2026"
+    },
+    {
+      "symbol": "ICT",
+      "event_date": "2026-03-18",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 83, circular C01420-2026"
+    },
+    {
+      "symbol": "JFC",
+      "event_date": "2025-11-27",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 86, circular C08088-2025"
+    },
+    {
+      "symbol": "JFC",
+      "event_date": "2026-05-04",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 86, circular C02611-2026"
+    },
+    {
+      "symbol": "MBT",
+      "event_date": "2025-09-05",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 128, circular C06213-2025"
+    },
+    {
+      "symbol": "MBT",
+      "event_date": "2026-03-06",
+      "event_type": "regular_and_special_cash_dividend_ex_date",
+      "source": "PSE EDGE company 128, circulars C01011-2026 and C01010-2026"
+    },
+    {
+      "symbol": "MEG",
+      "event_date": "2026-08-26",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 127, circular C06204-2026"
+    },
+    {
+      "symbol": "MER",
+      "event_date": "2026-03-25",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 118, circular C01178-2026"
+    },
+    {
+      "symbol": "MER",
+      "event_date": "2026-08-27",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 118, circular C05711-2026"
+    },
+    {
+      "symbol": "NIKL",
+      "event_date": "2025-11-27",
+      "event_type": "special_cash_dividend_ex_date",
+      "source": "PSE EDGE company 625, circular C07944-2025"
+    },
+    {
+      "symbol": "NIKL",
+      "event_date": "2026-03-11",
+      "event_type": "regular_cash_dividend_ex_date",
+      "source": "PSE EDGE company 625, circular C01194-2026"
+    },
+    {
+      "symbol": "PGOLD",
+      "event_date": "2026-04-16",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 629, circular C02316-2026"
+    },
+    {
+      "symbol": "PGOLD",
+      "event_date": "2026-08-14",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 629, circular C02317-2026"
+    },
+    {
+      "symbol": "SCC",
+      "event_date": "2025-11-03",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 157, circular C07357-2025"
+    },
+    {
+      "symbol": "SECB",
+      "event_date": "2025-11-11",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 32, circular C07539-2025"
+    },
+    {
+      "symbol": "SECB",
+      "event_date": "2026-04-22",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 32, circular C02378-2026"
+    },
+    {
+      "symbol": "SHLPH",
+      "event_date": "2026-04-10",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 663, circular C02042-2026"
+    },
+    {
+      "symbol": "SMPH",
+      "event_date": "2026-05-12",
+      "event_type": "cash_dividend_ex_date",
+      "source": "PSE EDGE company 112, circular C02972-2026"
+    }
+  ]
+}

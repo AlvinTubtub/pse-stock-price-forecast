@@ -105,6 +105,27 @@ def test_fold_scalers_exclude_extreme_validation_values(monkeypatch):
     assert all(mean.max() < 1_000_000.0 for mean in fitted_means)
 
 
+def test_expanded_lasso_grid_and_complete_selection_evidence(monkeypatch):
+    assert lag.LASSO_ALPHA_GRID[0] == pytest.approx(1e-4)
+    assert lag.LASSO_ALPHA_GRID[-1] == pytest.approx(1e3)
+    assert len(lag.LASSO_ALPHA_GRID) == 36
+    monkeypatch.setattr(lag, "select_pacf_return_lags", lambda _returns: [1, 2])
+    selected, evidence = lag._select_alpha_with_evidence(lag._usable_features(_ohlcv()))
+    assert selected == evidence["selected_alpha"]
+    assert evidence["selected_at_boundary"] is False
+    assert len(evidence["alpha_results"]) == len(lag.LASSO_ALPHA_GRID)
+    assert all(item["fold_count"] == 5 for item in evidence["alpha_results"])
+
+
+def test_lasso_boundary_winner_fails_instead_of_finalizing(monkeypatch):
+    features = lag._usable_features(_ohlcv())
+    monkeypatch.setattr(lag, "LASSO_ALPHA_GRID", (1e-4, 1.0, 1e3))
+    monkeypatch.setattr(lag, "select_pacf_return_lags", lambda _returns: [1, 2])
+    monkeypatch.setattr(lag.np, "argmin", lambda _scores: 0)
+    with pytest.raises(RuntimeError, match="grid boundary"):
+        lag._select_alpha_with_evidence(features)
+
+
 def test_formal_regression_uses_exact_plan_dates_and_development_only(monkeypatch):
     df = _ohlcv()
     plan = create_formal_evaluation_plan(df, "BPI")
