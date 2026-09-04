@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import CompanyGrid from "@/components/CompanyGrid";
 import { getCompanies } from "@/lib/data";
 
@@ -12,7 +13,9 @@ export default async function CompaniesPage() {
           {companies.length} PSE-listed companies with automated next-session forecasts.
         </p>
       </div>
-      <CompanyGrid companies={companies} />
+      <Suspense fallback={<div className="text-sm text-slate-400">Loading companies...</div>}>
+        <CompanyGrid companies={companies} />
+      </Suspense>
     </div>
   );
 }

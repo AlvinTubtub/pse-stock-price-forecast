@@ -21,7 +21,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const [companies, latest] = await Promise.all([getCompanies(), getLatest()]);
 
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="dark scroll-smooth" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

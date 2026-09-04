@@ -24,6 +24,7 @@ export interface NextDayPredictionChartProps {
   };
   forecastDate?: string;
   dataAsOf?: string | null;
+  hideModelBreakdown?: boolean;
 }
 
 function formatShortDate(dateStr: string): string {
@@ -47,6 +48,7 @@ export default function NextDayPredictionChart({
   nextClose,
   forecastDate,
   dataAsOf,
+  hideModelBreakdown = false,
 }: NextDayPredictionChartProps) {
   const [windowSize, setWindowSize] = useState<number>(25);
 
@@ -365,69 +367,73 @@ export default function NextDayPredictionChart({
         </ResponsiveContainer>
       </div>
 
-      {/* 3. Prediction Values Quick Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-        <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 text-center">
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider">Latest Actual Close</p>
-          <p className="text-sm sm:text-base font-bold text-white mt-0.5">
-            {formatPeso(previousClose)}
-          </p>
-          <p className="text-[10px] text-slate-500">{dataAsOf ? `as of ${formatDate(dataAsOf)}` : ""}</p>
-        </div>
-        <div className="bg-dark-bg border border-[#a855f7]/30 rounded-lg p-2.5 text-center">
-          <p className="text-[11px] text-[#c084fc] font-medium uppercase tracking-wider">
-            ARIMA Forecast
-          </p>
-          <p className="text-sm sm:text-base font-bold text-[#c084fc] mt-0.5">
-            {nextClose.arima !== undefined ? formatPeso(nextClose.arima) : "--"}
-          </p>
-          <p className="text-[10px] text-slate-500">
-            {nextClose.arima !== undefined && previousClose
-              ? `${nextClose.arima >= previousClose ? "+" : ""}${((nextClose.arima - previousClose) / previousClose * 100).toFixed(2)}%`
-              : ""}
-          </p>
-        </div>
-        <div className="bg-dark-bg border border-[#38bdf8]/30 rounded-lg p-2.5 text-center">
-          <p className="text-[11px] text-[#38bdf8] font-medium uppercase tracking-wider">
-            Lag-Reg Forecast
-          </p>
-          <p className="text-sm sm:text-base font-bold text-[#38bdf8] mt-0.5">
-            {nextClose.lag !== undefined ? formatPeso(nextClose.lag) : "--"}
-          </p>
-          <p className="text-[10px] text-slate-500">
-            {nextClose.lag !== undefined && previousClose
-              ? `${nextClose.lag >= previousClose ? "+" : ""}${((nextClose.lag - previousClose) / previousClose * 100).toFixed(2)}%`
-              : ""}
-          </p>
-        </div>
-        <div className="bg-dark-bg border border-[#f97316]/30 rounded-lg p-2.5 text-center">
-          <p className="text-[11px] text-[#fb923c] font-medium uppercase tracking-wider">
-            LSTM Forecast
-          </p>
-          <p className="text-sm sm:text-base font-bold text-[#fb923c] mt-0.5">
-            {nextClose.lstm !== undefined ? formatPeso(nextClose.lstm) : "--"}
-          </p>
-          <p className="text-[10px] text-slate-500">
-            {nextClose.lstm !== undefined && previousClose
-              ? `${nextClose.lstm >= previousClose ? "+" : ""}${((nextClose.lstm - previousClose) / previousClose * 100).toFixed(2)}%`
-              : ""}
-          </p>
-        </div>
-      </div>
+      {/* 3. Prediction Values Quick Cards & Notes (Hidden in Beginner mode) */}
+      {!hideModelBreakdown && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+            <div className="bg-dark-bg border border-dark-border rounded-lg p-2.5 text-center">
+              <p className="text-[11px] text-slate-400 uppercase tracking-wider">Latest Actual Close</p>
+              <p className="text-sm sm:text-base font-bold text-white mt-0.5">
+                {formatPeso(previousClose)}
+              </p>
+              <p className="text-[10px] text-slate-500">{dataAsOf ? `as of ${formatDate(dataAsOf)}` : ""}</p>
+            </div>
+            <div className="bg-dark-bg border border-[#a855f7]/30 rounded-lg p-2.5 text-center">
+              <p className="text-[11px] text-[#c084fc] font-medium uppercase tracking-wider">
+                ARIMA Forecast
+              </p>
+              <p className="text-sm sm:text-base font-bold text-[#c084fc] mt-0.5">
+                {nextClose.arima !== undefined ? formatPeso(nextClose.arima) : "--"}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                {nextClose.arima !== undefined && previousClose
+                  ? `${nextClose.arima >= previousClose ? "+" : ""}${((nextClose.arima - previousClose) / previousClose * 100).toFixed(2)}%`
+                  : ""}
+              </p>
+            </div>
+            <div className="bg-dark-bg border border-[#38bdf8]/30 rounded-lg p-2.5 text-center">
+              <p className="text-[11px] text-[#38bdf8] font-medium uppercase tracking-wider">
+                Lag-Reg Forecast
+              </p>
+              <p className="text-sm sm:text-base font-bold text-[#38bdf8] mt-0.5">
+                {nextClose.lag !== undefined ? formatPeso(nextClose.lag) : "--"}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                {nextClose.lag !== undefined && previousClose
+                  ? `${nextClose.lag >= previousClose ? "+" : ""}${((nextClose.lag - previousClose) / previousClose * 100).toFixed(2)}%`
+                  : ""}
+              </p>
+            </div>
+            <div className="bg-dark-bg border border-[#f97316]/30 rounded-lg p-2.5 text-center">
+              <p className="text-[11px] text-[#fb923c] font-medium uppercase tracking-wider">
+                LSTM Forecast
+              </p>
+              <p className="text-sm sm:text-base font-bold text-[#fb923c] mt-0.5">
+                {nextClose.lstm !== undefined ? formatPeso(nextClose.lstm) : "--"}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                {nextClose.lstm !== undefined && previousClose
+                  ? `${nextClose.lstm >= previousClose ? "+" : ""}${((nextClose.lstm - previousClose) / previousClose * 100).toFixed(2)}%`
+                  : ""}
+              </p>
+            </div>
+          </div>
 
-      {/* 4. Notes and Methodology Footer */}
-      <div className="pt-3 border-t border-dark-border/60 text-xs text-slate-400 space-y-1 leading-relaxed">
-        <p>
-          <strong className="text-slate-300 font-medium">Notes: </strong>
-          Broken lines represent next-day predictions for{" "}
-          <strong className="text-slate-300">{formatDate(forecastDate)}</strong> (the next trading
-          session).
-        </p>
-        <p className="text-[11px] text-slate-500">
-          ARIMA = AutoRegressive Integrated Moving Average &middot; Lag-Informed Regression =
-          Lag-Informed Regression &middot; LSTM = Long Short-Term Memory.
-        </p>
-      </div>
+          {/* 4. Notes and Methodology Footer */}
+          <div className="pt-3 border-t border-dark-border/60 text-xs text-slate-400 space-y-1 leading-relaxed">
+            <p>
+              <strong className="text-slate-300 font-medium">Notes: </strong>
+              Broken lines represent next-day predictions for{" "}
+              <strong className="text-slate-300">{formatDate(forecastDate)}</strong> (the next trading
+              session).
+            </p>
+            <p className="text-[11px] text-slate-500">
+              ARIMA = AutoRegressive Integrated Moving Average &middot; Lag-Informed Regression =
+              Lag-Informed Regression &middot; LSTM = Long Short-Term Memory.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }

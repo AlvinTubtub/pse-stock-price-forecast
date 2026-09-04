@@ -130,6 +130,50 @@ html:not(.dark) .bg-red-600 {
   color: #ffffff !important;
 }
 
+/* Ensure white & light text on dark photo surfaces, hero banners, and media cards in light mode */
+html:not(.dark) .dark-surface .text-white,
+html:not(.dark) .dark-surface h1,
+html:not(.dark) .dark-surface h2,
+html:not(.dark) .dark-surface h3,
+html:not(.dark) .dark-surface h4,
+html:not(.dark) .dark-surface .force-text-white {
+  color: #ffffff !important;
+}
+
+html:not(.dark) .dark-surface .text-slate-100 {
+  color: #f1f5f9 !important;
+}
+
+html:not(.dark) .dark-surface .text-slate-200 {
+  color: #e2e8f0 !important;
+}
+
+html:not(.dark) .dark-surface .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+html:not(.dark) .dark-surface .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html:not(.dark) .dark-surface .text-brand-300,
+html:not(.dark) .dark-surface .text-blue-300 {
+  color: #93c5fd !important;
+}
+
+html:not(.dark) .dark-surface .text-brand-400,
+html:not(.dark) .dark-surface .text-blue-400 {
+  color: #60a5fa !important;
+}
+
+html:not(.dark) .dark-surface .text-blue-200 {
+  color: #bfdbfe !important;
+}
+
+html:not(.dark) .dark-surface svg {
+  color: inherit;
+}
+
 html:not(.dark) .bg-white\/5 {
   background-color: rgba(15, 23, 42, 0.04);
 }
