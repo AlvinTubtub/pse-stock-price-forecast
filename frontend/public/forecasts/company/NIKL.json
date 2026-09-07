@@ -2,8 +2,8 @@
   "symbol": "NIKL",
   "name": "Nickel Asia Corporation",
   "sector": "Mining and Oil",
-  "previousClose": 4.6,
-  "predictedClose": 4.59,
+  "previousClose": 4.59,
+  "predictedClose": 4.58,
   "pesoChange": -0.01,
   "pctChange": -0.22,
   "direction": "bearish",
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 4.6,
-    "arima": 4.59,
-    "lstm": 4.61
+    "lag": 4.59,
+    "arima": 4.58,
+    "lstm": 4.6
   },
   "ohlcv": [
     {
@@ -13065,6 +13065,14 @@
       "low": 4.51,
       "close": 4.6,
       "volume": 45586910
+    },
+    {
+      "date": "2026-09-07",
+      "open": 4.6,
+      "high": 4.66,
+      "low": 4.48,
+      "close": 4.59,
+      "volume": 17310110
     }
   ],
   "backtestDates": [
@@ -13449,31 +13457,36 @@
   "productionBacktestDates": [
     "2026-09-02",
     "2026-09-03",
-    "2026-09-04"
+    "2026-09-04",
+    "2026-09-07"
   ],
   "productionBacktestActual": [
     4.0,
     4.55,
-    4.6
+    4.6,
+    4.59
   ],
   "productionBacktestByModel": {
     "Lag-Informed Regression": [
       4.11,
       4.0,
-      4.55
+      4.55,
+      4.6
     ],
     "ARIMA": [
       4.11,
       4.01,
-      4.54
+      4.54,
+      4.59
     ],
     "LSTM": [
       4.11,
       4.0,
-      4.55
+      4.55,
+      4.61
     ]
   },
-  "forecastDate": "2026-09-07",
-  "dataAsOf": "2026-09-04",
-  "inferenceAt": "2026-09-04T16:01:59+08:00"
+  "forecastDate": "2026-09-08",
+  "dataAsOf": "2026-09-07",
+  "inferenceAt": "2026-09-07T18:29:15+08:00"
 }

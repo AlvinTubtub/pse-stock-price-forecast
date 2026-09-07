@@ -3,9 +3,9 @@
   "name": "Jollibee Foods Corporation",
   "sector": "Industrial",
   "previousClose": 151.0,
-  "predictedClose": 150.61,
-  "pesoChange": -0.39,
-  "pctChange": -0.26,
+  "predictedClose": 150.66,
+  "pesoChange": -0.34,
+  "pctChange": -0.23,
   "direction": "bearish",
   "model": "LSTM",
   "confidence": 98.3,
@@ -39,7 +39,7 @@
   "nextClose": {
     "lag": 150.97,
     "arima": 151.36,
-    "lstm": 150.61
+    "lstm": 150.66
   },
   "ohlcv": [
     {
@@ -13065,6 +13065,14 @@
       "low": 151.0,
       "close": 151.0,
       "volume": 66074777
+    },
+    {
+      "date": "2026-09-07",
+      "open": 151.0,
+      "high": 151.3,
+      "low": 148.5,
+      "close": 151.0,
+      "volume": 73609934
     }
   ],
   "backtestDates": [
@@ -13449,31 +13457,36 @@
   "productionBacktestDates": [
     "2026-09-02",
     "2026-09-03",
-    "2026-09-04"
+    "2026-09-04",
+    "2026-09-07"
   ],
   "productionBacktestActual": [
     152.0,
     154.0,
+    151.0,
     151.0
   ],
   "productionBacktestByModel": {
     "Lag-Informed Regression": [
       152.77,
       151.97,
-      153.97
+      153.97,
+      150.97
     ],
     "ARIMA": [
       153.15,
       152.35,
-      154.34
+      154.34,
+      151.36
     ],
     "LSTM": [
       152.35,
       151.57,
-      153.64
+      153.64,
+      150.61
     ]
   },
-  "forecastDate": "2026-09-07",
-  "dataAsOf": "2026-09-04",
-  "inferenceAt": "2026-09-04T16:01:59+08:00"
+  "forecastDate": "2026-09-08",
+  "dataAsOf": "2026-09-07",
+  "inferenceAt": "2026-09-07T18:29:15+08:00"
 }
