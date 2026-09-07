@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -411,6 +412,7 @@ class FormalRunWriter:
         companies: list[str],
         *,
         git_dirty: bool | None = None,
+        corporate_action_registry: dict[str, object] | None = None,
     ) -> None:
         self._assert_mutable()
         self._write("methodology_manifest.json", {
@@ -425,6 +427,17 @@ class FormalRunWriter:
             "research_model_set": list(FORMAL_MODEL_KEYS),
             "formal_split": {"development_ratio": .85, "holdout_ratio": .15, "split_basis": "target_date"},
             "artifact_policy": {"formal_immutable": True, "deployment_separate": True},
+            "corporate_action_policy": {
+                "policy_id": "raw_close_retain_and_flag_v1",
+                "target_series": "raw_quoted_close",
+                "primary_analysis": "retain_all_validated_observations",
+                "automatic_outlier_or_error_exclusion": False,
+                "verified_event_dates": "flagged_by_target_date",
+                "sensitivity_analysis": "exclude_verified_event_target_dates_only",
+                "registry": corporate_action_registry or {
+                    "status": "not_supplied", "path": None, "sha256": None
+                },
+            },
             "dependencies": {name: self._version(name) for name in ("numpy", "pandas", "scipy", "statsmodels", "scikit-learn", "torch")},
         })
 
@@ -463,6 +476,9 @@ class FormalRunWriter:
             except Exception as exc:
                 raise FormalRunIntegrityError(f"{symbol}: invalid formal holdout evidence: {exc}") from exc
             self._validate_arima_diagnostics(symbol, company_dir / "diagnostics.json")
+            self._validate_lstm_diagnostics(symbol, company_dir / "diagnostics.json")
+            self._validate_lag_regression_diagnostics(symbol, company_dir / "diagnostics.json")
+            self._validate_corporate_action_diagnostics(symbol, company_dir / "diagnostics.json")
         evidence_files = [path for path in self.path.rglob("*") if path.is_file() and path.name != "finalized.json"]
         self._write("finalized.json", {
             "run_id": self.run_id,
@@ -471,6 +487,97 @@ class FormalRunWriter:
             "artifact_sha256": {str(path.relative_to(self.path)): file_sha256(path) for path in sorted(evidence_files)},
         })
         return self.finalized_path
+
+    @staticmethod
+    def _validate_lstm_diagnostics(symbol: str, path: Path) -> None:
+        try:
+            metadata = json.loads(path.read_text())["lstm"]["training_metadata"]
+            configurations = metadata["configuration_results"]
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise FormalRunIntegrityError(f"{symbol}: LSTM grid evidence is missing.") from exc
+        if metadata.get("configuration_count") != 48 or len(configurations) != 48:
+            raise FormalRunIntegrityError(f"{symbol}: LSTM evidence must contain exactly 48 configurations.")
+        if metadata.get("expected_tuning_fit_count") != 720 or metadata.get("tuning_seeds") != [42, 123, 2026]:
+            raise FormalRunIntegrityError(f"{symbol}: LSTM tuning fit/seed declaration is invalid.")
+        identities = []
+        for item in configurations:
+            config = item.get("configuration", {})
+            identity = (
+                config.get("lookback"), config.get("hidden_size"),
+                config.get("learning_rate"), config.get("batch_size"),
+            )
+            identities.append(identity)
+            folds = item.get("fold_results")
+            if item.get("status") != "complete" or not isinstance(folds, list) or len(folds) != 5:
+                raise FormalRunIntegrityError(f"{symbol}: incomplete LSTM configuration evidence for {identity}.")
+            if not math.isfinite(float(item.get("mean_validation_rmse", float("nan")))):
+                raise FormalRunIntegrityError(f"{symbol}: LSTM configuration mean RMSE is invalid for {identity}.")
+            for expected_fold, fold in enumerate(folds, start=1):
+                seed_results = fold.get("seed_results")
+                validation_dates = fold.get("validation_target_dates")
+                if not isinstance(seed_results, list) or [row.get("seed") for row in seed_results] != [42, 123, 2026]:
+                    raise FormalRunIntegrityError(f"{symbol}: incomplete LSTM seed evidence for {identity}.")
+                if (
+                    fold.get("fold_number") != expected_fold
+                    or not isinstance(validation_dates, list)
+                    or not validation_dates
+                    or str(validation_dates[0]) != str(fold.get("validation_target_start"))
+                    or str(validation_dates[-1]) != str(fold.get("validation_target_end"))
+                ):
+                    raise FormalRunIntegrityError(f"{symbol}: incomplete LSTM fold-date evidence for {identity}.")
+                for row in seed_results:
+                    if not math.isfinite(float(row.get("rmse", float("nan")))) or int(row.get("best_epoch", 0)) < 1:
+                        raise FormalRunIntegrityError(f"{symbol}: invalid LSTM RMSE/epoch evidence for {identity}.")
+        expected_identities = set(itertools.product(
+            (5, 10, 20, 30), (25, 50, 100), (.01, .001), (16, 32)
+        ))
+        if set(identities) != expected_identities:
+            raise FormalRunIntegrityError(f"{symbol}: LSTM evidence does not match the exact approved grid.")
+
+    @staticmethod
+    def _validate_lag_regression_diagnostics(symbol: str, path: Path) -> None:
+        try:
+            metadata = json.loads(path.read_text())["lag_reg"]["tuning_metadata"]
+            grid = metadata["grid"]
+            alpha_results = metadata["alpha_results"]
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise FormalRunIntegrityError(f"{symbol}: LASSO tuning evidence is missing.") from exc
+        if len(grid) != 36 or len(alpha_results) != 36:
+            raise FormalRunIntegrityError(f"{symbol}: LASSO grid evidence is incomplete.")
+        if (
+            min(grid) > 1e-4
+            or max(grid) < 1e3
+            or len(set(grid)) != 36
+            or grid != sorted(grid)
+            or metadata.get("selected_at_boundary") is not False
+        ):
+            raise FormalRunIntegrityError(f"{symbol}: LASSO grid is not expanded or has a boundary winner.")
+        for alpha, result in zip(grid, alpha_results):
+            if result.get("alpha") != alpha or result.get("fold_count") != 5:
+                raise FormalRunIntegrityError(f"{symbol}: LASSO per-alpha fold evidence is incomplete.")
+        selected_index = metadata.get("selected_index")
+        if (
+            not isinstance(selected_index, int)
+            or selected_index < 0
+            or selected_index >= len(alpha_results)
+            or alpha_results[selected_index].get("all_folds_converged") is not True
+        ):
+            raise FormalRunIntegrityError(f"{symbol}: selected LASSO alpha lacks confirmed fold convergence.")
+
+    @staticmethod
+    def _validate_corporate_action_diagnostics(symbol: str, path: Path) -> None:
+        try:
+            evidence = json.loads(path.read_text())["corporate_actions"]
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise FormalRunIntegrityError(f"{symbol}: corporate-action policy evidence is missing.") from exc
+        if (
+            evidence.get("policy_id") != "raw_close_retain_and_flag_v1"
+            or evidence.get("primary_rows_excluded") != 0
+            or evidence.get("automatic_outlier_or_error_exclusion") is not False
+            or not isinstance(evidence.get("verified_events"), list)
+            or not isinstance(evidence.get("sensitivity_analysis"), dict)
+        ):
+            raise FormalRunIntegrityError(f"{symbol}: corporate-action policy evidence is invalid.")
 
     def _read_plans(self) -> dict[str, FormalEvaluationPlan]:
         manifest = self.path / "split_manifest.json"

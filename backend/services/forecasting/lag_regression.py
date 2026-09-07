@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass, field
 
 import joblib
@@ -9,6 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from sklearn.linear_model import Lasso
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.preprocessing import StandardScaler
 
 from services.evaluation import compute_metrics
@@ -24,7 +26,9 @@ except Exception:  # pragma: no cover - optional dependency may be incompatible
 log = logging.getLogger(__name__)
 MAX_PACF_LAG = 20
 PACF_FALLBACK_LAGS = (1, 2, 3, 5)
-LASSO_ALPHA_GRID = tuple(np.logspace(-4, 1, 30))
+# Predeclared before the corrected rerun.  The earlier 10^-4..10^1 grid
+# produced an upper-bound winner for GLO, so its upper end is expanded.
+LASSO_ALPHA_GRID = tuple(np.logspace(-4, 3, 36))
 
 
 @dataclass
@@ -54,6 +58,7 @@ class FormalLagRegressionResult:
     metrics: dict[str, float]
     forecasts: pd.DataFrame
     backtest: list[float]
+    tuning_metadata: dict = field(default_factory=dict)
 
 
 def select_pacf_return_lags(return_series: pd.Series, max_lag: int = MAX_PACF_LAG, alpha: float = 0.05) -> list[int]:
@@ -86,28 +91,80 @@ def _usable_features(df: pd.DataFrame) -> pd.DataFrame:
     return features.dropna(subset=required).copy()
 
 
-def _select_alpha(features: pd.DataFrame) -> float:
-    """Manual expanding CV: PACF and scaler are fit inside each fold only."""
+def _select_alpha_with_evidence(features: pd.DataFrame) -> tuple[float, dict]:
+    """Run leakage-safe CV and retain full evidence for the expanded grid."""
     if len(features) < 20:
         raise ValueError("At least 20 usable development rows are required for regression CV.")
     splitter = expanding_window_splitter(len(features))
     scores = np.full(len(LASSO_ALPHA_GRID), np.inf, dtype=float)
+    alpha_results: list[dict] = []
     for alpha_index, alpha in enumerate(LASSO_ALPHA_GRID):
         fold_rmses: list[float] = []
+        fold_results: list[dict] = []
         for train_idx, validation_idx in splitter.split(features):
             fold_train, fold_validation = features.iloc[train_idx], features.iloc[validation_idx]
             columns = _candidate_columns(select_pacf_return_lags(fold_train["daily_return"]))
             scaler = StandardScaler().fit(fold_train[columns])
             model = Lasso(alpha=float(alpha), max_iter=50_000, tol=1e-3, random_state=42)
-            model.fit(scaler.transform(fold_train[columns]), fold_train["target_delta"].to_numpy(dtype=float))
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", ConvergenceWarning)
+                model.fit(scaler.transform(fold_train[columns]), fold_train["target_delta"].to_numpy(dtype=float))
             predicted_delta = model.predict(scaler.transform(fold_validation[columns]))
             errors = fold_validation["target_delta"].to_numpy(dtype=float) - predicted_delta
-            fold_rmses.append(float(np.sqrt(np.mean(errors**2))))
-        if fold_rmses:
+            rmse = float(np.sqrt(np.mean(errors**2)))
+            converged = not any(issubclass(item.category, ConvergenceWarning) for item in caught)
+            fold_rmses.append(rmse)
+            fold_results.append({
+                "fold_number": len(fold_results) + 1,
+                "rmse": rmse,
+                "converged": converged,
+                "iterations": int(model.n_iter_),
+            })
+        if fold_rmses and all(item["converged"] for item in fold_results):
             scores[alpha_index] = float(np.mean(fold_rmses))
+        alpha_results.append({
+            "alpha": float(alpha),
+            "fold_rmse": fold_rmses,
+            "fold_results": fold_results,
+            "mean_validation_rmse": float(scores[alpha_index]),
+            "fold_count": len(fold_rmses),
+            "all_folds_converged": all(item["converged"] for item in fold_results),
+        })
     if not np.isfinite(scores).any():
         raise RuntimeError("No LASSO alpha completed all regression CV folds.")
-    return float(LASSO_ALPHA_GRID[int(np.argmin(scores))])
+    selected_index = int(np.argmin(scores))
+    selected_alpha = float(LASSO_ALPHA_GRID[selected_index])
+    boundary = selected_index in {0, len(LASSO_ALPHA_GRID) - 1}
+    approved_expanded_grid = (
+        len(LASSO_ALPHA_GRID) >= 3
+        and float(LASSO_ALPHA_GRID[0]) <= 1e-4
+        and float(LASSO_ALPHA_GRID[-1]) >= 1e3
+    )
+    if boundary and approved_expanded_grid:
+        raise RuntimeError(
+            f"Selected LASSO alpha {selected_alpha:g} is on the expanded grid boundary; "
+            "expand the predeclared grid before a formal run."
+        )
+    metadata = {
+        "grid": [float(value) for value in LASSO_ALPHA_GRID],
+        "grid_min": float(LASSO_ALPHA_GRID[0]),
+        "grid_max": float(LASSO_ALPHA_GRID[-1]),
+        "grid_count": len(LASSO_ALPHA_GRID),
+        "selected_alpha": selected_alpha,
+        "selected_index": selected_index,
+        "selected_at_boundary": boundary,
+        "selection_metric": "mean_original_scale_delta_close_rmse",
+        "alpha_results": alpha_results,
+    }
+    rejected = sum(not item["all_folds_converged"] for item in alpha_results)
+    if rejected:
+        log.info("Rejected %d/%d LASSO alpha candidates with unconfirmed fold convergence.", rejected, len(alpha_results))
+    return selected_alpha, metadata
+
+
+def _select_alpha(features: pd.DataFrame) -> float:
+    """Compatibility wrapper returning only the selected alpha."""
+    return _select_alpha_with_evidence(features)[0]
 
 
 def _fit_final(features: pd.DataFrame, alpha: float) -> LagRegressionArtifact:
@@ -186,13 +243,19 @@ def train_formal_lag_regression(df: pd.DataFrame, plan: FormalEvaluationPlan) ->
     """Fit only development rows, then forecast every frozen hold-out date."""
     development = development_ohlcv_for_plan(df, plan)
     development_features = _usable_features(development)
-    alpha = _select_alpha(development_features)
+    alpha, tuning_metadata = _select_alpha_with_evidence(development_features)
     artifact = _fit_final(development_features, alpha)
     forecasts = _formal_forecast_rows(df, plan, artifact)
     development_actual = reconstruct_price(development.loc[development_features.index, "Close"], development_features["target_delta"])
     metrics = compute_metrics(forecasts["actual_close"], forecasts["predicted_close"], y_train=development_actual)
     log.info("Formal lag regression %s: alpha=%g, hold-out rows=%d", plan.symbol, alpha, len(forecasts))
-    return FormalLagRegressionResult(artifact, metrics, forecasts, forecasts["predicted_close"].tolist())
+    return FormalLagRegressionResult(
+        artifact,
+        metrics,
+        forecasts,
+        forecasts["predicted_close"].tolist(),
+        tuning_metadata,
+    )
 
 
 def train_deployment_lag_regression(df: pd.DataFrame) -> LagRegressionArtifact:

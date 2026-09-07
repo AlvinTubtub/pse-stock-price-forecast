@@ -114,7 +114,9 @@ differenced/scaled target.
   the regression's lambda selection and the ARIMA order search.
 - `services/forecasting/lag_regression.py` — training-only StandardScaler
   -> PACF-assisted lag selection -> LASSO as the *final* estimator (no
-  secondary OLS refit), lambda chosen by 5-fold expanding-window CV.
+  secondary OLS refit), lambda chosen by 5-fold expanding-window CV over
+  the predeclared expanded 10^-4 through 10^3 grid. The full grid evidence
+  is retained, and a boundary winner blocks formal finalization.
 - `services/forecasting/arima_model.py` — ADF stationarity test +
   (p, d, q) search restricted to p<=3, d<=2, q<=3, scored by
   expanding-window rolling-origin CV with walk-forward one-step
@@ -123,8 +125,14 @@ differenced/scaled target.
   predicting scaled ΔClose (Min-Max scaler fit on the training split
   only), hyperparameters chosen by grid search over lookback
   (5/10/20/30), hidden units (25/50/100), learning rate (0.01/0.001), and
-  batch size (16/32) — 48 configurations, each trained with mini-batches,
-  up to 200 epochs, early stopping (patience 10), seed 42.
+  batch size (16/32) — 48 configurations. Every configuration is evaluated
+  on the same five target-date folds using seeds 42, 123, and 2026; all 720
+  fold/seed results are retained. A stopping-tail epoch choice is followed by
+  a fresh seed-42 refit on every development sequence.
+- `services/corporate_actions.py` — keeps every validated raw-Close row in
+  the primary analysis, never removes observations because of large errors,
+  and records a separate sensitivity analysis when verified event dates are
+  supplied.
 - `services/evaluation.py` — shared RMSE/MAE/MASE/R² metrics (computed on
   reconstructed peso prices; MASE is scaled against the in-sample naive
   one-step forecast), plus the cross-model statistical-significance
@@ -148,9 +156,42 @@ why). `run_pipeline.py` still supports training inline via its
 ```bash
 python -m services.model_selector --mode deployment-refresh  # refit approved configurations
 python -m services.model_selector --mode deployment-retune --symbols BPI  # manual challenger only
+python scripts/smoke_formal_runner.py --symbols BPI --epochs 2  # development only; writes no formal run
 python run_pipeline.py                     # ingest + train in one go (local/dev; CI never does both together)
 python run_pipeline.py --no-train           # ingest new data only, skip retraining (what the Fast Pipeline runs)
 ```
+
+An optional formal corporate-action registry is passed with
+`--corporate-actions-file`. It must be reviewed before the run and use this
+shape:
+
+```json
+{
+  "schema_version": 1,
+  "review_status": "complete",
+  "reviewed_symbols": ["BPI"],
+  "review_period": {
+    "start_date": "2025-09-02",
+    "end_date": "2026-08-28"
+  },
+  "events": [
+    {
+      "symbol": "BPI",
+      "event_date": "2026-01-05",
+      "event_type": "stock_split",
+      "source": "exchange disclosure reference"
+    }
+  ]
+}
+```
+
+`reviewed_symbols` must cover every requested company and `review_period` must
+cover every formal holdout target date. The reviewed 15-company registry for
+the frozen August 28, 2026 experiment is
+`config/formal_corporate_actions_20250902_20260828.json`. The registry hash
+becomes part of the resume contract, so its contents cannot change during a
+resumed run. If no reviewed registry is supplied, the formal evidence records
+that limitation rather than claiming that no events occurred.
 
 The expensive ARIMA and LSTM searches run only during explicitly requested
 manual challenger retuning or formal research. The Sunday workflow performs

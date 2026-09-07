@@ -459,14 +459,14 @@ Forecast Error Over Time must use the exact same aligned observations used by th
 The error definition is:
 
 ```text
-Forecast Error = Predicted Close − Actual Close
+Forecast Error = Actual Close - Predicted Close
 ```
 
 Therefore:
 
 ```text
-positive error → model predicted above actual
-negative error → model predicted below actual
+positive error → model predicted below actual
+negative error → model predicted above actual
 zero error     → exact prediction
 ```
 
@@ -516,6 +516,14 @@ auditable
 ```
 
 Once finalized, they should not be modified by normal deployment operations.
+
+Finalization also requires complete tuning and policy evidence: all 48 LSTM
+configurations across five folds and three seeds, the complete expanded LASSO
+alpha grid with a non-boundary winner, and the raw-Close corporate-action
+policy. Valid observations remain in the primary analysis. Verified event
+dates, when available, are flagged by forecast target date and used only in a
+separate sensitivity analysis; observations are never removed merely because
+the model error or price movement is large.
 
 ---
 

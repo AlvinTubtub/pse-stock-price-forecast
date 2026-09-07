@@ -45,6 +45,7 @@ from services.artifact_runs import (
 )
 from services.pdf_pipeline.config import TARGET_COMPANIES
 from services.evaluation import build_naive_formal_forecasts, compute_canonical_formal_metrics, evaluate_naive, run_formal_residual_diagnostics, run_formal_statistical_tests
+from services.corporate_actions import build_corporate_action_evidence, load_verified_event_registry
 from services.formal_evaluation import validate_formal_holdout_alignment
 from services.forecasting import arima_model, lag_regression, lstm_model
 from services.time_series_cv import FormalEvaluationPlan, create_development_cv_date_plan, create_formal_evaluation_plan
@@ -108,7 +109,12 @@ def _deployment_backtest_payload(forecasts: dict[str, pd.DataFrame]) -> dict:
         },
     }
 
-def evaluate_formal_symbol(symbol: str, df: pd.DataFrame) -> dict:
+def evaluate_formal_symbol(
+    symbol: str,
+    df: pd.DataFrame,
+    *,
+    verified_corporate_actions: tuple[dict[str, object], ...] = (),
+) -> dict:
     """Evaluate a symbol without writing deployment, cache, or frontend artifacts."""
     log.info("Formal evaluation for %s (%d rows).", symbol, len(df))
     plan = create_formal_evaluation_plan(df, symbol)
@@ -133,12 +139,18 @@ def evaluate_formal_symbol(symbol: str, df: pd.DataFrame) -> dict:
     log.info("Formal evaluation for %s uses canonical MASE denominator %.12g.", symbol, mase_denominator)
     lag_metadata = {
         "selected_alpha": lag.artifact.alpha,
+        "tuning_metadata": lag.tuning_metadata,
         "selected_features": lag.artifact.selected_features,
         "coefficients": {name: float(value) for name, value in zip(lag.artifact.candidate_features, lag.artifact.model.coef_)},
         **run_formal_residual_diagnostics(forecasts["lag_reg"]["error"], include_ljung_box=True),
     }
     lstm_metadata = {"training_metadata": lstm.metadata, **run_formal_residual_diagnostics(forecasts["lstm"]["error"])}
-    return {"plan": plan, "development_cv_plan": development_cv_plan, "forecasts": forecasts, "metrics": metrics, "diagnostics": {"lag_reg": lag_metadata, "arima": arima.diagnostics, "lstm": lstm_metadata}, "development_close": development_close, "mase_denominator": mase_denominator, "lstm_config": lstm.selected_config, "backtests": {"lag_reg": lag.backtest, "arima": arima.backtest, "lstm": lstm.backtest}}
+    corporate_action_evidence = build_corporate_action_evidence(
+        forecasts,
+        development_close,
+        verified_events=verified_corporate_actions,
+    )
+    return {"plan": plan, "development_cv_plan": development_cv_plan, "forecasts": forecasts, "metrics": metrics, "diagnostics": {"lag_reg": lag_metadata, "arima": arima.diagnostics, "lstm": lstm_metadata, "corporate_actions": corporate_action_evidence}, "development_close": development_close, "mase_denominator": mase_denominator, "lstm_config": lstm.selected_config, "backtests": {"lag_reg": lag.backtest, "arima": arima.backtest, "lstm": lstm.backtest}}
 
 
 def train_symbol(symbol: str, df: pd.DataFrame) -> tuple[dict, dict[str, object]]:
@@ -711,6 +723,7 @@ def run_formal_evaluation(
     expected_data_cutoff: str | None = None,
     expected_row_count: int | None = None,
     resume: bool = False,
+    corporate_actions_file: Path | None = None,
 ) -> Path:
     """Create or resume one immutable formal run without deployment writes.
 
@@ -728,6 +741,12 @@ def run_formal_evaluation(
         raise ValueError("Formal evaluation symbol list contains duplicates.")
     if expected_row_count is not None and expected_row_count <= 1:
         raise ValueError("Expected formal source row count must be greater than one.")
+    canonical_universe = set(requested) == set(EXPECTED_TICKERS)
+    if canonical_universe and corporate_actions_file is None:
+        raise ValueError(
+            "The canonical 15-company formal run requires a reviewed --corporate-actions-file; "
+            "do not claim that an omitted registry means no events occurred."
+        )
     expected_cutoff = None
     if expected_data_cutoff is not None:
         try:
@@ -771,6 +790,20 @@ def run_formal_evaluation(
             source_provenance[symbol]["sha256"],
         )
 
+    if corporate_actions_file is None:
+        corporate_actions, corporate_action_registry = load_verified_event_registry(None, requested)
+    else:
+        preflight_plans = {
+            symbol: create_formal_evaluation_plan(validated_data[symbol], symbol)
+            for symbol in requested
+        }
+        corporate_actions, corporate_action_registry = load_verified_event_registry(
+            corporate_actions_file,
+            requested,
+            required_start_date=min(plan.holdout_start_date for plan in preflight_plans.values()),
+            required_end_date=max(plan.holdout_end_date for plan in preflight_plans.values()),
+        )
+
     formal_run_id = create_run_id(run_id)
     writer = FormalRunWriter(BASE_DIR, formal_run_id)
     if writer.path.exists() and not resume:
@@ -792,6 +825,7 @@ def run_formal_evaluation(
             }
             for symbol in requested
         },
+        "corporate_action_registry": corporate_action_registry,
     }
     resumed = writer.create_or_resume(resume_contract)
     log.info(
@@ -821,7 +855,14 @@ def run_formal_evaluation(
                     len(requested),
                     symbol,
                 )
-                payload = evaluate_formal_symbol(symbol, validated_data[symbol])
+                if corporate_actions[symbol]:
+                    payload = evaluate_formal_symbol(
+                        symbol,
+                        validated_data[symbol],
+                        verified_corporate_actions=corporate_actions[symbol],
+                    )
+                else:
+                    payload = evaluate_formal_symbol(symbol, validated_data[symbol])
                 writer.write_company_checkpoint(symbol, payload, source_provenance[symbol])
                 payload = writer.read_company_checkpoint(symbol)
                 elapsed = time.monotonic() - company_started_at
@@ -839,7 +880,12 @@ def run_formal_evaluation(
             formal_by_symbol[symbol] = payload
         writer.write_split_manifest(plans)
         writer.write_data_manifest(source_provenance)
-        writer.write_methodology_manifest(str(max(cutoff_dates).date()), requested, git_dirty=git_dirty)
+        writer.write_methodology_manifest(
+            str(max(cutoff_dates).date()),
+            requested,
+            git_dirty=git_dirty,
+            corporate_action_registry=corporate_action_registry,
+        )
         statistics = run_formal_statistical_tests(formal_by_symbol)
         for symbol in requested:
             stage1 = statistics["per_company"][symbol]["dm_squared_error"]["stage1_vs_naive"]
@@ -909,6 +955,11 @@ if __name__ == "__main__":  # pragma: no cover
         help="Resume an incomplete formal run after verifying its code and frozen-input contract.",
     )
     parser.add_argument(
+        "--corporate-actions-file",
+        type=Path,
+        help="Formal-only reviewed JSON registry of verified corporate-action dates.",
+    )
+    parser.add_argument(
         "--challenger-run-id",
         help="Required source challenger run identifier for deployment-approve.",
     )
@@ -941,10 +992,11 @@ if __name__ == "__main__":  # pragma: no cover
             expected_data_cutoff=args.expected_data_cutoff,
             expected_row_count=args.expected_row_count,
             resume=args.resume,
+            corporate_actions_file=args.corporate_actions_file,
         )
         print(finalized)
     elif args.mode == "deployment-retune":
-        if args.raw_dir or args.expected_data_cutoff or args.expected_row_count or args.resume:
+        if args.raw_dir or args.expected_data_cutoff or args.expected_row_count or args.resume or args.corporate_actions_file:
             parser.error("Frozen-data and resume options are valid only for formal mode.")
         if args.strict:
             parser.error("--strict is not supported for manual challenger retuning.")
@@ -956,7 +1008,7 @@ if __name__ == "__main__":  # pragma: no cover
         )
         print(challenger)
     elif args.mode == "deployment-approve":
-        if args.raw_dir or args.expected_data_cutoff or args.expected_row_count or args.resume:
+        if args.raw_dir or args.expected_data_cutoff or args.expected_row_count or args.resume or args.corporate_actions_file:
             parser.error("Frozen-data and resume options are valid only for formal mode.")
         if args.strict or args.run_id:
             parser.error("--strict and --run-id are not deployment-approve options.")
@@ -980,6 +1032,7 @@ if __name__ == "__main__":  # pragma: no cover
             or args.expected_data_cutoff
             or args.expected_row_count
             or args.resume
+            or args.corporate_actions_file
         ):
             parser.error("Approval, symbol, and run-ID options are not deployment-refresh options.")
         mapping = refresh_deployment_all(strict=args.strict)

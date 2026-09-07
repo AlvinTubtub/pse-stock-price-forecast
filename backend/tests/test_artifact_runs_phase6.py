@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import json
+import itertools
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -65,6 +66,73 @@ def _valid_arima_diagnostics() -> dict:
     }
 
 
+def _valid_lstm_diagnostics() -> dict:
+    configurations = []
+    for lookback, hidden, learning_rate, batch in itertools.product(
+        (5, 10, 20, 30), (25, 50, 100), (.01, .001), (16, 32)
+    ):
+        folds = [{
+            "fold_number": fold,
+            "validation_target_start": f"2025-0{fold}-01",
+            "validation_target_end": f"2025-0{fold}-02",
+            "validation_target_dates": [f"2025-0{fold}-01", f"2025-0{fold}-02"],
+            "seed_results": [
+                {"seed": seed, "rmse": .1, "best_epoch": 1}
+                for seed in (42, 123, 2026)
+            ],
+        } for fold in range(1, 6)]
+        configurations.append({
+            "configuration": {
+                "lookback": lookback,
+                "hidden_size": hidden,
+                "learning_rate": learning_rate,
+                "batch_size": batch,
+            },
+            "status": "complete",
+            "mean_validation_rmse": .1,
+            "validation_rmse_std": 0.0,
+            "fold_results": folds,
+        })
+    return {"training_metadata": {
+        "configuration_count": 48,
+        "expected_tuning_fit_count": 720,
+        "tuning_seeds": [42, 123, 2026],
+        "configuration_results": configurations,
+    }}
+
+
+def _valid_lag_diagnostics() -> dict:
+    grid = [float(value) for value in np.logspace(-4, 3, 36)]
+    return {"tuning_metadata": {
+        "grid": grid,
+        "alpha_results": [
+            {"alpha": value, "fold_count": 5, "all_folds_converged": index == 20}
+            for index, value in enumerate(grid)
+        ],
+        "selected_index": 20,
+        "selected_at_boundary": False,
+    }}
+
+
+def _valid_corporate_action_diagnostics() -> dict:
+    return {
+        "policy_id": "raw_close_retain_and_flag_v1",
+        "primary_rows_excluded": 0,
+        "automatic_outlier_or_error_exclusion": False,
+        "verified_events": [],
+        "sensitivity_analysis": {"status": "not_applicable_no_verified_holdout_events"},
+    }
+
+
+def _valid_diagnostics() -> dict:
+    return {
+        "lag_reg": _valid_lag_diagnostics(),
+        "arima": _valid_arima_diagnostics(),
+        "lstm": _valid_lstm_diagnostics(),
+        "corporate_actions": _valid_corporate_action_diagnostics(),
+    }
+
+
 def _complete_writer(tmp_path: Path) -> FormalRunWriter:
     plan, forecasts = _plan_and_forecasts()
     writer = FormalRunWriter(tmp_path, "controlled_run")
@@ -75,7 +143,7 @@ def _complete_writer(tmp_path: Path) -> FormalRunWriter:
         "BPI",
         forecasts,
         {model: {"rmse": 0.0} for model in forecasts},
-        {"arima": _valid_arima_diagnostics()},
+        _valid_diagnostics(),
     )
     writer.write_methodology_manifest("2025-01-20", ["BPI"])
     writer.write_statistics({"per_company": {}})
@@ -133,11 +201,7 @@ def test_formal_orchestration_never_writes_deployment_or_dashboard_state(tmp_pat
         "plan": plan,
         "forecasts": forecasts,
         "metrics": {model: {"rmse": 0.0} for model in forecasts},
-        "diagnostics": {
-            "lag_reg": {},
-            "arima": _valid_arima_diagnostics(),
-            "lstm": {},
-        },
+        "diagnostics": _valid_diagnostics(),
         "development_close": [1.0, 2.0],
     }
     monkeypatch.setattr(model_selector, "BASE_DIR", tmp_path)
@@ -165,6 +229,7 @@ def test_evaluate_formal_symbol_replaces_model_specific_metrics_with_canonical_v
             model=SimpleNamespace(coef_=np.array([])),
         ),
         backtest=[],
+        tuning_metadata={"grid": [1e-4, 1.0, 1e3], "alpha_results": [{}, {}, {}], "selected_at_boundary": False},
     )
     arima = SimpleNamespace(
         forecasts=forecasts["arima"],
@@ -203,6 +268,15 @@ def test_formal_orchestration_rejects_a_dirty_git_worktree(tmp_path):
     with patch.object(model_selector, "git_worktree_is_dirty", return_value=True):
         with pytest.raises(RuntimeError, match="clean Git worktree"):
             model_selector.run_formal_evaluation(raw_dir=tmp_path, symbols=["BPI"], run_id="dirty")
+
+
+def test_canonical_formal_run_requires_reviewed_corporate_action_registry(tmp_path):
+    with pytest.raises(ValueError, match="requires a reviewed"):
+        model_selector.run_formal_evaluation(
+            raw_dir=tmp_path,
+            symbols=list(model_selector.EXPECTED_TICKERS),
+            run_id="missing_registry",
+        )
 
 
 def test_formal_finalization_rejects_unconfirmed_arima_diagnostics(tmp_path):
@@ -254,11 +328,7 @@ def test_formal_run_resumes_only_missing_company_checkpoint(tmp_path, monkeypatc
             "plan": plan,
             "forecasts": forecasts,
             "metrics": {model: {"rmse": 0.0} for model in forecasts},
-            "diagnostics": {
-                "lag_reg": {},
-                "arima": _valid_arima_diagnostics(),
-                "lstm": {},
-            },
+            "diagnostics": _valid_diagnostics(),
             "development_close": [float(value) for value in range(17)],
         }
 

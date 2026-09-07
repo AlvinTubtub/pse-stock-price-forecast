@@ -132,11 +132,31 @@ def test_configuration_tie_breaking_is_deterministic(monkeypatch):
         lambda development, config, cv_plan: (1.0, .25, [{}] * cv_plan.fold_count),
     )
     plan = create_formal_evaluation_plan(_df(100), "BPI", holdout_fraction=.01)
-    selected, mean_rmse, rmse_std, _folds = lstm._select_formal_config(
+    selected, mean_rmse, rmse_std, _folds, configuration_results = lstm._select_formal_config(
         _df(100), create_development_cv_date_plan(plan)
     )
     assert selected == lstm.LSTMConfig(5, 25, .01, 16)
     assert mean_rmse == 1.0 and rmse_std == .25
+    assert len(configuration_results) == 8
+    assert all(item["status"] == "complete" for item in configuration_results)
+
+
+def test_partial_lstm_grid_cannot_be_ranked(monkeypatch):
+    monkeypatch.setattr(lstm, "LOOKBACK_GRID", (5, 10))
+    monkeypatch.setattr(lstm, "HIDDEN_UNITS_GRID", (25,))
+    monkeypatch.setattr(lstm, "LEARNING_RATE_GRID", (.01,))
+    monkeypatch.setattr(lstm, "BATCH_SIZE_GRID", (16,))
+    calls = 0
+
+    def incomplete(_development, _config, cv_plan):
+        nonlocal calls
+        calls += 1
+        return (1.0, .1, [{}] * cv_plan.fold_count) if calls == 1 else (None, None, [])
+
+    monkeypatch.setattr(lstm, "_evaluate_formal_config", incomplete)
+    plan = create_formal_evaluation_plan(_df(100), "BPI", holdout_fraction=.01)
+    with pytest.raises(ValueError, match="partial grids cannot be ranked"):
+        lstm._select_formal_config(_df(100), create_development_cv_date_plan(plan))
 
 
 def test_final_refit_uses_fresh_complete_scaler_and_every_development_sequence(monkeypatch):
@@ -178,7 +198,8 @@ def test_formal_output_matches_plan_and_is_oos(monkeypatch):
     scaler = MinMaxScaler().fit(np.diff(development["Close"]).reshape(-1, 1))
     model = lstm._LSTMNet(1, 25)
     for parameter in model.parameters(): parameter.data.zero_()
-    monkeypatch.setattr(lstm, "_select_formal_config", lambda _dev, _cv: (config, 0.123456, 0.0123, [{"mean_rmse": .123456}] * 5))
+    evidence = [{"configuration": config.__dict__, "status": "complete", "mean_validation_rmse": .123456, "validation_rmse_std": .0123, "fold_results": [{"seed_results": []}] * 5}]
+    monkeypatch.setattr(lstm, "_select_formal_config", lambda _dev, _cv: (config, 0.123456, 0.0123, [{"mean_rmse": .123456}] * 5, evidence))
     monkeypatch.setattr(lstm, "_fit_final_formal", lambda dev, cfg: (model, scaler, lstm._formal_delta_samples(dev, cfg.lookback), {"epoch_selection": {"best_epoch": 1}, "final_refit": {"uses_all_development_sequences": True}}))
     formal = lstm.train_formal_lstm(df, plan)
     validated = validate_formal_holdout_alignment({"lstm": formal.forecasts}, plan, required_models=("lstm",))

@@ -277,16 +277,28 @@ def _evaluate_formal_config(
 def _select_formal_config(
     development: pd.DataFrame,
     cv_plan: DevelopmentCVDatePlan,
-) -> tuple[LSTMConfig, float, float, list[dict]]:
-    """Select the exact grid by mean RMSE, then deterministic config order."""
+) -> tuple[LSTMConfig, float, float, list[dict], list[dict]]:
+    """Evaluate and retain the exact grid, then select by deterministic rank."""
     candidates = [LSTMConfig(*values) for values in itertools.product(LOOKBACK_GRID, HIDDEN_UNITS_GRID, LEARNING_RATE_GRID, BATCH_SIZE_GRID)]
     results = []
-    for config in candidates:
+    configuration_results: list[dict] = []
+    for index, config in enumerate(candidates, start=1):
+        log.info("Formal LSTM configuration %d/%d: %s", index, len(candidates), config)
         mean_rmse, rmse_std, folds = _evaluate_formal_config(development, config, cv_plan)
-        if mean_rmse is not None and rmse_std is not None and len(folds) == cv_plan.fold_count:
-            results.append((mean_rmse, config, rmse_std, folds))
-    if not results:
-        raise ValueError("No LSTM configuration completed all five formal development folds.")
+        if mean_rmse is None or rmse_std is None or len(folds) != cv_plan.fold_count:
+            raise ValueError(
+                f"LSTM configuration {config} did not complete all {cv_plan.fold_count} "
+                "formal development folds; partial grids cannot be ranked."
+            )
+        evidence = {
+            "configuration": config.__dict__,
+            "status": "complete",
+            "mean_validation_rmse": mean_rmse,
+            "validation_rmse_std": rmse_std,
+            "fold_results": folds,
+        }
+        configuration_results.append(evidence)
+        results.append((mean_rmse, config, rmse_std, folds))
     mean_rmse, config, rmse_std, folds = min(
         results,
         key=lambda item: (
@@ -297,7 +309,7 @@ def _select_formal_config(
             item[1].batch_size,
         ),
     )
-    return config, mean_rmse, rmse_std, folds
+    return config, mean_rmse, rmse_std, folds, configuration_results
 
 
 def _determine_final_epoch(samples: pd.DataFrame, config: LSTMConfig) -> dict:
@@ -415,7 +427,7 @@ def train_formal_lstm(
         raise ValueError("LSTM requires the approved lookback-30, five-fold development CV plan.")
     if not set(cv_plan.common_target_dates) <= set(plan.development_target_dates):
         raise ValueError("LSTM development CV plan contains dates outside formal development.")
-    config, mean_rmse, rmse_std, folds = _select_formal_config(development, cv_plan)
+    config, mean_rmse, rmse_std, folds, configuration_results = _select_formal_config(development, cv_plan)
     model, scaler, development_samples, final_epoch = _fit_final_formal(development, config)
     samples = _formal_delta_samples(df, config.lookback)
     holdout = samples.loc[samples["target_date"].isin(plan.holdout_target_dates)].copy()
@@ -428,7 +440,7 @@ def train_formal_lstm(
     forecasts = pd.DataFrame({"symbol": plan.symbol, "model": "lstm", "origin_date": holdout["origin_date"], "target_date": holdout["target_date"], "actual_close": holdout["actual_close"], "predicted_close": holdout["origin_close"].to_numpy() + predicted_delta}).sort_values("target_date").reset_index(drop=True)
     forecasts["error"] = forecasts["actual_close"] - forecasts["predicted_close"]
     artifact = {"artifact_version": 2, "input_design": FORMAL_INPUT_DESIGN, "state_dict": model.state_dict(), "input_size": 1, "seq_len": config.lookback, "hidden_size": config.hidden_size, "delta_scaler": scaler, "training_seed": FINAL_FIT_SEED}
-    metadata = {"selected_config": config.__dict__, "mean_validation_rmse": mean_rmse, "validation_rmse_std": rmse_std, "fold_results": folds, "max_epochs": EPOCHS, "patience": PATIENCE, "tuning_seeds": list(TUNING_SEEDS), "seed": FINAL_FIT_SEED, "final_fit_seed": FINAL_FIT_SEED, "configuration_tie_breaking": ["mean_validation_rmse", "lookback", "hidden_size", "learning_rate", "batch_size"], "common_cv_maximum_lookback": cv_plan.maximum_lookback, "common_cv_target_start": cv_plan.common_target_dates[0], "common_cv_target_end": cv_plan.common_target_dates[-1], "input_design": FORMAL_INPUT_DESIGN, "development_sequence_count": len(development_samples), "holdout_prediction_count": len(forecasts), "final_epoch_info": final_epoch}
+    metadata = {"selected_config": config.__dict__, "mean_validation_rmse": mean_rmse, "validation_rmse_std": rmse_std, "fold_results": folds, "configuration_results": configuration_results, "configuration_count": len(configuration_results), "expected_configuration_count": 48, "expected_tuning_fit_count": 48 * cv_plan.fold_count * len(TUNING_SEEDS), "max_epochs": EPOCHS, "patience": PATIENCE, "tuning_seeds": list(TUNING_SEEDS), "seed": FINAL_FIT_SEED, "final_fit_seed": FINAL_FIT_SEED, "configuration_tie_breaking": ["mean_validation_rmse", "lookback", "hidden_size", "learning_rate", "batch_size"], "common_cv_maximum_lookback": cv_plan.maximum_lookback, "common_cv_target_start": cv_plan.common_target_dates[0], "common_cv_target_end": cv_plan.common_target_dates[-1], "input_design": FORMAL_INPUT_DESIGN, "development_sequence_count": len(development_samples), "holdout_prediction_count": len(forecasts), "final_epoch_info": final_epoch}
     metrics = compute_metrics(forecasts["actual_close"], forecasts["predicted_close"], y_train=development["Close"])
     return FormalLSTMResult(artifact, metrics, forecasts, forecasts["predicted_close"].tolist(), config, metadata)
 
