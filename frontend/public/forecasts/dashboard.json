@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-07T18:29:17.647951+08:00",
-  "forecastDate": "2026-09-08",
-  "lastRunAt": "2026-09-07T10:29:12+00:00",
+  "generatedAt": "2026-09-08T16:02:41.262437+08:00",
+  "forecastDate": "2026-09-09",
+  "lastRunAt": "2026-09-08T08:02:35+00:00",
   "status": "ok",
   "totalCompanies": 15,
   "missingCompanies": [],
@@ -28,32 +28,32 @@
     }
   ],
   "marketSummary": {
-    "gainers": 4,
-    "losers": 9,
-    "unchanged": 2
+    "gainers": 5,
+    "losers": 7,
+    "unchanged": 3
   },
   "topGainer": {
     "symbol": "APX",
     "name": "Apex Mining Co., Inc.",
     "sector": "Mining and Oil",
-    "latestClose": 17.28,
-    "predictedClose": 17.39,
-    "pctChange": 0.64,
+    "latestClose": 16.8,
+    "predictedClose": 16.9,
+    "pctChange": 0.6,
     "direction": "bullish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 96.3,
-    "forecastDate": "2026-09-08"
+    "forecastDate": "2026-09-09"
   },
   "topLoser": {
-    "symbol": "MER",
-    "name": "Manila Electric Company",
-    "sector": "Industrial",
-    "latestClose": 480.0,
-    "predictedClose": 478.51,
-    "pctChange": -0.31,
+    "symbol": "SMPH",
+    "name": "SM Prime Holdings, Inc.",
+    "sector": "Property",
+    "latestClose": 18.4,
+    "predictedClose": 18.35,
+    "pctChange": -0.27,
     "direction": "bearish",
     "bestModel": "Lag-Informed Regression",
-    "confidence": 93.8,
-    "forecastDate": "2026-09-08"
+    "confidence": 95.6,
+    "forecastDate": "2026-09-09"
   }
 }

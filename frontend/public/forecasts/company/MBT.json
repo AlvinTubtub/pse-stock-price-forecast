@@ -2,11 +2,11 @@
   "symbol": "MBT",
   "name": "Metropolitan Bank & Trust Co.",
   "sector": "Financials",
-  "previousClose": 65.9,
-  "predictedClose": 65.86,
-  "pesoChange": -0.04,
-  "pctChange": -0.06,
-  "direction": "bearish",
+  "previousClose": 64.5,
+  "predictedClose": 64.65,
+  "pesoChange": 0.15,
+  "pctChange": 0.23,
+  "direction": "bullish",
   "model": "ARIMA",
   "confidence": 86.2,
   "metrics": {
@@ -37,9 +37,9 @@
     }
   },
   "nextClose": {
-    "lag": 65.91,
-    "arima": 65.86,
-    "lstm": 65.87
+    "lag": 64.51,
+    "arima": 64.65,
+    "lstm": 64.64
   },
   "ohlcv": [
     {
@@ -13073,6 +13073,14 @@
       "low": 65.8,
       "close": 65.9,
       "volume": 125935005
+    },
+    {
+      "date": "2026-09-08",
+      "open": 64.6,
+      "high": 64.75,
+      "low": 64.25,
+      "close": 64.5,
+      "volume": 122861717
     }
   ],
   "backtestDates": [
@@ -13458,35 +13466,40 @@
     "2026-09-02",
     "2026-09-03",
     "2026-09-04",
-    "2026-09-07"
+    "2026-09-07",
+    "2026-09-08"
   ],
   "productionBacktestActual": [
     65.3,
     65.85,
     65.85,
-    65.9
+    65.9,
+    64.5
   ],
   "productionBacktestByModel": {
     "Lag-Informed Regression": [
       66.42,
       65.41,
       65.83,
-      65.86
+      65.86,
+      65.91
     ],
     "ARIMA": [
       66.33,
       65.44,
       65.84,
-      65.78
+      65.78,
+      65.86
     ],
     "LSTM": [
       66.4,
       65.4,
       65.81,
-      65.82
+      65.82,
+      65.87
     ]
   },
-  "forecastDate": "2026-09-08",
-  "dataAsOf": "2026-09-07",
-  "inferenceAt": "2026-09-07T18:29:15+08:00"
+  "forecastDate": "2026-09-09",
+  "dataAsOf": "2026-09-08",
+  "inferenceAt": "2026-09-08T16:02:38+08:00"
 }
