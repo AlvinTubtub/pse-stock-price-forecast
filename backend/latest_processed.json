@@ -1,9 +1,9 @@
 {
-  "last_run_at": "2026-09-08T08:02:35+00:00",
+  "last_run_at": "2026-09-10T15:00:44+00:00",
   "status": "ok",
-  "duration_seconds": 1.98,
-  "pdf_count": 1,
-  "record_count": 15,
+  "duration_seconds": 5.12,
+  "pdf_count": 2,
+  "record_count": 30,
   "symbols_updated": [
     "ALI",
     "APX",
@@ -22,6 +22,6 @@
     "SMPH"
   ],
   "best_models_updated": 0,
-  "triggered_by": "repository_dispatch",
+  "triggered_by": "workflow_dispatch",
   "error": null
 }

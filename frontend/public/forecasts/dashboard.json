@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-08T16:02:41.262437+08:00",
-  "forecastDate": "2026-09-09",
-  "lastRunAt": "2026-09-08T08:02:35+00:00",
+  "generatedAt": "2026-09-10T23:00:49.885920+08:00",
+  "forecastDate": "2026-09-11",
+  "lastRunAt": "2026-09-10T15:00:44+00:00",
   "status": "ok",
   "totalCompanies": 15,
   "missingCompanies": [],
@@ -28,32 +28,32 @@
     }
   ],
   "marketSummary": {
-    "gainers": 5,
+    "gainers": 7,
     "losers": 7,
-    "unchanged": 3
+    "unchanged": 1
   },
   "topGainer": {
     "symbol": "APX",
     "name": "Apex Mining Co., Inc.",
     "sector": "Mining and Oil",
-    "latestClose": 16.8,
-    "predictedClose": 16.9,
-    "pctChange": 0.6,
+    "latestClose": 18.2,
+    "predictedClose": 18.3,
+    "pctChange": 0.55,
     "direction": "bullish",
     "bestModel": "Lag-Informed Regression",
     "confidence": 96.3,
-    "forecastDate": "2026-09-09"
+    "forecastDate": "2026-09-11"
   },
   "topLoser": {
-    "symbol": "SMPH",
-    "name": "SM Prime Holdings, Inc.",
-    "sector": "Property",
-    "latestClose": 18.4,
-    "predictedClose": 18.35,
-    "pctChange": -0.27,
+    "symbol": "JFC",
+    "name": "Jollibee Foods Corporation",
+    "sector": "Industrial",
+    "latestClose": 148.5,
+    "predictedClose": 148.08,
+    "pctChange": -0.28,
     "direction": "bearish",
-    "bestModel": "Lag-Informed Regression",
-    "confidence": 95.6,
-    "forecastDate": "2026-09-09"
+    "bestModel": "LSTM",
+    "confidence": 98.3,
+    "forecastDate": "2026-09-11"
   }
 }

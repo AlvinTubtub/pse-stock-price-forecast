@@ -71,6 +71,18 @@
         "ARIMA": 954.47,
         "LSTM": 956.95
       },
+      "actual": 975.0,
+      "reconciled_at": "2026-09-10T23:00:47+08:00"
+    },
+    {
+      "target_date": "2026-09-11",
+      "issued_at": "2026-09-10T23:00:47+08:00",
+      "data_as_of": "2026-09-10",
+      "predictions": {
+        "Lag-Informed Regression": 986.84,
+        "ARIMA": 983.62,
+        "LSTM": 986.5
+      },
       "actual": null,
       "reconciled_at": null
     }
