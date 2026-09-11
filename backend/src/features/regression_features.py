@@ -34,6 +34,16 @@ class RegressionSample:
 
 
 @dataclass(frozen=True, slots=True)
+class RegressionOriginFeatures:
+    """Causal feature row for an origin whose next-session target is unknown."""
+
+    origin_date: date
+    origin_close: float
+    feature_names: tuple[str, ...]
+    feature_values: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RegressionDataset:
     """Causal feature samples plus dated returns used for fold-local PACF."""
 
@@ -166,6 +176,163 @@ def regression_feature_names(config: RegressionFeatureConfig) -> tuple[str, ...]
     return tuple(names)
 
 
+@dataclass(frozen=True, slots=True)
+class _RegressionFeatureContext:
+    closes: tuple[float, ...]
+    volumes: tuple[float, ...]
+    returns: tuple[float, ...]
+    ema_fast: tuple[float, ...]
+    ema_slow: tuple[float, ...]
+    macd: tuple[float, ...]
+    macd_signal: tuple[float, ...]
+
+
+def _build_feature_context(
+    records: Sequence[OhlcvRecord],
+    config: RegressionFeatureConfig,
+) -> _RegressionFeatureContext:
+    closes = tuple(record.close for record in records)
+    volumes = tuple(record.volume for record in records)
+    returns = (math.nan,) + tuple(
+        _safe_relative(
+            closes[index],
+            closes[index - 1],
+            name="daily return",
+            origin=records[index].trading_date,
+        )
+        - 1.0
+        for index in range(1, len(records))
+    )
+    ema_fast = tuple(_ema(closes, config.ema_fast_period))
+    ema_slow = tuple(_ema(closes, config.ema_slow_period))
+    macd = tuple(fast - slow for fast, slow in zip(ema_fast, ema_slow))
+    macd_signal = tuple(_ema(macd, config.macd_signal_period))
+    return _RegressionFeatureContext(
+        closes=closes,
+        volumes=volumes,
+        returns=returns,
+        ema_fast=ema_fast,
+        ema_slow=ema_slow,
+        macd=macd,
+        macd_signal=macd_signal,
+    )
+
+
+def _feature_values_at(
+    records: Sequence[OhlcvRecord],
+    index: int,
+    config: RegressionFeatureConfig,
+    context: _RegressionFeatureContext,
+) -> tuple[float, ...]:
+    origin = records[index]
+    values: list[float] = []
+    values.extend(context.returns[index - lag + 1] for lag in config.return_lags)
+    for window in config.rolling_return_windows:
+        return_window = context.returns[index - window + 1 : index + 1]
+        mean_return, std_return = _mean_std(return_window)
+        values.extend((mean_return, std_return))
+
+    values.append(math.log1p(origin.volume))
+    values.append(
+        _safe_relative(
+            origin.volume,
+            records[index - 1].volume,
+            name="volume change",
+            origin=origin.trading_date,
+        )
+        - 1.0
+    )
+    for window in config.volume_windows:
+        volume_window = context.volumes[index - window + 1 : index + 1]
+        mean_volume, std_volume = _mean_std(volume_window)
+        values.append(
+            _safe_relative(
+                origin.volume,
+                mean_volume,
+                name=f"volume ratio {window}",
+                origin=origin.trading_date,
+            )
+            - 1.0
+        )
+        values.append(
+            0.0 if std_volume == 0.0 else (origin.volume - mean_volume) / std_volume
+        )
+
+    values.append((origin.high - origin.low) / origin.close)
+    values.append((origin.close - origin.open) / origin.open)
+    day_range = origin.high - origin.low
+    values.append(0.5 if day_range == 0.0 else (origin.close - origin.low) / day_range)
+    for window in config.rolling_return_windows:
+        mean_close, _ = _mean_std(context.closes[index - window + 1 : index + 1])
+        values.append(origin.close / mean_close - 1.0)
+
+    rsi_returns = context.returns[index - config.rsi_period + 1 : index + 1]
+    average_gain = sum(max(value, 0.0) for value in rsi_returns) / config.rsi_period
+    average_loss = sum(max(-value, 0.0) for value in rsi_returns) / config.rsi_period
+    if average_gain == 0.0 and average_loss == 0.0:
+        rsi = 50.0
+    elif average_loss == 0.0:
+        rsi = 100.0
+    else:
+        relative_strength = average_gain / average_loss
+        rsi = 100.0 - (100.0 / (1.0 + relative_strength))
+    values.append(rsi)
+    values.extend(
+        (
+            origin.close / context.ema_fast[index] - 1.0,
+            origin.close / context.ema_slow[index] - 1.0,
+            context.macd[index] / origin.close,
+            context.macd_signal[index] / origin.close,
+            (context.macd[index] - context.macd_signal[index]) / origin.close,
+        )
+    )
+
+    bollinger_closes = context.closes[
+        index - config.bollinger_window + 1 : index + 1
+    ]
+    bollinger_mean, bollinger_std = _mean_std(bollinger_closes)
+    if bollinger_std == 0.0:
+        bollinger_z = 0.0
+        bollinger_width = 0.0
+        bollinger_position = 0.5
+    else:
+        band_distance = config.bollinger_standard_deviations * bollinger_std
+        lower_band = bollinger_mean - band_distance
+        upper_band = bollinger_mean + band_distance
+        bollinger_z = (origin.close - bollinger_mean) / bollinger_std
+        bollinger_width = (upper_band - lower_band) / bollinger_mean
+        bollinger_position = (origin.close - lower_band) / (upper_band - lower_band)
+    values.extend((bollinger_z, bollinger_width, bollinger_position))
+    values.extend(context.closes[index - lag] for lag in config.raw_price_lags)
+    if not all(math.isfinite(value) for value in values):
+        raise FeatureConstructionError(
+            f"Non-finite derived feature at origin {origin.trading_date.isoformat()}"
+        )
+    return tuple(values)
+
+
+def build_regression_origin_features(
+    records: Sequence[OhlcvRecord],
+    config: RegressionFeatureConfig = RegressionFeatureConfig(),
+) -> RegressionOriginFeatures:
+    """Build the latest causal row without inventing a future target observation."""
+
+    require_chronological_records(records)
+    minimum_origin = _minimum_origin_index(config)
+    if len(records) <= minimum_origin:
+        raise FeatureConstructionError(
+            f"Need more than {minimum_origin} records for configured feature warm-up"
+        )
+    context = _build_feature_context(records, config)
+    index = len(records) - 1
+    return RegressionOriginFeatures(
+        origin_date=records[index].trading_date,
+        origin_close=records[index].close,
+        feature_names=regression_feature_names(config),
+        feature_values=_feature_values_at(records, index, config, context),
+    )
+
+
 def build_regression_dataset(
     records: Sequence[OhlcvRecord],
     config: RegressionFeatureConfig = RegressionFeatureConfig(),
@@ -183,104 +350,14 @@ def build_regression_dataset(
             f"Need more than {minimum_origin + 1} records for configured feature warm-up"
         )
 
-    closes = [record.close for record in records]
-    volumes = [record.volume for record in records]
-    returns = [math.nan] + [
-        _safe_relative(closes[index], closes[index - 1], name="daily return", origin=records[index].trading_date) - 1.0
-        for index in range(1, len(records))
-    ]
-    ema_fast = _ema(closes, config.ema_fast_period)
-    ema_slow = _ema(closes, config.ema_slow_period)
-    macd = [fast - slow for fast, slow in zip(ema_fast, ema_slow)]
-    macd_signal = _ema(macd, config.macd_signal_period)
+    context = _build_feature_context(records, config)
     names = regression_feature_names(config)
 
     samples: list[RegressionSample] = []
     for index in range(minimum_origin, len(records) - 1):
         origin = records[index]
         target = records[index + 1]
-        values: list[float] = []
-
-        values.extend(returns[index - lag + 1] for lag in config.return_lags)
-        for window in config.rolling_return_windows:
-            return_window = returns[index - window + 1 : index + 1]
-            mean_return, std_return = _mean_std(return_window)
-            values.extend((mean_return, std_return))
-
-        values.append(math.log1p(origin.volume))
-        values.append(
-            _safe_relative(
-                origin.volume,
-                records[index - 1].volume,
-                name="volume change",
-                origin=origin.trading_date,
-            )
-            - 1.0
-        )
-        for window in config.volume_windows:
-            volume_window = volumes[index - window + 1 : index + 1]
-            mean_volume, std_volume = _mean_std(volume_window)
-            values.append(
-                _safe_relative(
-                    origin.volume,
-                    mean_volume,
-                    name=f"volume ratio {window}",
-                    origin=origin.trading_date,
-                )
-                - 1.0
-            )
-            values.append(0.0 if std_volume == 0.0 else (origin.volume - mean_volume) / std_volume)
-
-        values.append((origin.high - origin.low) / origin.close)
-        values.append((origin.close - origin.open) / origin.open)
-        day_range = origin.high - origin.low
-        values.append(0.5 if day_range == 0.0 else (origin.close - origin.low) / day_range)
-        for window in config.rolling_return_windows:
-            mean_close, _ = _mean_std(closes[index - window + 1 : index + 1])
-            values.append(origin.close / mean_close - 1.0)
-
-        rsi_returns = returns[index - config.rsi_period + 1 : index + 1]
-        average_gain = sum(max(value, 0.0) for value in rsi_returns) / config.rsi_period
-        average_loss = sum(max(-value, 0.0) for value in rsi_returns) / config.rsi_period
-        if average_gain == 0.0 and average_loss == 0.0:
-            rsi = 50.0
-        elif average_loss == 0.0:
-            rsi = 100.0
-        else:
-            relative_strength = average_gain / average_loss
-            rsi = 100.0 - (100.0 / (1.0 + relative_strength))
-        values.append(rsi)
-
-        values.extend(
-            (
-                origin.close / ema_fast[index] - 1.0,
-                origin.close / ema_slow[index] - 1.0,
-                macd[index] / origin.close,
-                macd_signal[index] / origin.close,
-                (macd[index] - macd_signal[index]) / origin.close,
-            )
-        )
-
-        bollinger_closes = closes[index - config.bollinger_window + 1 : index + 1]
-        bollinger_mean, bollinger_std = _mean_std(bollinger_closes)
-        if bollinger_std == 0.0:
-            bollinger_z = 0.0
-            bollinger_width = 0.0
-            bollinger_position = 0.5
-        else:
-            band_distance = config.bollinger_standard_deviations * bollinger_std
-            lower_band = bollinger_mean - band_distance
-            upper_band = bollinger_mean + band_distance
-            bollinger_z = (origin.close - bollinger_mean) / bollinger_std
-            bollinger_width = (upper_band - lower_band) / bollinger_mean
-            bollinger_position = (origin.close - lower_band) / (upper_band - lower_band)
-        values.extend((bollinger_z, bollinger_width, bollinger_position))
-
-        values.extend(closes[index - lag] for lag in config.raw_price_lags)
-        if not all(math.isfinite(value) for value in values):
-            raise FeatureConstructionError(
-                f"Non-finite derived feature at origin {origin.trading_date.isoformat()}"
-            )
+        values = _feature_values_at(records, index, config, context)
         samples.append(
             RegressionSample(
                 origin_date=origin.trading_date,
@@ -288,7 +365,7 @@ def build_regression_dataset(
                 origin_close=origin.close,
                 actual_close=target.close,
                 target_delta=target.close - origin.close,
-                feature_values=tuple(values),
+                feature_values=values,
             )
         )
 
@@ -296,7 +373,7 @@ def build_regression_dataset(
         feature_names=names,
         samples=tuple(samples),
         return_dates=tuple(record.trading_date for record in records[1:]),
-        daily_returns=tuple(returns[1:]),
+        daily_returns=context.returns[1:],
     )
     LOGGER.info(
         "Built causal LIR features samples=%d features=%d first_origin=%s last_origin=%s",

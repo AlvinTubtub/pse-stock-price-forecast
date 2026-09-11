@@ -206,6 +206,19 @@ class FittedLstmModel:
     ) -> np.ndarray:
         chosen = tuple(samples)
         matrix = sequence_matrix(chosen)
+        return self.predict_delta_sequences(matrix)
+
+    def predict_delta_sequences(
+        self,
+        sequences: Sequence[Sequence[float]] | np.ndarray,
+    ) -> np.ndarray:
+        """Predict unlabeled next deltas from causal production sequences."""
+
+        matrix = np.asarray(sequences, dtype=np.float64)
+        if matrix.ndim == 1:
+            matrix = matrix.reshape(1, -1)
+        if matrix.ndim != 2 or not np.isfinite(matrix).all():
+            raise ValueError("Prediction sequences must be a finite two-dimensional matrix")
         if matrix.shape[1] != self.specification.lookback:
             raise ValueError("Prediction sequence width does not match model lookback")
         scaled = self.scaler.transform(matrix)
@@ -214,7 +227,7 @@ class FittedLstmModel:
         with torch.no_grad():
             scaled_predictions = self.network(inputs).cpu().numpy().astype(np.float64)
         predictions = self.scaler.inverse_transform(scaled_predictions).reshape(-1)
-        if predictions.shape != (len(chosen),) or not np.isfinite(predictions).all():
+        if predictions.shape != (len(matrix),) or not np.isfinite(predictions).all():
             raise RuntimeError("LSTM produced invalid prediction output")
         return predictions
 
