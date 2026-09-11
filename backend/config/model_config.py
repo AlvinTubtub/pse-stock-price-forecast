@@ -164,6 +164,60 @@ class ArimaConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class LstmConfig:
+    """Central univariate LSTM search and chronological-stopping configuration."""
+
+    lookback_lengths: tuple[int, ...] = (5, 10, 20)
+    hidden_sizes: tuple[int, ...] = (16, 32)
+    learning_rates: tuple[float, ...] = (0.001, 0.003)
+    batch_sizes: tuple[int, ...] = (32,)
+    tuning_seeds: tuple[int, ...] = (11, 29, 47)
+    cv_splits: int = 5
+    max_epochs: int = 100
+    early_stopping_patience: int = 10
+    early_stopping_min_delta: float = 1e-6
+    stopping_tail_proportion: float = 0.15
+    minimum_stopping_samples: int = 5
+    final_seed: int = 42
+
+    def __post_init__(self) -> None:
+        positive_integer_grids = (
+            ("lookback_lengths", self.lookback_lengths),
+            ("hidden_sizes", self.hidden_sizes),
+            ("batch_sizes", self.batch_sizes),
+        )
+        for name, values in positive_integer_grids:
+            if not values or any(value < 1 for value in values):
+                raise ValueError(f"{name} must contain positive integers")
+            if tuple(sorted(set(values))) != values:
+                raise ValueError(f"{name} must be unique and strictly increasing")
+        if (
+            not self.learning_rates
+            or any(value <= 0 for value in self.learning_rates)
+            or tuple(sorted(set(self.learning_rates))) != self.learning_rates
+        ):
+            raise ValueError(
+                "learning_rates must be positive, unique, and strictly increasing"
+            )
+        if len(self.tuning_seeds) != 3 or len(set(self.tuning_seeds)) != 3:
+            raise ValueError("Exactly three unique tuning_seeds are required")
+        if any(seed < 0 for seed in self.tuning_seeds):
+            raise ValueError("tuning_seeds cannot be negative")
+        if self.cv_splits < 2:
+            raise ValueError("cv_splits must be at least 2")
+        if self.max_epochs < 1 or self.early_stopping_patience < 1:
+            raise ValueError("Epoch and patience settings must be positive")
+        if self.early_stopping_min_delta < 0:
+            raise ValueError("early_stopping_min_delta cannot be negative")
+        if not 0.0 < self.stopping_tail_proportion < 1.0:
+            raise ValueError("stopping_tail_proportion must be between zero and one")
+        if self.minimum_stopping_samples < 1:
+            raise ValueError("minimum_stopping_samples must be positive")
+        if self.final_seed != 42:
+            raise ValueError("The final development and production seed must remain 42")
+
+
+@dataclass(frozen=True, slots=True)
 class ModelConfig:
     """Settings that must be identical across model evaluations."""
 
@@ -171,6 +225,7 @@ class ModelConfig:
     random_seed: int = 42
     lag_regression: LagRegressionConfig = field(default_factory=LagRegressionConfig)
     arima: ArimaConfig = field(default_factory=ArimaConfig)
+    lstm: LstmConfig = field(default_factory=LstmConfig)
 
     def __post_init__(self) -> None:
         if not 0.0 < self.evaluation_proportion < 1.0:

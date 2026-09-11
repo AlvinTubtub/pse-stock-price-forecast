@@ -19,11 +19,15 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
 ## Current status
 
-Phase 5 adds a fresh statsmodels ARIMA implementation alongside Lag-Informed Regression. ARIMA models the chronological Close series, searches an explicit order/trend grid with expanding-window one-step validation, requires convergence evidence, and updates state without refitting coefficients during evaluation. LSTM is intentionally not implemented yet.
+Phase 6 adds one fresh univariate PyTorch LSTM alongside Lag-Informed Regression and ARIMA. It consumes only historical daily Close deltas and predicts the next daily Close delta. Every lookback is compared on validation target dates derived from the maximum configured lookback.
 
 Lag-Informed Regression keeps evaluation and production fitting separate. Reproducibility metadata can be written only under the ignored `artifacts/lir/` directory.
 
 ARIMA likewise keeps evaluation and production fitting separate. Its reproducibility metadata can be written only under the ignored `artifacts/arima/` directory.
+
+LSTM early stopping uses a chronological tail inside each training block. Each final fit first selects an epoch count, then creates a fresh scaler and model and trains on the entire development or production block. Metadata and PyTorch state are written only under the ignored `artifacts/lstm/` directory.
+
+PyTorch deterministic algorithms and fixed seeds are enabled. Exact floating-point results can still vary across PyTorch releases, operating systems, CPU architectures, and other hardware/software differences.
 
 ## Development setup
 

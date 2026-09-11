@@ -17,6 +17,14 @@ from .train_lir import (
     refit_lir_for_production,
     train_lir_for_evaluation,
 )
+from .train_lstm import (
+    LstmEvaluationResult,
+    LstmTrainingError,
+    persist_lstm_artifacts,
+    refit_lstm_for_production,
+    train_lstm_for_evaluation,
+    tune_lstm,
+)
 
 __all__ = [
     "AdfDiagnostic",
@@ -25,12 +33,18 @@ __all__ = [
     "ArimaTuningError",
     "ExpandingWindowFold",
     "LIREvaluationResult",
+    "LstmEvaluationResult",
+    "LstmTrainingError",
     "expanding_window_folds",
     "persist_lir_metadata",
+    "persist_lstm_artifacts",
     "persist_arima_metadata",
     "refit_arima_for_production",
     "refit_lir_for_production",
+    "refit_lstm_for_production",
     "train_arima_for_evaluation",
     "train_lir_for_evaluation",
+    "train_lstm_for_evaluation",
     "tune_arima",
+    "tune_lstm",
 ]
