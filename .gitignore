@@ -35,6 +35,7 @@ pnpm-debug.log*
 
 # Backend runtime artifacts and logs
 /backend/artifacts/
+/backend/data/pdf_reports/
 backend/*.log
 
 # IDE
