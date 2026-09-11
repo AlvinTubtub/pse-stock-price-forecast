@@ -6,6 +6,7 @@ from datetime import date, datetime
 import hashlib
 import json
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -64,8 +65,8 @@ class ProductionSelections:
     lstm: LstmSpecification
 
     def __post_init__(self) -> None:
-        if self.lir_alpha <= 0:
-            raise ValueError("Selected LIR alpha must be positive")
+        if not math.isfinite(self.lir_alpha) or self.lir_alpha <= 0:
+            raise ValueError("Selected LIR alpha must be finite and positive")
 
 
 def selections_from_evaluation_results(
@@ -260,7 +261,7 @@ def validate_model_artifact_metadata(
     if (
         not isinstance(artifact_file, str)
         or Path(artifact_file).name != artifact_file
-        or not artifact_file.endswith(expected_extension)
+        or artifact_file != f"{expected_model.value}{expected_extension}"
     ):
         raise ModelArtifactCompatibilityError("Unsafe or incompatible artifact filename")
     artifact_sha256 = payload.get("artifact_sha256")

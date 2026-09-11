@@ -160,6 +160,29 @@ def load_production_model(
             raise ModelArtifactCompatibilityError(
                 f"Loaded {model.value} artifact has an incompatible model class"
             )
+        hyperparameters = metadata.hyperparameters
+        try:
+            if model is ModelId.LAG_REGRESSION and (
+                float(hyperparameters["alpha"]) != fitted_model.fit_metadata.alpha
+                or tuple(hyperparameters["feature_names"])
+                != fitted_model.fit_metadata.feature_names
+                or tuple(hyperparameters["pacf_selected_lags"])
+                != fitted_model.pacf_selected_lags
+            ):
+                raise ModelArtifactCompatibilityError(
+                    "LIR metadata does not match model state"
+                )
+            if model is ModelId.ARIMA and (
+                tuple(hyperparameters["order"]) != fitted_model.specification.order
+                or hyperparameters["trend"] != fitted_model.specification.trend
+            ):
+                raise ModelArtifactCompatibilityError(
+                    "ARIMA metadata does not match model state"
+                )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ModelArtifactCompatibilityError(
+                f"{model.value} hyperparameter metadata is incompatible"
+            ) from exc
     return ProductionModelArtifact(
         model_family=model,
         fitted_model=fitted_model,

@@ -85,8 +85,9 @@ def _predict_from_artifacts(
     company = get_company(symbol)
     history = tuple(records)
     require_chronological_records(history)
-    by_model = {artifact.model_family: artifact for artifact in artifacts}
-    if len(by_model) != len(tuple(artifacts)):
+    chosen_artifacts = tuple(artifacts)
+    by_model = {artifact.model_family: artifact for artifact in chosen_artifacts}
+    if len(by_model) != len(chosen_artifacts):
         raise NextDayInferenceError("Duplicate production model artifact")
     if set(by_model) != set(PRINCIPAL_MODELS):
         missing = sorted(model.value for model in set(PRINCIPAL_MODELS) - set(by_model))
@@ -94,6 +95,8 @@ def _predict_from_artifacts(
         raise NextDayInferenceError(
             f"Principal production model mismatch; missing={missing} extra={extra}"
         )
+    if any(artifact.metadata.symbol != company.symbol for artifact in chosen_artifacts):
+        raise NextDayInferenceError("Production artifact symbol does not match company")
     origin_date = history[-1].trading_date
     forecast_for = calendar.next_trading_day(origin_date)
     inference_at = manila_now()

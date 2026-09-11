@@ -19,7 +19,7 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
 ## Current status
 
-Phase 7 adds unified chronological evaluation for Lag-Informed Regression, ARIMA, LSTM, and a date-indexed naive persistence benchmark. The split is rebuilt from current raw history, all model outputs must cover the exact same evaluation target dates, and malformed or incomplete model/date combinations fail before metrics are calculated.
+Phase 8 adds fresh production refitting and next-PSE-session inference. Selected hyperparameters are carried forward from chronological evaluation, but every principal model, scaler, and fitted state is rebuilt using all currently available raw history.
 
 Lag-Informed Regression keeps evaluation and production fitting separate. Reproducibility metadata can be written only under the ignored `artifacts/lir/` directory.
 
@@ -30,6 +30,8 @@ LSTM early stopping uses a chronological tail inside each training block. Each f
 PyTorch deterministic algorithms and fixed seeds are enabled. Exact floating-point results can still vary across PyTorch releases, operating systems, CPU architectures, and other hardware/software differences.
 
 Unified evaluation emits canonical one-step-ahead records and computes full-precision RMSE, MAE, MASE, and R-squared. Every model uses the same MASE denominator calculated once from the company's development Close series. Principal models are ranked by evaluation RMSE; production refitting remains a separate later operation.
+
+Production model files and compatibility metadata live only under `artifacts/models/{SYMBOL}/`. Fresh refits never load existing files. Inference validates schema, implementation version, model identity, artifact format, SHA-256, training boundary, row count, and family-specific model state before predicting. A configured PSE calendar determines the next trading session.
 
 ## Development setup
 
