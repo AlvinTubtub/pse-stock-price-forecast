@@ -5,6 +5,7 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 ## Layout
 
 - `data/raw/`: preserved source market data. Pipeline code must treat these files as immutable inputs.
+- `data/pdf_reports/`: ignored staging area for downloaded official PSE EDGE EOD PDFs.
 - `config/`: pipeline configuration added in later phases.
 - `src/data/`: data loading and validation.
 - `src/features/`: feature engineering.
@@ -13,11 +14,14 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 - `src/evaluation/`: backtesting and metrics.
 - `src/inference/`: next-session inference.
 - `src/export/`: frontend-contract export logic.
+- `src/ingestion/`: ingestion-only PSE EOD download, parse, validation, and conflict-safe merge logic.
 - `artifacts/`: ignored generated outputs split into `models/`, `evaluations/`, `forecasts/`, and `logs/`.
 - `scripts/`: command-line entry points added in later phases.
 - `tests/`: backend tests added with each implementation phase.
 
 ## Current status
+
+Phase 11.5 restores automated official PSE EDGE EOD ingestion without restoring the old services or model lifecycle. It derives target symbols from `config/companies.py`, treats 404 dates as unpublished, rejects conflicting historical rows, validates every merge with the new raw validator, and never starts training or forecast export.
 
 Phase 11 adds four authoritative commands with structured JSON logging. The training command always tunes and fits from raw data; `--fresh` additionally resets all generated artifacts first. Single-symbol runs require `--no-export` because the frontend contract requires one complete 15-company dataset. The forecast command loads only compatible new production and evaluation artifacts and never retunes models.
 
@@ -85,6 +89,18 @@ Generate forecasts from persisted models without tuning or refitting:
 
 ```bash
 python -m scripts.forecast_all --all
+```
+
+Ingest all missing PSE EOD reports from the day after the newest raw date through the current Philippine date:
+
+```bash
+python scripts/update_eod.py
+```
+
+Ingest an explicit inclusive date range without running any model code:
+
+```bash
+python scripts/update_eod.py --start-date 2026-09-01 --end-date 2026-09-10 --verbose
 ```
 
 Artifact reset requires interactive confirmation unless `--yes` is supplied:
