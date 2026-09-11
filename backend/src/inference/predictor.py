@@ -218,18 +218,18 @@ def validate_artifact_against_history(
     artifact: ProductionModelArtifact,
     records: Sequence[OhlcvRecord],
 ) -> tuple[OhlcvRecord, ...]:
-    """Require inference history to exactly match the artifact training boundary."""
+    """Require history to contain the unchanged model-training boundary or newer rows."""
 
     history = tuple(records)
     require_chronological_records(history)
     metadata = artifact.metadata
-    if history[-1].trading_date != metadata.trained_through:
+    if len(history) < metadata.data_row_count:
         raise ModelArtifactCompatibilityError(
-            "Model trained-through date does not match current history"
+            "Current history ends before the model training boundary"
         )
-    if len(history) != metadata.data_row_count:
+    if history[metadata.data_row_count - 1].trading_date != metadata.trained_through:
         raise ModelArtifactCompatibilityError(
-            "Model data-row count does not match current history"
+            "Model trained-through date does not match the historical boundary"
         )
     return history
 
@@ -267,6 +267,8 @@ def predict_with_production_model(
         fitted = artifact.fitted_model
         if not isinstance(fitted, FittedArimaModel):
             raise ModelArtifactCompatibilityError("Invalid in-memory ARIMA model")
+        for observation in history[artifact.metadata.data_row_count :]:
+            fitted = fitted.append_actual(observation.close)
         predicted_close = fitted.forecast_one()
         predicted_delta = predicted_close - origin_close
     elif model is ModelId.LSTM:

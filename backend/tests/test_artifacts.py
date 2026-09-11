@@ -60,6 +60,7 @@ def test_artifact_manager_records_run_lifecycle_and_environment(tmp_path: Path) 
     assert payload["errors"] == []
     assert payload["python_version"]
     assert set(payload["dependency_versions"]) == {
+        "joblib",
         "numpy",
         "scikit-learn",
         "statsmodels",

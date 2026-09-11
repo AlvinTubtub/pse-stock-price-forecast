@@ -28,6 +28,7 @@ ARTIFACT_DIRECTORY_NAMES: Final[tuple[str, ...]] = (
 RUN_METADATA_SCHEMA_ID: Final[str] = "forecastph.training-run"
 RUN_METADATA_SCHEMA_VERSION: Final[int] = 1
 DEPENDENCY_DISTRIBUTIONS: Final[tuple[str, ...]] = (
+    "joblib",
     "numpy",
     "scikit-learn",
     "statsmodels",

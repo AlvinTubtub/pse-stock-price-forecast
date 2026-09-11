@@ -203,9 +203,34 @@ def test_fresh_refit_persists_and_predicts_all_three_models(
             fresh.origin_close + fresh.predicted_delta
         )
 
+    new_close = records[-1].close + 0.4
+    extended_records = records + (
+        OhlcvRecord(
+            trading_date=records[-1].trading_date + timedelta(days=1),
+            open=new_close - 0.2,
+            high=new_close + 0.7,
+            low=new_close - 0.7,
+            close=new_close,
+            volume=11_000.0,
+        ),
+    )
+    arima_artifact = result.artifact_for(ModelId.ARIMA)
+    expected_extended_arima = arima_artifact.fitted_model.append_actual(
+        new_close
+    ).forecast_one()
+    extended_arima = predict_with_production_model(
+        arima_artifact, extended_records
+    )
+    assert extended_arima.predicted_close == pytest.approx(expected_extended_arima)
+    for model in ModelId.LAG_REGRESSION, ModelId.LSTM:
+        extended = predict_with_production_model(
+            result.artifact_for(model), extended_records
+        )
+        assert math.isfinite(extended.predicted_close)
+
     with pytest.raises(
         ModelArtifactCompatibilityError,
-        match="trained-through date",
+        match="training boundary",
     ):
         predict_with_production_model(result.artifact_for(ModelId.ARIMA), records[:-1])
 
@@ -224,7 +249,6 @@ def test_fresh_refit_persists_and_predicts_all_three_models(
             expected_model=ModelId.LAG_REGRESSION,
         )
 
-    arima_artifact = result.artifact_for(ModelId.ARIMA)
     arima_payload = json.loads(
         arima_artifact.metadata_path.read_text(encoding="utf-8")
     )

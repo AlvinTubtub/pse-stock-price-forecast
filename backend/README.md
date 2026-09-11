@@ -19,6 +19,8 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
 ## Current status
 
+Phase 11 adds four authoritative commands with structured JSON logging. The training command always tunes and fits from raw data; `--fresh` additionally resets all generated artifacts first. Single-symbol runs require `--no-export` because the frontend contract requires one complete 15-company dataset. The forecast command loads only compatible new production and evaluation artifacts and never retunes models.
+
 Phase 10 adds the operational frontend exporter. It accepts only the new typed evaluation and next-day inference results plus validated raw OHLCV records, emits the documented 34 operational files, and validates every JSON document before atomic replacement. It does not read existing frontend JSON as model input and does not touch the preserved formal-study file.
 
 Phase 9 adds one lightweight generated-artifact layout. Ordinary training-run manifests in `artifacts/logs/` record timing, environment versions, the source-data boundary, processed symbols, status, and errors. They are operational records only, not immutable formal experiments.
@@ -60,3 +62,33 @@ python -m scripts.reset_artifacts
 ```
 
 The reset command validates that its target is exactly `backend/artifacts`. It never deletes or rewrites `data/raw`.
+
+Validate all configured raw files and report row counts and date ranges:
+
+```bash
+python -m scripts.validate_raw --all
+```
+
+Run the complete fresh lifecycle and publish frontend forecast data:
+
+```bash
+python -m scripts.train_all --all --fresh
+```
+
+Train one company for diagnostics without publishing a partial frontend dataset:
+
+```bash
+python -m scripts.train_all --symbol ALI --fresh --no-export --verbose
+```
+
+Generate forecasts from persisted models without tuning or refitting:
+
+```bash
+python -m scripts.forecast_all --all
+```
+
+Artifact reset requires interactive confirmation unless `--yes` is supplied:
+
+```bash
+python -m scripts.reset_artifacts --yes
+```
