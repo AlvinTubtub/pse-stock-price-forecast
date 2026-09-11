@@ -19,9 +19,11 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
 ## Current status
 
-Phase 4 adds a fresh Lag-Informed Regression implementation. It predicts next-session close deltas with causal OHLCV features, fold-local PACF lag selection, fold-local standardization, expanding-window alpha tuning, and LASSO as the final estimator. ARIMA and LSTM are intentionally not implemented yet.
+Phase 5 adds a fresh statsmodels ARIMA implementation alongside Lag-Informed Regression. ARIMA models the chronological Close series, searches an explicit order/trend grid with expanding-window one-step validation, requires convergence evidence, and updates state without refitting coefficients during evaluation. LSTM is intentionally not implemented yet.
 
 Lag-Informed Regression keeps evaluation and production fitting separate. Reproducibility metadata can be written only under the ignored `artifacts/lir/` directory.
+
+ARIMA likewise keeps evaluation and production fitting separate. Its reproducibility metadata can be written only under the ignored `artifacts/arima/` directory.
 
 ## Development setup
 

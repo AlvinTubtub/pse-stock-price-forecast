@@ -97,12 +97,80 @@ class LagRegressionConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ArimaConfig:
+    """Search bounds, trend policy, and convergence settings for ARIMA."""
+
+    p_values: tuple[int, ...] = (0, 1, 2, 3)
+    d_values: tuple[int, ...] = (0, 1, 2)
+    q_values: tuple[int, ...] = (0, 1, 2, 3)
+    trend_options_by_d: tuple[tuple[int, tuple[str, ...]], ...] = (
+        (0, ("c",)),
+        (1, ("t",)),
+        (2, ("n",)),
+    )
+    cv_splits: int = 5
+    retry_max_iterations: tuple[int, ...] = (200, 1_000)
+    enforce_stationarity: bool = False
+    enforce_invertibility: bool = False
+    require_confirmed_convergence: bool = True
+
+    def __post_init__(self) -> None:
+        integer_grids = (
+            ("p_values", self.p_values, 0, 3),
+            ("d_values", self.d_values, 0, 2),
+            ("q_values", self.q_values, 0, 3),
+        )
+        for name, values, lower, upper in integer_grids:
+            if not values:
+                raise ValueError(f"{name} cannot be empty")
+            if tuple(sorted(set(values))) != values:
+                raise ValueError(f"{name} must be unique and strictly increasing")
+            if any(value < lower or value > upper for value in values):
+                raise ValueError(f"{name} must stay within {lower}..{upper}")
+
+        trend_map = dict(self.trend_options_by_d)
+        if len(trend_map) != len(self.trend_options_by_d):
+            raise ValueError("trend_options_by_d cannot repeat a differencing order")
+        valid_trends = {"n", "c", "t", "ct"}
+        for differencing in self.d_values:
+            options = trend_map.get(differencing)
+            if not options:
+                raise ValueError(f"No trend options configured for d={differencing}")
+            if len(set(options)) != len(options) or any(
+                option not in valid_trends for option in options
+            ):
+                raise ValueError(
+                    "Trend options must be unique values drawn from n, c, t, and ct"
+                )
+        if self.cv_splits < 2:
+            raise ValueError("cv_splits must be at least 2")
+        if (
+            not self.retry_max_iterations
+            or tuple(sorted(set(self.retry_max_iterations)))
+            != self.retry_max_iterations
+            or any(value < 1 for value in self.retry_max_iterations)
+        ):
+            raise ValueError(
+                "retry_max_iterations must be unique, positive, and strictly increasing"
+            )
+
+    def trends_for_d(self, differencing: int) -> tuple[str, ...]:
+        """Return the predeclared trend choices for one differencing order."""
+
+        try:
+            return dict(self.trend_options_by_d)[differencing]
+        except KeyError as exc:
+            raise ValueError(f"No trend options configured for d={differencing}") from exc
+
+
+@dataclass(frozen=True, slots=True)
 class ModelConfig:
     """Settings that must be identical across model evaluations."""
 
     evaluation_proportion: float = 0.15
     random_seed: int = 42
     lag_regression: LagRegressionConfig = field(default_factory=LagRegressionConfig)
+    arima: ArimaConfig = field(default_factory=ArimaConfig)
 
     def __post_init__(self) -> None:
         if not 0.0 < self.evaluation_proportion < 1.0:
