@@ -19,7 +19,9 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
 ## Current status
 
-Phase 3 provides strict raw-data loading, OHLCV validation, next-session target construction, a shared chronological evaluation plan, explicit company/model configuration, and PSE calendar helpers. Forecasting algorithms are intentionally not implemented yet.
+Phase 4 adds a fresh Lag-Informed Regression implementation. It predicts next-session close deltas with causal OHLCV features, fold-local PACF lag selection, fold-local standardization, expanding-window alpha tuning, and LASSO as the final estimator. ARIMA and LSTM are intentionally not implemented yet.
+
+Lag-Informed Regression keeps evaluation and production fitting separate. Reproducibility metadata can be written only under the ignored `artifacts/lir/` directory.
 
 ## Development setup
 

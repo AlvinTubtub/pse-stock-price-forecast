@@ -8,7 +8,11 @@ version = "0.1.0"
 description = "ForecastPH forecasting backend"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=1.26,<3.0",
+    "scikit-learn>=1.4,<2.0",
+    "statsmodels>=0.14,<1.0",
+]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0,<10.0"]
