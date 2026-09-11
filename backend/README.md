@@ -19,7 +19,7 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
 ## Current status
 
-Phase 2 provides package skeletons only. Forecasting algorithms, training, evaluation, inference, and export behavior are intentionally not implemented yet.
+Phase 3 provides strict raw-data loading, OHLCV validation, next-session target construction, a shared chronological evaluation plan, explicit company/model configuration, and PSE calendar helpers. Forecasting algorithms are intentionally not implemented yet.
 
 ## Development setup
 
