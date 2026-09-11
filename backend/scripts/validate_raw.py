@@ -1,8 +1,15 @@
 """Validate and report configured immutable raw OHLCV histories."""
 
+from __future__ import annotations
+
 import argparse
 import logging
 from collections.abc import Sequence
+from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts._common import add_symbol_selection, add_verbose_option, selected_symbols
 from src.data.loader import load_company_history
@@ -14,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    add_symbol_selection(parser)
+    add_symbol_selection(parser, required=False)
     add_verbose_option(parser)
     return parser
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from config.companies import COMPANIES
 from src.ingestion.cleaner import NumericCleaningError, QuotationRecord, clean_quotation
 from src.ingestion.config import (
     DEFAULT_INGESTION_SETTINGS,
@@ -19,6 +20,7 @@ from src.ingestion.config import (
 LOGGER = logging.getLogger(__name__)
 DATE_PATTERN = re.compile(r"([A-Za-z]+ \d{1,2}, \d{4})")
 LOCAL_FILENAME_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})-EOD\.pdf$")
+QUOTATION_VALUE_COUNT = 9
 
 
 class PdfParseError(ValueError):
@@ -53,28 +55,37 @@ def parse_quotation_line(
 
     symbols = target_symbols if target_symbols is not None else configured_symbols()
     tokens = line.split()
-    symbol_index = next((index for index, token in enumerate(tokens) if token in symbols), None)
-    if symbol_index is None:
+    identified = None
+    for company in COMPANIES:
+        if company.symbol not in symbols:
+            continue
+        expected_prefix = (*company.pse_issue_name.split(), company.symbol)
+        if tuple(tokens[: len(expected_prefix)]) == expected_prefix:
+            identified = (company, len(expected_prefix) - 1)
+            break
+    if identified is None:
         return None
+    company, symbol_index = identified
     remaining = tokens[symbol_index + 1 :]
-    # PSE layout after Symbol: Bid, Ask, Open, High, Low, Close, change,
-    # Volume, Value. The change column is deliberately not modeled.
-    if symbol_index == 0 or len(remaining) < 9:
-        raise PdfParseError(f"Malformed quotation row for {tokens[symbol_index]}: {line!r}")
+    # Actual PSE layout after Symbol: Bid, Ask, Open, High, Low, Close,
+    # Volume, Value, and Net Foreign Buying/(Selling). Only OHLCV and Value
+    # are retained; Net Foreign is outside the canonical ingestion contract.
+    if len(remaining) != QUOTATION_VALUE_COUNT:
+        raise PdfParseError(f"Malformed quotation row for {company.symbol}: {line!r}")
     try:
         return clean_quotation(
             report_date=report_date,
-            issue_name=" ".join(tokens[:symbol_index]),
-            symbol=tokens[symbol_index],
+            issue_name=company.pse_issue_name,
+            symbol=company.symbol,
             open_value=remaining[2],
             high_value=remaining[3],
             low_value=remaining[4],
             close_value=remaining[5],
-            volume_value=remaining[7],
-            traded_value=remaining[8],
+            volume_value=remaining[6],
+            traded_value=remaining[7],
         )
     except NumericCleaningError as exc:
-        raise PdfParseError(f"Malformed quotation row for {tokens[symbol_index]}: {exc}") from exc
+        raise PdfParseError(f"Malformed quotation row for {company.symbol}: {exc}") from exc
 
 
 def _open_pdf(path: Path) -> Any:

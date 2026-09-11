@@ -3,6 +3,8 @@
 from datetime import date, datetime, timedelta
 import json
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -29,6 +31,7 @@ from src.training.orchestration import (
 
 
 MANILA = ZoneInfo("Asia/Manila")
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 def synthetic_records(count: int = 24) -> tuple[OhlcvRecord, ...]:
@@ -356,6 +359,44 @@ def test_validate_raw_and_reset_cli_confirmation(
     assert reset_calls == []
     assert reset_artifacts.main(["--yes"]) == 0
     assert reset_calls == [True]
+
+
+@pytest.mark.parametrize(
+    "script_name",
+    ("validate_raw.py", "train_all.py", "forecast_all.py", "reset_artifacts.py"),
+)
+def test_phase_11_scripts_support_direct_execution(script_name: str) -> None:
+    completed = subprocess.run(
+        [sys.executable, str(BACKEND_ROOT / "scripts" / script_name), "--help"],
+        cwd=BACKEND_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_validate_raw_defaults_to_all_symbols_for_both_entry_styles() -> None:
+    direct = subprocess.run(
+        [sys.executable, str(BACKEND_ROOT / "scripts" / "validate_raw.py")],
+        cwd=BACKEND_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    module = subprocess.run(
+        [sys.executable, "-m", "scripts.validate_raw"],
+        cwd=BACKEND_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert direct.returncode == 0, direct.stderr
+    assert module.returncode == 0, module.stderr
+    assert "Raw validation summary symbols=15" in direct.stderr
+    assert "failures=0" in direct.stderr
+    assert "Raw validation summary symbols=15" in module.stderr
+    assert "failures=0" in module.stderr
 
 
 def test_single_symbol_export_is_rejected_to_protect_full_frontend_contract() -> None:

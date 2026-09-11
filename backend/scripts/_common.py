@@ -6,14 +6,16 @@ from datetime import date
 from config.companies import COMPANIES, get_company
 
 
-def add_symbol_selection(parser: argparse.ArgumentParser) -> None:
-    selection = parser.add_mutually_exclusive_group(required=True)
+def add_symbol_selection(
+    parser: argparse.ArgumentParser, *, required: bool = True
+) -> None:
+    selection = parser.add_mutually_exclusive_group(required=required)
     selection.add_argument("--symbol", help="Process one configured PSE symbol")
     selection.add_argument("--all", action="store_true", help="Process all configured symbols")
 
 
 def selected_symbols(arguments: argparse.Namespace) -> tuple[str, ...]:
-    if arguments.all:
+    if arguments.all or arguments.symbol is None:
         return tuple(company.symbol for company in COMPANIES)
     return (get_company(arguments.symbol).symbol,)
 

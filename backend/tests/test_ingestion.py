@@ -8,6 +8,7 @@ from urllib.error import URLError
 
 import pytest
 
+from config.companies import COMPANIES
 from scripts import update_eod
 from src.ingestion.cleaner import NumericCleaningError, clean_number, clean_quotation
 from src.ingestion.config import IngestionSettings
@@ -19,7 +20,12 @@ from src.ingestion.downloader import (
     report_url,
 )
 from src.ingestion.merger import RawMergeError, merge_symbol, validate_raw_file
-from src.ingestion.parser import ParseBatchResult, parse_pdf, parse_quotation_line
+from src.ingestion.parser import (
+    ParseBatchResult,
+    PdfParseError,
+    parse_pdf,
+    parse_quotation_line,
+)
 from src.ingestion.pipeline import resolve_date_range, run_ingestion
 
 
@@ -155,7 +161,7 @@ def test_parser_extracts_only_configured_company_rows(tmp_path: Path) -> None:
     text = "\n".join(
         (
             "END OF DAY QUOTATION REPORT September 7, 2026",
-            "BANK PH ISLANDS BPI 99 100 100 103 99 101 1 123,000 12,345,000",
+            "BANK PH ISLANDS BPI 99 100 100 103 99 101 123,000 12,345,000 1",
             "UNKNOWN COMPANY XYZ 1 2 1 2 1 2 0 5 10",
         )
     )
@@ -170,9 +176,9 @@ def test_parser_extracts_only_configured_company_rows(tmp_path: Path) -> None:
     assert record.value == Decimal("12345000")
 
 
-def test_parser_quotation_layout_matches_main_branch_offsets() -> None:
+def test_parser_quotation_layout_matches_actual_pse_columns() -> None:
     record = parse_quotation_line(
-        "BANK PH ISLANDS BPI 99 100 100 103 99 101 1 123,000 12,345,000",
+        "BANK PH ISLANDS BPI 99 100 100 103 99 101 123,000 12,345,000 1",
         date(2026, 9, 7),
     )
     assert record is not None
@@ -182,6 +188,69 @@ def test_parser_quotation_layout_matches_main_branch_offsets() -> None:
         Decimal("99"),
         Decimal("101"),
     )
+    assert record.volume == Decimal("123000")
+    assert record.value == Decimal("12345000")
+
+
+def test_glo_token_inside_unrelated_issue_name_is_not_a_target_row() -> None:
+    assert (
+        parse_quotation_line(
+            "GLO PREF ANV GLOBA 1,925 1,964 - - - - - - -",
+            date(2026, 9, 11),
+        )
+        is None
+    )
+
+
+def test_genuine_glo_common_stock_row_is_parsed_once_and_correctly() -> None:
+    record = parse_quotation_line(
+        "GLOBE TELECOM GLO 1,598 1,600 1,620 1,623 1,595 1,600 "
+        "31,180 49,938,475 (21,146,560)",
+        date(2026, 9, 11),
+    )
+    assert record is not None
+    assert record.symbol == "GLO"
+    assert record.issue_name == "GLOBE TELECOM"
+    assert record.open == Decimal("1620")
+    assert record.high == Decimal("1623")
+    assert record.low == Decimal("1595")
+    assert record.close == Decimal("1600")
+    assert record.volume == Decimal("31180")
+    assert record.value == Decimal("49938475")
+
+
+def test_genuine_target_row_with_malformed_ohlcv_remains_strict() -> None:
+    with pytest.raises(PdfParseError, match="Malformed quotation row for GLO"):
+        parse_quotation_line(
+            "GLOBE TELECOM GLO 1,598 1,600 bad 1,623 1,595 1,600 "
+            "31,180 49,938,475 (21,146,560)",
+            date(2026, 9, 11),
+        )
+
+
+def test_false_positive_line_cannot_invalidate_full_configured_report(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "2026-09-11-EOD.pdf"
+    path.write_bytes(b"placeholder")
+    quote_lines = [
+        f"{company.pse_issue_name} {company.symbol} "
+        "99 100 100 103 99 101 123,000 12,345,000 1"
+        for company in COMPANIES
+    ]
+    text = "\n".join(
+        [
+            "Daily Quotation Report September 11, 2026",
+            "GLO PREF ANV GLOBA 1,925 1,964 - - - - - - -",
+            *quote_lines,
+        ]
+    )
+    records = parse_pdf(path, pdf_opener=lambda _path: _Pdf([_Page(text)]))
+    assert len(records) == len(COMPANIES) == 15
+    assert {record.symbol for record in records} == {
+        company.symbol for company in COMPANIES
+    }
+    assert sum(record.symbol == "GLO" for record in records) == 1
 
 
 def test_numeric_cleaning_is_deterministic_and_strict() -> None:
