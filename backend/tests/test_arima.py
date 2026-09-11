@@ -372,6 +372,8 @@ def test_metadata_is_written_only_below_arima_artifacts(monkeypatch, tmp_path) -
 
     destination = persist_arima_metadata(result, artifact_name="ALI-test")
 
-    assert destination == tmp_path / "artifacts" / "arima" / "ALI-test.json"
+    assert destination == (
+        tmp_path / "artifacts" / "evaluations" / "arima" / "ALI-test.json"
+    )
     assert destination.is_file()
     assert '"selected_specification"' in destination.read_text(encoding="utf-8")

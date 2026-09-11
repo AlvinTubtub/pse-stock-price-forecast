@@ -334,7 +334,9 @@ def test_model_and_scaler_state_are_persisted_under_artifacts(
     metadata = json.loads(paths.metadata.read_text(encoding="utf-8"))
     checkpoint = torch.load(paths.model_state, map_location="cpu", weights_only=True)
 
-    assert paths.metadata.parent == tmp_path / "artifacts" / "lstm"
+    assert paths.metadata.parent == (
+        tmp_path / "artifacts" / "evaluations" / "lstm"
+    )
     assert paths.model_state.parent == paths.metadata.parent
     assert metadata["model_state_file"] == "ALI-test.pt"
     assert metadata["final_development_stage_b"]["scaler"]

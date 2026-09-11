@@ -13,19 +13,21 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 - `src/evaluation/`: backtesting and metrics.
 - `src/inference/`: next-session inference.
 - `src/export/`: frontend-contract export logic.
-- `artifacts/`: ignored runtime outputs such as trained models, metrics, and intermediate data.
+- `artifacts/`: ignored generated outputs split into `models/`, `evaluations/`, `forecasts/`, and `logs/`.
 - `scripts/`: command-line entry points added in later phases.
 - `tests/`: backend tests added with each implementation phase.
 
 ## Current status
 
+Phase 9 adds one lightweight generated-artifact layout. Ordinary training-run manifests in `artifacts/logs/` record timing, environment versions, the source-data boundary, processed symbols, status, and errors. They are operational records only, not immutable formal experiments.
+
 Phase 8 adds fresh production refitting and next-PSE-session inference. Selected hyperparameters are carried forward from chronological evaluation, but every principal model, scaler, and fitted state is rebuilt using all currently available raw history.
 
-Lag-Informed Regression keeps evaluation and production fitting separate. Reproducibility metadata can be written only under the ignored `artifacts/lir/` directory.
+Lag-Informed Regression keeps evaluation and production fitting separate. Generated evaluation metadata is written under `artifacts/evaluations/lir/`.
 
-ARIMA likewise keeps evaluation and production fitting separate. Its reproducibility metadata can be written only under the ignored `artifacts/arima/` directory.
+ARIMA likewise keeps evaluation and production fitting separate. Generated evaluation metadata is written under `artifacts/evaluations/arima/`.
 
-LSTM early stopping uses a chronological tail inside each training block. Each final fit first selects an epoch count, then creates a fresh scaler and model and trains on the entire development or production block. Metadata and PyTorch state are written only under the ignored `artifacts/lstm/` directory.
+LSTM early stopping uses a chronological tail inside each training block. Each final fit first selects an epoch count, then creates a fresh scaler and model and trains on the entire development or production block. Generated evaluation metadata and state are written under `artifacts/evaluations/lstm/`.
 
 PyTorch deterministic algorithms and fixed seeds are enabled. Exact floating-point results can still vary across PyTorch releases, operating systems, CPU architectures, and other hardware/software differences.
 
@@ -48,3 +50,11 @@ Run tests from `backend/` after tests are introduced:
 ```bash
 python -m pytest
 ```
+
+Safely clear generated artifacts and recreate the four artifact directories:
+
+```bash
+python -m scripts.reset_artifacts
+```
+
+The reset command validates that its target is exactly `backend/artifacts`. It never deletes or rewrites `data/raw`.

@@ -16,6 +16,7 @@ import torch
 from config.companies import get_company
 from config.model_config import DEFAULT_MODEL_CONFIG, ModelConfig, ModelId
 from config.settings import SETTINGS, manila_now
+from src.artifacts.manager import ArtifactManager
 from src.data.loader import load_company_history
 from src.data.validator import OhlcvRecord, require_chronological_records
 from src.features.regression_features import build_regression_dataset
@@ -152,9 +153,7 @@ def compute_artifact_sha256(path: Path) -> str:
 
 
 def _models_root() -> Path:
-    root = (SETTINGS.artifacts_dir / "models").resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    return ArtifactManager(SETTINGS.artifacts_dir).ensure_directories().models.resolve()
 
 
 def _symbol_directory(root: Path, symbol: str) -> Path:

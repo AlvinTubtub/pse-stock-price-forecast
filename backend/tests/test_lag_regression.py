@@ -264,7 +264,8 @@ def test_reproducibility_metadata_persists_only_under_artifacts(
     try:
         payload = json.loads(destination.read_text(encoding="utf-8"))
         assert destination.parent.name == "lir"
-        assert destination.parents[1].name == "artifacts"
+        assert destination.parents[1].name == "evaluations"
+        assert destination.parents[2].name == "artifacts"
         assert payload["tuning"]["chosen_alpha"] == result.tuning.chosen_alpha
         assert payload["development_fit"]["selected_features"] == list(
             result.fitted.fit_metadata.selected_features

@@ -14,6 +14,7 @@ from statsmodels.tsa.stattools import adfuller
 
 from config.model_config import ArimaConfig, DEFAULT_MODEL_CONFIG
 from config.settings import SETTINGS
+from src.artifacts.manager import ArtifactManager
 from src.data.split import CompanyEvaluationPlan
 from src.data.validator import OhlcvRecord, require_chronological_records
 from src.models.arima import (
@@ -427,14 +428,17 @@ def persist_arima_metadata(
     *,
     artifact_name: str,
 ) -> Path:
-    """Persist ARIMA reproducibility metadata only under backend/artifacts/arima."""
+    """Persist ARIMA evaluation metadata under backend/artifacts/evaluations."""
 
     allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
     if not artifact_name or any(character not in allowed for character in artifact_name):
         raise ValueError(
             "artifact_name may contain only letters, numbers, hyphens, and underscores"
         )
-    output_dir = SETTINGS.artifacts_dir / "arima"
+    output_dir = (
+        ArtifactManager(SETTINGS.artifacts_dir).ensure_directories().evaluations
+        / "arima"
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / f"{artifact_name}.json"
     with destination.open("w", encoding="utf-8") as output:

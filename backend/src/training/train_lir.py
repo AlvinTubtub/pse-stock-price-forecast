@@ -13,6 +13,7 @@ import numpy as np
 
 from config.model_config import DEFAULT_MODEL_CONFIG, LagRegressionConfig
 from config.settings import SETTINGS
+from src.artifacts.manager import ArtifactManager
 from src.data.split import CompanyEvaluationPlan
 from src.features.regression_features import (
     RegressionDataset,
@@ -328,11 +329,13 @@ def persist_lir_metadata(
     *,
     artifact_name: str,
 ) -> Path:
-    """Persist reproducibility metadata only under backend/artifacts/lir."""
+    """Persist LIR evaluation metadata under backend/artifacts/evaluations."""
 
     if not artifact_name or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for character in artifact_name):
         raise ValueError("artifact_name may contain only letters, numbers, hyphens, and underscores")
-    output_dir = SETTINGS.artifacts_dir / "lir"
+    output_dir = (
+        ArtifactManager(SETTINGS.artifacts_dir).ensure_directories().evaluations / "lir"
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / f"{artifact_name}.json"
     with destination.open("w", encoding="utf-8") as output:

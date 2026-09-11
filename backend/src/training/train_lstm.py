@@ -15,6 +15,7 @@ from torch import nn
 
 from config.model_config import DEFAULT_MODEL_CONFIG, LstmConfig
 from config.settings import SETTINGS
+from src.artifacts.manager import ArtifactManager
 from src.data.split import CompanyEvaluationPlan
 from src.data.validator import OhlcvRecord, require_chronological_records
 from src.features.targets import NextDayForecastPair, build_next_day_pairs
@@ -711,7 +712,7 @@ def persist_lstm_artifacts(
     *,
     artifact_name: str,
 ) -> LstmArtifactPaths:
-    """Persist metadata and PyTorch state only under backend/artifacts/lstm."""
+    """Persist LSTM evaluation artifacts under backend/artifacts/evaluations."""
 
     allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
     if not artifact_name or any(character not in allowed for character in artifact_name):
@@ -719,7 +720,9 @@ def persist_lstm_artifacts(
             "artifact_name may contain only letters, numbers, hyphens, and underscores"
         )
     validate_model_state(result.fitted)
-    output_dir = SETTINGS.artifacts_dir / "lstm"
+    output_dir = (
+        ArtifactManager(SETTINGS.artifacts_dir).ensure_directories().evaluations / "lstm"
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     state_path = output_dir / f"{artifact_name}.pt"
     metadata_path = output_dir / f"{artifact_name}.json"
