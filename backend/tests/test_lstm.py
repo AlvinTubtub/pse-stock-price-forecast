@@ -23,6 +23,7 @@ from src.models.lstm import (
 from src.training import train_lstm as train_lstm_module
 from src.training.cross_validation import expanding_window_folds
 from src.training.train_lstm import (
+    LSTM_EVALUATION_SCHEMA_ID,
     candidate_specifications,
     fit_fixed_epochs,
     persist_lstm_artifacts,
@@ -338,7 +339,27 @@ def test_model_and_scaler_state_are_persisted_under_artifacts(
         tmp_path / "artifacts" / "evaluations" / "lstm"
     )
     assert paths.model_state.parent == paths.metadata.parent
+    assert metadata["schema_id"] == LSTM_EVALUATION_SCHEMA_ID
+    assert metadata["schema_version"] == 1
     assert metadata["model_state_file"] == "ALI-test.pt"
     assert metadata["final_development_stage_b"]["scaler"]
     assert checkpoint["scaler"] == result.fitted.scaler.state_dict()
     assert checkpoint["model_state_dict"]
+    assert checkpoint["schema_id"] == LSTM_EVALUATION_SCHEMA_ID
+    assert len(metadata["tuning"]["candidates"]) == len(tuning.candidates)
+    for persisted, in_memory in zip(
+        metadata["tuning"]["candidates"], tuning.candidates
+    ):
+        assert {summary["seed"] for summary in persisted["seed_summaries"]} == set(
+            config.tuning_seeds
+        )
+        assert len(persisted["fold_seed_scores"]) == len(
+            in_memory.fold_seed_scores
+        )
+    expected = json.loads(
+        json.dumps(
+            result.as_metadata_dict(model_state_file="ALI-test.pt"),
+            allow_nan=False,
+        )
+    )
+    assert {key: metadata[key] for key in expected} == expected

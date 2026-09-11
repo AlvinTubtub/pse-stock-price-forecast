@@ -166,6 +166,16 @@ def test_train_company_lifecycle_calls_each_authoritative_stage_once(
 
         return implementation
 
+    def evidence_stage(name: str, expected, result):
+        def implementation(value, *, artifact_name, artifacts_root):
+            calls.append(name)
+            assert value is expected
+            assert artifact_name == "ALI"
+            assert artifacts_root == tmp_path / "artifacts"
+            return result
+
+        return implementation
+
     model_result = lambda offset: SimpleNamespace(
         symbol="ALI",
         target_dates=output_dates,
@@ -184,6 +194,36 @@ def test_train_company_lifecycle_calls_each_authoritative_stage_once(
     monkeypatch.setattr(orchestration, "train_lir_for_evaluation", stage("lir", lir))
     monkeypatch.setattr(orchestration, "train_arima_for_evaluation", stage("arima", arima))
     monkeypatch.setattr(orchestration, "train_lstm_for_evaluation", stage("lstm", lstm))
+    monkeypatch.setattr(
+        orchestration,
+        "persist_lir_metadata",
+        evidence_stage(
+            "persist_lir_evidence",
+            lir,
+            tmp_path / "evaluations/lir/ALI.json",
+        ),
+    )
+    monkeypatch.setattr(
+        orchestration,
+        "persist_arima_metadata",
+        evidence_stage(
+            "persist_arima_evidence",
+            arima,
+            tmp_path / "evaluations/arima/ALI.json",
+        ),
+    )
+    monkeypatch.setattr(
+        orchestration,
+        "persist_lstm_artifacts",
+        evidence_stage(
+            "persist_lstm_evidence",
+            lstm,
+            orchestration.LstmArtifactPaths(
+                metadata=tmp_path / "evaluations/lstm/ALI.json",
+                model_state=tmp_path / "evaluations/lstm/ALI.pt",
+            ),
+        ),
+    )
     monkeypatch.setattr(orchestration, "evaluate_prediction_outputs", stage("evaluate", evaluation))
     monkeypatch.setattr(
         orchestration, "selections_from_evaluation_results", stage("select", selections)
@@ -213,12 +253,24 @@ def test_train_company_lifecycle_calls_each_authoritative_stage_once(
     )
 
     assert result.symbol == "ALI"
+    assert result.production_refit is refit
+    assert result.evaluation_path == tmp_path / "evaluation.joblib"
+    assert result.forecast_path == tmp_path / "forecast.json"
+    assert result.frontend_artifacts.evaluation is evaluation
+    assert result.frontend_artifacts.next_day_forecast is forecast
+    assert result.model_evaluation_artifacts.lir_metadata.name == "ALI.json"
+    assert result.model_evaluation_artifacts.arima_metadata.name == "ALI.json"
+    assert result.model_evaluation_artifacts.lstm_metadata.name == "ALI.json"
+    assert result.model_evaluation_artifacts.lstm_model_state.name == "ALI.pt"
     assert calls == [
         "plan",
         "features",
         "lir",
         "arima",
         "lstm",
+        "persist_lir_evidence",
+        "persist_arima_evidence",
+        "persist_lstm_evidence",
         "evaluate",
         "select",
         "production_refit",
@@ -226,6 +278,41 @@ def test_train_company_lifecycle_calls_each_authoritative_stage_once(
         "persist_evaluation",
         "persist_forecast",
     ]
+
+
+def test_model_evidence_persistence_failure_stops_before_production_refit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    records = synthetic_records()
+    trained = SimpleNamespace(symbol="ALI")
+    production_called = False
+
+    monkeypatch.setattr(orchestration, "build_company_evaluation_plan", lambda *args, **kwargs: object())
+    monkeypatch.setattr(orchestration, "build_regression_dataset", lambda *args, **kwargs: object())
+    monkeypatch.setattr(orchestration, "train_lir_for_evaluation", lambda *args, **kwargs: trained)
+    monkeypatch.setattr(orchestration, "train_arima_for_evaluation", lambda *args, **kwargs: trained)
+    monkeypatch.setattr(orchestration, "train_lstm_for_evaluation", lambda *args, **kwargs: trained)
+
+    def fail_persistence(*args, **kwargs):
+        raise OSError("evaluation artifact storage unavailable")
+
+    def production_refit(*args, **kwargs):
+        nonlocal production_called
+        production_called = True
+
+    monkeypatch.setattr(orchestration, "persist_lir_metadata", fail_persistence)
+    monkeypatch.setattr(orchestration, "refit_all_principal_models", production_refit)
+
+    with pytest.raises(OSError, match="storage unavailable"):
+        train_company_lifecycle(
+            "ALI",
+            records,
+            calendar=PSETradingCalendar(),
+            artifacts_root=tmp_path / "artifacts",
+        )
+
+    assert not production_called
 
 
 def test_forecast_lifecycle_loads_and_predicts_without_training(

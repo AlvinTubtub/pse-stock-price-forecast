@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from src.artifacts.io import ArtifactWriteError, atomic_write_json
 from src.artifacts.manager import (
     ARTIFACT_DIRECTORY_NAMES,
     RUN_METADATA_SCHEMA_ID,
@@ -19,6 +20,21 @@ from src.artifacts.manager import (
 
 
 MANILA = ZoneInfo("Asia/Manila")
+
+
+def test_atomic_json_rejects_non_finite_values_without_replacing_destination(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "evidence.json"
+    destination.write_text('{"status": "previous"}\n', encoding="utf-8")
+
+    with pytest.raises(ArtifactWriteError, match="finite JSON"):
+        atomic_write_json(destination, {"rmse": float("nan")})
+
+    assert json.loads(destination.read_text(encoding="utf-8")) == {
+        "status": "previous"
+    }
+    assert not (tmp_path / ".evidence.json.tmp").exists()
 
 
 def backend_paths(tmp_path: Path) -> tuple[Path, Path, Path]:

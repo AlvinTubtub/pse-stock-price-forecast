@@ -3,10 +3,10 @@
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
-import json
 import logging
 import math
 from pathlib import Path
+from typing import Final
 import warnings
 
 import numpy as np
@@ -14,6 +14,7 @@ from statsmodels.tsa.stattools import adfuller
 
 from config.model_config import ArimaConfig, DEFAULT_MODEL_CONFIG
 from config.settings import SETTINGS
+from src.artifacts.io import atomic_write_json
 from src.artifacts.manager import ArtifactManager
 from src.data.split import CompanyEvaluationPlan
 from src.data.validator import OhlcvRecord, require_chronological_records
@@ -29,6 +30,8 @@ from src.training.cross_validation import expanding_window_folds
 
 
 LOGGER = logging.getLogger(__name__)
+ARIMA_EVALUATION_SCHEMA_ID: Final[str] = "forecastph.arima-evaluation"
+ARIMA_EVALUATION_SCHEMA_VERSION: Final[int] = 1
 
 
 class ArimaTuningError(ArimaError):
@@ -427,6 +430,7 @@ def persist_arima_metadata(
     result: ArimaEvaluationResult,
     *,
     artifact_name: str,
+    artifacts_root: Path | None = None,
 ) -> Path:
     """Persist ARIMA evaluation metadata under backend/artifacts/evaluations."""
 
@@ -435,20 +439,15 @@ def persist_arima_metadata(
         raise ValueError(
             "artifact_name may contain only letters, numbers, hyphens, and underscores"
         )
-    output_dir = (
-        ArtifactManager(SETTINGS.artifacts_dir).ensure_directories().evaluations
-        / "arima"
-    )
+    root = SETTINGS.artifacts_dir if artifacts_root is None else Path(artifacts_root)
+    output_dir = ArtifactManager(root).ensure_directories().evaluations / "arima"
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / f"{artifact_name}.json"
-    with destination.open("w", encoding="utf-8") as output:
-        json.dump(
-            result.as_metadata_dict(),
-            output,
-            indent=2,
-            sort_keys=True,
-            allow_nan=False,
-        )
-        output.write("\n")
+    payload = {
+        "schema_id": ARIMA_EVALUATION_SCHEMA_ID,
+        "schema_version": ARIMA_EVALUATION_SCHEMA_VERSION,
+        **result.as_metadata_dict(),
+    }
+    atomic_write_json(destination, payload)
     LOGGER.info("Persisted ARIMA metadata path=%s", destination)
     return destination

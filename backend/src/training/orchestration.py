@@ -36,9 +36,16 @@ from src.training.production_refit import (
     refit_all_principal_models,
     selections_from_evaluation_results,
 )
-from src.training.train_arima import train_arima_for_evaluation
-from src.training.train_lir import train_lir_for_evaluation
-from src.training.train_lstm import train_lstm_for_evaluation
+from src.training.train_arima import (
+    persist_arima_metadata,
+    train_arima_for_evaluation,
+)
+from src.training.train_lir import persist_lir_metadata, train_lir_for_evaluation
+from src.training.train_lstm import (
+    LstmArtifactPaths,
+    persist_lstm_artifacts,
+    train_lstm_for_evaluation,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -53,6 +60,16 @@ class OrchestrationError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class ModelEvaluationArtifactPaths:
+    """Detailed model-specific evidence created from one evaluation run."""
+
+    lir_metadata: Path
+    arima_metadata: Path
+    lstm_metadata: Path
+    lstm_model_state: Path
+
+
+@dataclass(frozen=True, slots=True)
 class CompanyTrainingResult:
     symbol: str
     frontend_artifacts: CompanyFrontendArtifacts
@@ -60,6 +77,7 @@ class CompanyTrainingResult:
     production_refit: ProductionRefitResult
     evaluation_path: Path
     forecast_path: Path
+    model_evaluation_artifacts: ModelEvaluationArtifactPaths
 
 
 def _artifact_root(artifacts_root: Path | None) -> Path:
@@ -297,6 +315,22 @@ def train_company_lifecycle(
     )
     arima = train_arima_for_evaluation(history, plan, config=model_config.arima)
     lstm = train_lstm_for_evaluation(history, plan, config=model_config.lstm)
+    LOGGER.info("Persisting model-specific evaluation evidence symbol=%s", company.symbol)
+    lir_evaluation_path = persist_lir_metadata(
+        lir,
+        artifact_name=company.symbol,
+        artifacts_root=artifacts_root,
+    )
+    arima_evaluation_path = persist_arima_metadata(
+        arima,
+        artifact_name=company.symbol,
+        artifacts_root=artifacts_root,
+    )
+    lstm_evaluation_paths: LstmArtifactPaths = persist_lstm_artifacts(
+        lstm,
+        artifact_name=company.symbol,
+        artifacts_root=artifacts_root,
+    )
     evaluation = evaluate_prediction_outputs(
         plan,
         (
@@ -358,6 +392,12 @@ def train_company_lifecycle(
         production_refit=production_refit,
         evaluation_path=evaluation_path,
         forecast_path=forecast_path,
+        model_evaluation_artifacts=ModelEvaluationArtifactPaths(
+            lir_metadata=lir_evaluation_path,
+            arima_metadata=arima_evaluation_path,
+            lstm_metadata=lstm_evaluation_paths.metadata,
+            lstm_model_state=lstm_evaluation_paths.model_state,
+        ),
     )
 
 

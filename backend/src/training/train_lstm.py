@@ -3,11 +3,11 @@
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
-import json
 import logging
 import math
 from pathlib import Path
 import random
+from typing import Final
 
 import numpy as np
 import torch
@@ -15,6 +15,7 @@ from torch import nn
 
 from config.model_config import DEFAULT_MODEL_CONFIG, LstmConfig
 from config.settings import SETTINGS
+from src.artifacts.io import atomic_write_json, validated_json_text
 from src.artifacts.manager import ArtifactManager
 from src.data.split import CompanyEvaluationPlan
 from src.data.validator import OhlcvRecord, require_chronological_records
@@ -35,6 +36,8 @@ from src.training.cross_validation import ExpandingWindowFold, expanding_window_
 
 
 LOGGER = logging.getLogger(__name__)
+LSTM_EVALUATION_SCHEMA_ID: Final[str] = "forecastph.lstm-evaluation"
+LSTM_EVALUATION_SCHEMA_VERSION: Final[int] = 1
 
 
 class LstmTrainingError(RuntimeError):
@@ -711,6 +714,7 @@ def persist_lstm_artifacts(
     result: LstmEvaluationResult,
     *,
     artifact_name: str,
+    artifacts_root: Path | None = None,
 ) -> LstmArtifactPaths:
     """Persist LSTM evaluation artifacts under backend/artifacts/evaluations."""
 
@@ -720,32 +724,42 @@ def persist_lstm_artifacts(
             "artifact_name may contain only letters, numbers, hyphens, and underscores"
         )
     validate_model_state(result.fitted)
-    output_dir = (
-        ArtifactManager(SETTINGS.artifacts_dir).ensure_directories().evaluations / "lstm"
-    )
+    root = SETTINGS.artifacts_dir if artifacts_root is None else Path(artifacts_root)
+    output_dir = ArtifactManager(root).ensure_directories().evaluations / "lstm"
     output_dir.mkdir(parents=True, exist_ok=True)
     state_path = output_dir / f"{artifact_name}.pt"
     metadata_path = output_dir / f"{artifact_name}.json"
-    torch.save(
-        {
-            "format_version": 1,
-            "specification": result.fitted.specification.as_dict(),
-            "selected_epoch_count": result.fitted.epoch_count,
-            "seed": result.fitted.seed,
-            "scaler": result.fitted.scaler.state_dict(),
-            "model_state_dict": result.fitted.cpu_state_dict(),
-        },
-        state_path,
-    )
-    with metadata_path.open("w", encoding="utf-8") as output:
-        json.dump(
-            result.as_metadata_dict(model_state_file=state_path.name),
-            output,
-            indent=2,
-            sort_keys=True,
-            allow_nan=False,
+    state_payload = {
+        "schema_id": LSTM_EVALUATION_SCHEMA_ID,
+        "schema_version": LSTM_EVALUATION_SCHEMA_VERSION,
+        "format_version": 1,
+        "specification": result.fitted.specification.as_dict(),
+        "selected_epoch_count": result.fitted.epoch_count,
+        "seed": result.fitted.seed,
+        "scaler": result.fitted.scaler.state_dict(),
+        "model_state_dict": result.fitted.cpu_state_dict(),
+    }
+    metadata_payload = {
+        "schema_id": LSTM_EVALUATION_SCHEMA_ID,
+        "schema_version": LSTM_EVALUATION_SCHEMA_VERSION,
+        **result.as_metadata_dict(model_state_file=state_path.name),
+    }
+    validated_json_text(metadata_payload)
+    temporary_state = state_path.with_name(f".{state_path.name}.tmp")
+    try:
+        torch.save(state_payload, temporary_state)
+        loaded_state = torch.load(
+            temporary_state,
+            map_location="cpu",
+            weights_only=True,
         )
-        output.write("\n")
+        if not isinstance(loaded_state, dict) or not loaded_state.get("model_state_dict"):
+            raise LstmTrainingError("Persisted LSTM evaluation state is incomplete")
+        temporary_state.replace(state_path)
+        atomic_write_json(metadata_path, metadata_payload)
+    except Exception:
+        temporary_state.unlink(missing_ok=True)
+        raise
     LOGGER.info(
         "Persisted LSTM artifacts metadata=%s model_state=%s",
         metadata_path,

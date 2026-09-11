@@ -1,6 +1,7 @@
 """Focused unit and integration tests for the fresh ARIMA pipeline."""
 
 from datetime import date, timedelta
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -22,7 +23,9 @@ from src.models.arima import (
 )
 from src.training import train_arima as train_arima_module
 from src.training.train_arima import (
+    ARIMA_EVALUATION_SCHEMA_ID,
     ArimaCandidateResult,
+    ArimaFoldScore,
     ArimaTuningResult,
     compute_adf_diagnostic,
     persist_arima_metadata,
@@ -352,10 +355,29 @@ def test_metadata_is_written_only_below_arima_artifacts(monkeypatch, tmp_path) -
         model_config=ModelConfig(evaluation_proportion=0.2),
     )
     specification = ArimaSpecification((0, 1, 0), "t")
+    attempt = ArimaFitAttempt(
+        max_iterations=200,
+        status=ConvergenceStatus.CONFIRMED_CONVERGED,
+        optimizer_details={"converged": True},
+    )
+    fold_scores = tuple(
+        ArimaFoldScore(
+            fold_index=index,
+            train_start=records[0].trading_date,
+            train_end=records[19 + index].trading_date,
+            validation_start=records[20 + index].trading_date,
+            validation_end=records[24 + index].trading_date,
+            train_size=20 + index,
+            validation_size=5,
+            rmse=1.0 + index / 10,
+            fit_attempts=(attempt,),
+        )
+        for index in range(2)
+    )
     tuning = ArimaTuningResult(
         selected_specification=specification,
         selected_mean_validation_rmse=1.0,
-        candidates=(ArimaCandidateResult(specification, True, 1.0, ()),),
+        candidates=(ArimaCandidateResult(specification, True, 1.0, fold_scores),),
     )
     monkeypatch.setattr(train_arima_module, "tune_arima", lambda *args, **kwargs: tuning)
     monkeypatch.setattr(
@@ -370,10 +392,24 @@ def test_metadata_is_written_only_below_arima_artifacts(monkeypatch, tmp_path) -
     )
     result = train_arima_for_evaluation(records, plan, config=arima_config())
 
-    destination = persist_arima_metadata(result, artifact_name="ALI-test")
+    destination = persist_arima_metadata(
+        result,
+        artifact_name="ALI-test",
+        artifacts_root=tmp_path / "artifacts",
+    )
+    payload = json.loads(destination.read_text(encoding="utf-8"))
 
     assert destination == (
         tmp_path / "artifacts" / "evaluations" / "arima" / "ALI-test.json"
     )
     assert destination.is_file()
-    assert '"selected_specification"' in destination.read_text(encoding="utf-8")
+    assert payload["schema_id"] == ARIMA_EVALUATION_SCHEMA_ID
+    assert payload["schema_version"] == 1
+    assert payload["tuning"]["selected_specification"] == specification.as_dict()
+    assert len(payload["tuning"]["candidates"]) == 1
+    assert len(payload["tuning"]["candidates"][0]["fold_scores"]) == 2
+    assert payload["tuning"]["candidates"][0]["fold_scores"][0][
+        "convergence_evidence"
+    ]
+    expected = json.loads(json.dumps(result.as_metadata_dict(), allow_nan=False))
+    assert {key: payload[key] for key in expected} == expected

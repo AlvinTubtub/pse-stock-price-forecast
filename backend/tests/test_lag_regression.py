@@ -21,6 +21,7 @@ from src.models.lag_regression import LagRegressionModel
 from src.training.cross_validation import expanding_window_folds
 from src.training.train_lir import (
     AlphaGridBoundaryWarning,
+    LIR_EVALUATION_SCHEMA_ID,
     persist_lir_metadata,
     refit_lir_for_production,
     train_lir_for_evaluation,
@@ -266,6 +267,8 @@ def test_reproducibility_metadata_persists_only_under_artifacts(
         assert destination.parent.name == "lir"
         assert destination.parents[1].name == "evaluations"
         assert destination.parents[2].name == "artifacts"
+        assert payload["schema_id"] == LIR_EVALUATION_SCHEMA_ID
+        assert payload["schema_version"] == 1
         assert payload["tuning"]["chosen_alpha"] == result.tuning.chosen_alpha
         assert payload["development_fit"]["selected_features"] == list(
             result.fitted.fit_metadata.selected_features
@@ -273,7 +276,21 @@ def test_reproducibility_metadata_persists_only_under_artifacts(
         assert payload["development_fit"]["coefficients"]
         assert payload["development_fit"]["scaler"]["mean"]
         assert payload["development_fit"]["pacf_selected_lags"] == [1]
-        assert payload["tuning"]["fold_scores"]
+        assert len(payload["tuning"]["mean_validation_rmse"]) == len(
+            result.configuration.alpha_grid
+        )
+        assert len(payload["tuning"]["fold_scores"]) == (
+            len(result.configuration.alpha_grid) * result.configuration.cv_splits
+        )
+        assert all(
+            fold["pacf_selected_lags"]
+            and fold["feature_names"]
+            and fold["scaler_mean"]
+            and fold["scaler_scale"]
+            for fold in payload["tuning"]["fold_scores"]
+        )
+        expected = json.loads(json.dumps(result.as_metadata_dict(), allow_nan=False))
+        assert {key: payload[key] for key in expected} == expected
     finally:
         destination.unlink(missing_ok=True)
         destination.parent.rmdir()
