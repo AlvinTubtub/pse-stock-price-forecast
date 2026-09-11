@@ -1,0 +1,12 @@
+{
+  "artifact_sha256": {
+    "development_close.json": "55007407dc0ffa2c09454bcf483365a4f2bdadca1d7f43a9a4ac755c7fd69b2c",
+    "diagnostics.json": "02cc9a391bdf87e42c5c569320b07c6c871bb2ad0a48f50ba0c85fcea4400939",
+    "holdout_predictions.csv": "c8cd119c6e71ae9785089b6ed1932fce3200d4d533d1083755304b289685a40b",
+    "metrics.json": "bf1ae78829d1c3cbcb3100836ef8e551e2c1321d5b5367ef1ec1526474b60b97",
+    "plan.json": "93a98bc8f472423b4ad7cacc68795c6925bdf97996c86903c5a276569f76a91b",
+    "source_data.json": "42887a795ba4b0cadd0b64ac00055bfa27a3416a176caf76c5fd3c0e1e4c7a53"
+  },
+  "completed_at": "2026-09-04T18:05:41.401828+00:00",
+  "symbol": "MEG"
+}

@@ -1,0 +1,12 @@
+{
+  "artifact_sha256": {
+    "development_close.json": "dd0889d2509d8279006c641ec3bbcd3130a8b4d6db81b388bddafc4a4968f0f2",
+    "diagnostics.json": "e3e769c1463fa6857a466f579f483286278ffa82bbba87decb8db2f8fa47ee1b",
+    "holdout_predictions.csv": "590c3ecf95fd117d9654a7ad039e3e0da503d2d87d0edb419e68c33064846b71",
+    "metrics.json": "bc927a57361f5a9cdc953a4956d408bc159aaac69a771e71bda170ea80238cb8",
+    "plan.json": "f7c0a7c2f3d05db97d5b0256775b0b6bad1958c999db5f0b0582f0cda8bfc8d6",
+    "source_data.json": "988c6f99aac018932b38297eccfe6811951f25aad90bada9b251139eb35a9ab4"
+  },
+  "completed_at": "2026-09-04T21:00:35.283278+00:00",
+  "symbol": "PGOLD"
+}

@@ -1,0 +1,12 @@
+{
+  "artifact_sha256": {
+    "development_close.json": "002d82a30c7eb0a4e69adc28592a4b4dae09da99cd1a76e386f7e33ec71c4df1",
+    "diagnostics.json": "997b3f6b602e01e3f2ebdd1f14510219a2b32009ec14b02716fa437639393a40",
+    "holdout_predictions.csv": "c9a59eee243916b2da2afc2cd63bb15464b54bc45c99609370a8c1998de92062",
+    "metrics.json": "f4e34613d03750af93bbe17fa7bdb9e8841fcae7dd1ce7ebe644e9b35fd9dbca",
+    "plan.json": "99f0347c94754c171dcc238372307e1d2b2e53c36f71957d93580701efcea95c",
+    "source_data.json": "0794ed247cfefcc7bcb764f8f1dc5f255ac2f079691423a7cc60bafdec2ada72"
+  },
+  "completed_at": "2026-09-04T22:31:24.239974+00:00",
+  "symbol": "SECB"
+}

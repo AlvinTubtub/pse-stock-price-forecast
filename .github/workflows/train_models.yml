@@ -8,9 +8,10 @@ name: PSE Scheduled Model Refresh
 
 on:
   schedule:
-    # Every November 3 at 00:00 UTC = 08:00 Philippine Time (UTC+8).
+    # Monthly on day 3 at 00:00 UTC = 08:00 Philippine Time (UTC+8).
+    # This refits approved configurations only; it never retunes or auto-promotes.
     # Manual execution remains available through workflow_dispatch.
-    - cron: "0 0 3 11 *"
+    - cron: "0 0 3 * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -127,6 +128,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No training changes to commit."
           else
-            git commit -m "Automated weekly model training ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git commit -m "Automated monthly deployment refresh ($(date -u +'%Y-%m-%d %H:%M UTC'))"
             git push
           fi

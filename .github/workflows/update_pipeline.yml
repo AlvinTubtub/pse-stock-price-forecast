@@ -8,12 +8,12 @@ name: Fast Pipeline (data + inference, no training)
 # It:
 #   1. Checks the PSE trading calendar (skips if weekend or Philippine holiday)
 #   2. Ingests the latest PSE EOD data
-#   3. Runs daily inference using persisted weekly models
+#   3. Runs daily inference using persisted approved deployment models
 #   4. Exports frontend JSON artifacts
 #   5. Validates the exported artifacts
 #   6. Commits and pushes updated artifacts
 #
-# Weekly model retraining is handled separately.
+# Monthly deployment refitting is handled separately; retuning remains manual.
 
 on:
   repository_dispatch:

@@ -2,6 +2,7 @@ import {
   getCompanyDetail,
   getCompanies,
   getDashboard,
+  getFormalStudy,
   getMetrics,
   getLatest,
 } from "@/lib/data";
@@ -219,69 +220,44 @@ export async function buildLiveContext(): Promise<string> {
  * Builds a compact context string for Model Performance & Comparison (/compare).
  */
 export async function buildCompareContext(): Promise<string> {
-  const [metrics, companies] = await Promise.all([getMetrics(), getCompanies()]);
+  const [formal, metrics, companies] = await Promise.all([
+    getFormalStudy(), getMetrics(), getCompanies(),
+  ]);
+  if (!formal) return `[Context: Model Results]\nThe approved formal-study dataset is unavailable.`;
 
-  if (!metrics || !metrics.perCompany) {
-    return `[Context: Model Performance]
-Model evaluation data is currently being generated.`;
-  }
-
-  const symbols = Object.keys(metrics.perCompany).sort();
-  const totalCompanies = symbols.length;
-
-  const MODEL_CONFIGS = [
-    { id: "arima", name: "ARIMA", isTrained: true },
-    { id: "lag_reg", name: "Lag-Informed Regression", isTrained: true },
-    { id: "lstm", name: "LSTM", isTrained: true },
-    { id: "naive", name: "Naive baseline", isTrained: false },
-  ];
-
-  const modelSummary = MODEL_CONFIGS.map((config) => {
-    const wins = config.isTrained
-      ? symbols.filter((s) => metrics.perCompany[s]?.bestModel === config.name).length
-      : 0;
-    const winRate = config.isTrained && totalCompanies > 0 ? ((wins / totalCompanies) * 100).toFixed(1) : "—";
-    
-    let beatNaiveCount = 0;
-    for (const sym of symbols) {
-      const m = metrics.perCompany[sym]?.metrics?.[config.id];
-      if (m) {
-        const mase = typeof m.mase === "number" ? m.mase : parseFloat(String(m.mase));
-        if (!isNaN(mase) && mase < 1.0) beatNaiveCount++;
-      }
-    }
-    const beatNaivePct = totalCompanies > 0 ? ((beatNaiveCount / totalCompanies) * 100).toFixed(1) : "0.0";
-
-    return `- ${config.name}: ${config.isTrained ? `Won ${wins}/${totalCompanies} companies (${winRate}% win rate)` : "Benchmark persistence model"}. Beats Naive on ${beatNaiveCount}/${totalCompanies} stocks (${beatNaivePct}%).`;
+  const modelSummary = formal.methodology.models.map((model) => {
+    const row = formal.aggregate[model];
+    const wins = row.principalRmseWins === null ? "benchmark" : `${row.principalRmseWins}/15 principal-model RMSE wins`;
+    return `- ${row.label}: ${wins}; median RMSE ${formatNum(row.medianRMSE, 6)}; median MASE ${formatNum(row.medianMASE, 6)}.`;
   }).join("\n");
-
-  const statTests = (metrics.statisticalTests || {}) as Record<string, any>;
-  const friedman = statTests.friedman;
-  const consistency = statTests.best_model_consistency;
-
-  let statsText = "Statistical tests conducted:\n";
-  if (friedman) {
-    statsText += `- Friedman Omnibus Test: Chi-square statistic = ${formatNum(friedman.statistic, 2)}, p-value = ${friedman.p_value < 0.001 ? "< 0.001 (Statistically Significant difference across models)" : formatNum(friedman.p_value, 4)}\n`;
-  }
-  if (consistency) {
-    statsText += `- Best Model Consistency Check: Dominant model = ${consistency.dominant_model}, Won = ${consistency.dominant_count}/${consistency.total_companies} companies (${consistency.pass ? "Pass" : "Fail"})\n`;
-  }
-
-  const perCompanyWinners = symbols
-    .map((sym) => `${sym}: ${metrics.perCompany[sym]?.bestModel || "N/A"}`)
+  const winners = formal.perCompany
+    .map((row) => `${row.symbol}: ${formal.methodology.modelLabels[row.principalWinnerByRmse]}`)
     .join(", ");
+  const significant = formal.conclusion.significantVsNaive
+    .map((row) => `${row.symbol}: ${formal.methodology.modelLabels[row.model]} (Holm p=${formatNum(row.adjustedPValue, 6)})`)
+    .join("; ");
+  const operationalModels = companies.map((company) => `${company.symbol}: ${company.bestModel}`).join(", ");
 
-  return `[Context: Model Comparison & Performance]
-- Total Tracked Companies: ${totalCompanies}
-- Evaluation Rule: Per-company winning model is determined strictly by lowest test-set RMSE on chronological backtest.
-- Cross-company aggregation uses median metrics because stock price levels range from ₱2 to ₱2,000 across the PSE.
+  return `[Context: Formal Study and Operational Model Results]
+Formal study:
+- Run ID: ${formal.runId}; status: ${formal.status}; immutable.
+- Data cutoff: ${formal.data.cutoffDate}; holdout: ${formal.data.holdoutStart} to ${formal.data.holdoutEnd}; 243 dates per company.
+- Conclusion: ${formal.conclusion.summary}
+- Descriptive principal-model RMSE wins: Lag-Informed Regression 7, ARIMA 7, LSTM 1. No model reached the required 8/15 threshold.
+- Significant squared-error DM improvements over Naive: ${significant}.
+- Friedman permutation p=${formatNum(formal.acrossCompany.friedmanMase.permutation_p_value, 6)}, but no Wilcoxon pair survived Holm correction.
+- MASE below 1 is a scaling comparison and is not by itself proof of significant improvement over the holdout Naive forecast.
 
-Cross-Company Model Summary:
+Formal model summary:
 ${modelSummary}
 
-${statsText}
-Per-Company Selected Winners:
-${perCompanyWinners}`;
+Formal descriptive principal winners:
+${winners}
+
+Operational deployment:
+- Current generated metrics timestamp: ${metrics?.generatedAt || "unavailable"}.
+- Current deployment model choices: ${operationalModels}.
+- Operational forecasts and metrics can change with new PSE data and must not be described as replacements for the fixed formal study.`;
 }
 
 /**
@@ -299,7 +275,8 @@ export async function buildGeneralContext(): Promise<string> {
   3. LSTM (Long Short-Term Memory) - recurrent neural network capturing non-linear temporal dynamics.
   4. Naive Baseline - persistence benchmark where tomorrow's forecast equals today's closing price.
 - Evaluation Metrics: RMSE (Root Mean Squared Error), MAE (Mean Absolute Error), MASE (Mean Absolute Scaled Error), R² (Goodness of Fit).
-- Model Selection: For each company, the model with the lowest test-set RMSE on the held-out test window is automatically selected.`;
+- Formal Study: The immutable Run 02 comparison is reported separately from deployment forecasts. It found a 7–7–1 descriptive RMSE split for Lag-Informed Regression, ARIMA, and LSTM, with no model reaching the 8-of-15 consistency threshold.
+- Deployment: Current next-day forecasts use separately approved persisted models and can change as new official PSE data arrive.`;
 }
 
 /**

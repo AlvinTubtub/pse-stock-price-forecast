@@ -4,6 +4,7 @@ import type {
   CompanyDetail,
   CompanySummary,
   DashboardData,
+  FormalStudyData,
   LatestData,
   MetricsData,
 } from "./types";
@@ -16,6 +17,7 @@ import type {
 // entire "backend" of the deployed app; the real backend/ pipeline that
 // produces the JSON runs entirely inside GitHub Actions, never on Vercel.
 const FORECASTS_DIR = path.join(process.cwd(), "public", "forecasts");
+const APPROVED_FORMAL_RUN_ID = "FORMAL_CORRECTED_20260828_02";
 
 async function readJson<T>(relativePath: string): Promise<T | null> {
   try {
@@ -36,6 +38,10 @@ export async function getLatest(): Promise<LatestData | null> {
 
 export async function getMetrics(): Promise<MetricsData | null> {
   return readJson<MetricsData>("metrics.json");
+}
+
+export async function getFormalStudy(): Promise<FormalStudyData | null> {
+  return readJson<FormalStudyData>(`formal/${APPROVED_FORMAL_RUN_ID}.json`);
 }
 
 export async function getCompanies(): Promise<CompanySummary[]> {

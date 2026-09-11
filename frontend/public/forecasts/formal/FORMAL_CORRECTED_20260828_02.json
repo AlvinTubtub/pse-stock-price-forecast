@@ -1,0 +1,1616 @@
+{
+  "acrossCompany": {
+    "friedmanMase": {
+      "model_order": [
+        "lag_reg",
+        "arima",
+        "lstm",
+        "naive"
+      ],
+      "n_companies": 15,
+      "p_value": 0.004607472639470351,
+      "permutation_count": 10000,
+      "permutation_p_value": 0.004299570042995701,
+      "seed": 42,
+      "statistic": 13.013513513513516
+    },
+    "rmseConsistency": {
+      "counts": {
+        "arima": 7,
+        "lag_reg": 7,
+        "lstm": 1
+      },
+      "dominant_count": 7,
+      "dominant_model": null,
+      "min_required": 8,
+      "pass": false,
+      "tie": true,
+      "tied_models": [
+        "arima",
+        "lag_reg"
+      ],
+      "total_companies": 15
+    },
+    "wilcoxonPosthoc": {
+      "posthoc_executed": true,
+      "results": {
+        "arima vs lstm": {
+          "holm_p_value": 0.2548828125,
+          "p_value": 0.063720703125,
+          "statistic": 27.0
+        },
+        "arima vs naive": {
+          "holm_p_value": 1.0,
+          "p_value": 0.700703412251682,
+          "statistic": 40.0
+        },
+        "lag_reg vs arima": {
+          "holm_p_value": 1.0,
+          "p_value": 0.93408203125,
+          "statistic": 58.0
+        },
+        "lag_reg vs lstm": {
+          "holm_p_value": 0.0615234375,
+          "p_value": 0.01025390625,
+          "statistic": 16.0
+        },
+        "lag_reg vs naive": {
+          "holm_p_value": 1.0,
+          "p_value": 0.7197265625,
+          "statistic": 53.0
+        },
+        "lstm vs naive": {
+          "holm_p_value": 0.12786865234375,
+          "p_value": 0.02557373046875,
+          "statistic": 21.0
+        }
+      }
+    }
+  },
+  "aggregate": {
+    "arima": {
+      "label": "ARIMA",
+      "medianMAE": 0.6329075071644485,
+      "medianMASE": 1.0490725975964998,
+      "medianR2": 0.9444126746191149,
+      "medianRMSE": 0.8594153622767774,
+      "principalRmseWins": 7
+    },
+    "lag_reg": {
+      "label": "Lag-Informed Regression",
+      "medianMAE": 0.6340982385377771,
+      "medianMASE": 1.054091339431588,
+      "medianR2": 0.9444366096892007,
+      "medianRMSE": 0.8608817385131576,
+      "principalRmseWins": 7
+    },
+    "lstm": {
+      "label": "LSTM",
+      "medianMAE": 0.6375938569741716,
+      "medianMASE": 1.0674069209927672,
+      "medianR2": 0.9441765966919267,
+      "medianRMSE": 0.8641885043772942,
+      "principalRmseWins": 1
+    },
+    "naive": {
+      "label": "Naive baseline",
+      "medianMAE": 0.6339506172839506,
+      "medianMASE": 1.0633520697428003,
+      "medianR2": 0.9444349366927998,
+      "medianRMSE": 0.8608721293230879,
+      "principalRmseWins": null
+    }
+  },
+  "conclusion": {
+    "dominanceThreshold": 8,
+    "dominantModel": null,
+    "principalRmseWins": {
+      "arima": 7,
+      "lag_reg": 7,
+      "lstm": 1
+    },
+    "significantPosthocPairs": [],
+    "significantVsNaive": [
+      {
+        "adjustedPValue": 0.04176169679469588,
+        "direction": "model_a_lower_loss",
+        "model": "lag_reg",
+        "rawPValue": 0.01392056559823196,
+        "significantlyBeatsNaive": true,
+        "symbol": "ICT"
+      },
+      {
+        "adjustedPValue": 0.0025940149963843417,
+        "direction": "model_a_lower_loss",
+        "model": "lag_reg",
+        "rawPValue": 0.0008646716654614472,
+        "significantlyBeatsNaive": true,
+        "symbol": "MBT"
+      }
+    ],
+    "summary": "No forecasting model was consistently dominant across the 15 companies."
+  },
+  "data": {
+    "companyCount": 15,
+    "cutoffDate": "2026-08-28",
+    "developmentPairsPerCompany": 1380,
+    "firstDate": "2020-01-02",
+    "forecastPairsPerCompany": 1623,
+    "holdoutEnd": "2026-08-28",
+    "holdoutPairsPerCompany": 243,
+    "holdoutStart": "2025-09-02",
+    "rowsPerCompany": 1624,
+    "totalHoldoutPredictions": 14580,
+    "totalRows": 24360
+  },
+  "finalizedAt": "2026-09-05T00:27:09.125961+00:00",
+  "identity": {
+    "archiveSha256": "2b2ed0ca6b88ea6cfef5ac14013440da1c7c55c1d9f9640e04a595fdafca5d24",
+    "corporateActionRegistrySha256": "98199732d5372683c256d1e7c9b9ab1b9987b9f2a7240dbe0c43d00370d508eb",
+    "releaseUrl": "https://github.com/AlvinTubtub/pse-stock-price-forecast/releases/tag/formal-corrected-20260828-02-code",
+    "repositoryCommit": "bfb33b8c184c87cc8828af5529410da94addd71c",
+    "sourceDataCommit": "2e72058057f5ba2ef903147c8390c3f05f41ffe3"
+  },
+  "kind": "immutable_formal_study",
+  "methodology": {
+    "corporateActionPolicy": {
+      "automatic_outlier_or_error_exclusion": false,
+      "policy_id": "raw_close_retain_and_flag_v1",
+      "primary_analysis": "retain_all_validated_observations",
+      "registry": {
+        "event_count": 26,
+        "path": "/home/alvincj004/pse-stock-price-forecast-bfb33b8/backend/config/formal_corporate_actions_20250902_20260828.json",
+        "review_period": {
+          "end_date": "2026-08-28",
+          "start_date": "2025-09-02"
+        },
+        "reviewed_symbols": [
+          "ALI",
+          "APX",
+          "BPI",
+          "GLO",
+          "ICT",
+          "JFC",
+          "MBT",
+          "MEG",
+          "MER",
+          "NIKL",
+          "PGOLD",
+          "SCC",
+          "SECB",
+          "SHLPH",
+          "SMPH"
+        ],
+        "selected_event_count": 26,
+        "sha256": "98199732d5372683c256d1e7c9b9ab1b9987b9f2a7240dbe0c43d00370d508eb",
+        "status": "complete"
+      },
+      "sensitivity_analysis": "exclude_verified_event_target_dates_only",
+      "target_series": "raw_quoted_close",
+      "verified_event_dates": "flagged_by_target_date"
+    },
+    "lassoAlphaCandidates": 36,
+    "lstmConfigurations": 48,
+    "lstmFolds": 5,
+    "lstmTuningSeeds": [
+      42,
+      123,
+      2026
+    ],
+    "modelLabels": {
+      "arima": "ARIMA",
+      "lag_reg": "Lag-Informed Regression",
+      "lstm": "LSTM",
+      "naive": "Naive baseline"
+    },
+    "models": [
+      "lag_reg",
+      "arima",
+      "lstm",
+      "naive"
+    ],
+    "splitBasis": "target_date"
+  },
+  "perCompany": [
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.1,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 32,
+          "finalFitSeed": 42,
+          "fixedEpochs": 4,
+          "hiddenSize": 25,
+          "learningRate": 0.01,
+          "lookback": 10,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-11-11",
+          "2026-03-05"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "1f9c704de669276a9c9e3f000166a66a4c38678b735db2294c30dbcbf950caca",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.10128510519582079,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.033761701731940263,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.16146871423509968,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.08073435711754984,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.3534990199032797,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.3534990199032797,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "lag_reg"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.3594655382108636,
+          "mase": 0.6491264626157965,
+          "r2": 0.9859170536033198,
+          "rmse": 0.4622016956779218
+        },
+        "lag_reg": {
+          "mae": 0.35883819802142086,
+          "mase": 0.6479936054299408,
+          "r2": 0.9859400725397024,
+          "rmse": 0.46182380094357034
+        },
+        "lstm": {
+          "mae": 0.36211426841555844,
+          "mase": 0.6539095660998046,
+          "r2": 0.9858280476365231,
+          "rmse": 0.46365998117389984
+        },
+        "naive": {
+          "mae": 0.3600823045267489,
+          "mase": 0.6502402253950712,
+          "r2": 0.9858811868793967,
+          "rmse": 0.4627898935766724
+        }
+      },
+      "principalWinnerByRmse": "lag_reg",
+      "symbol": "ALI"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            1,
+            1
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.01,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 32,
+          "finalFitSeed": 42,
+          "fixedEpochs": 21,
+          "hiddenSize": 100,
+          "learningRate": 0.01,
+          "lookback": 5,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2026-04-14"
+        ],
+        "remainingHoldoutCount": 242,
+        "status": "complete",
+        "verifiedEventCount": 1
+      },
+      "dataSha256": "6d85622c0e3d8ed6d7f2d928063c5b83a8580af46c6b971566403e11fb9ec8f7",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.6944641249790908,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.23148804165969694,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.6944641249790908,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.2859927939171629,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.747060420136384,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.747060420136384,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "lag_reg"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.4078673436021628,
+          "mase": 7.623688665460987,
+          "r2": 0.9621757429068597,
+          "rmse": 0.5475489650202319
+        },
+        "lag_reg": {
+          "mae": 0.3983522742757473,
+          "mase": 7.445836902350417,
+          "r2": 0.9631213858193151,
+          "rmse": 0.5406610150287887
+        },
+        "lstm": {
+          "mae": 0.4024174518373587,
+          "mase": 7.521821529670256,
+          "r2": 0.9628967261328973,
+          "rmse": 0.5423053326271934
+        },
+        "naive": {
+          "mae": 0.39851851851851855,
+          "mase": 7.448944271374178,
+          "r2": 0.9630816077616031,
+          "rmse": 0.5409525206796154
+        }
+      },
+      "principalWinnerByRmse": "lag_reg",
+      "symbol": "APX"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            1,
+            1
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.1,
+          "selectedFeatureCount": 2,
+          "selectedFeatures": [
+            "oc_return_pct",
+            "return_lag_1"
+          ]
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 8,
+          "hiddenSize": 25,
+          "learningRate": 0.01,
+          "lookback": 30,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-12-02",
+          "2026-06-03"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "358a40a3cd371e3158de4770552d7fd676355c9d15831c96f928434d42740456",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.2479572143715978,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.14489109138135747,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.1815425501785619,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.06051418339285397,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.2479572143715978,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.1239786071857989,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "arima"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 1.6829815792330842,
+          "mase": 1.1892035736516413,
+          "r2": 0.9384907556872316,
+          "rmse": 2.3148993914415628
+        },
+        "lag_reg": {
+          "mae": 1.6893296584487467,
+          "mase": 1.1936891595797592,
+          "r2": 0.9378972391606912,
+          "rmse": 2.32604107114887
+        },
+        "lstm": {
+          "mae": 1.835550548987073,
+          "mase": 1.2970096045069943,
+          "r2": 0.9319137282752008,
+          "rmse": 2.4355200091294553
+        },
+        "naive": {
+          "mae": 1.6983539094650213,
+          "mase": 1.200065742479124,
+          "r2": 0.935873120641183,
+          "rmse": 2.363643522104905
+        }
+      },
+      "principalWinnerByRmse": "arima",
+      "symbol": "BPI"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            0,
+            1,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 15.848931924611142,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 32,
+          "finalFitSeed": 42,
+          "fixedEpochs": 10,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 10,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-11-19",
+          "2026-02-16",
+          "2026-05-22",
+          "2026-08-17"
+        ],
+        "remainingHoldoutCount": 239,
+        "status": "complete",
+        "verifiedEventCount": 4
+      },
+      "dataSha256": "7ca266cb2a98261cd85d46635591cea1b3c565db840dd5dfce04bf56ca979478",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 1.0,
+          "direction": "equal_loss",
+          "rawPValue": 1.0,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.6825022648942507,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.016719536362409304,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.005573178787469768,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "arima",
+        "naive"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 18.037037037037038,
+          "mase": 0.5899346126398007,
+          "r2": 0.9430646649086529,
+          "rmse": 26.290009681502553
+        },
+        "lag_reg": {
+          "mae": 18.0430175903972,
+          "mase": 0.5901302176841688,
+          "r2": 0.9430330730816063,
+          "rmse": 26.297302466004144
+        },
+        "lstm": {
+          "mae": 19.26860990838258,
+          "mase": 0.6302154782444472,
+          "r2": 0.9373693510529969,
+          "rmse": 27.57358668030518
+        },
+        "naive": {
+          "mae": 18.037037037037038,
+          "mase": 0.5899346126398007,
+          "r2": 0.9430646649086529,
+          "rmse": 26.290009681502553
+        }
+      },
+      "principalWinnerByRmse": "arima",
+      "symbol": "GLO"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            1,
+            1
+          ],
+          "trend": "t"
+        },
+        "lagRegression": {
+          "alpha": 0.3981071705534973,
+          "selectedFeatureCount": 3,
+          "selectedFeatures": [
+            "rsi_14",
+            "oc_return_pct",
+            "return_lag_1"
+          ]
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 47,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 30,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2026-03-18"
+        ],
+        "remainingHoldoutCount": 242,
+        "status": "complete",
+        "verifiedEventCount": 1
+      },
+      "dataSha256": "a0b261565c4cf3a4141a9f0e8c07d20349cbaef978f64b8551d48d4c555a3efb",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.28598022149863644,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.28598022149863644,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.04176169679469588,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.01392056559823196,
+          "significantlyBeatsNaive": true
+        },
+        "lstm": {
+          "adjustedPValue": 0.1576933325007328,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.0788466662503664,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "lstm"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 12.857918128353756,
+          "mase": 3.288348224078611,
+          "r2": 0.9885736878878658,
+          "rmse": 17.435691394206145
+        },
+        "lag_reg": {
+          "mae": 12.874806805083166,
+          "mase": 3.2926674186461766,
+          "r2": 0.9882931564792617,
+          "rmse": 17.648428462880126
+        },
+        "lstm": {
+          "mae": 12.687147477241574,
+          "mase": 3.2446744845428785,
+          "r2": 0.9886104199888217,
+          "rmse": 17.407643625528358
+        },
+        "naive": {
+          "mae": 12.963786008230452,
+          "mase": 3.3154234046252826,
+          "r2": 0.9881807178658929,
+          "rmse": 17.732978275476416
+        }
+      },
+      "principalWinnerByRmse": "lstm",
+      "symbol": "ICT"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "trend": "c"
+        },
+        "lagRegression": {
+          "alpha": 1.584893192461114,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 32,
+          "finalFitSeed": 42,
+          "fixedEpochs": 65,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 20,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-11-27",
+          "2026-05-04"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "b31864b078c1d51b31ca952165700da7da432104a20135635db1645e141d1d5e",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.4327301181842367,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.4327301181842367,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.32409079317951717,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.16204539658975858,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.027422580986353084,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.009140860328784361,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "naive"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 2.857434498297783,
+          "mase": 0.8738331799075788,
+          "r2": 0.9825219350596016,
+          "rmse": 4.051790358523678
+        },
+        "lag_reg": {
+          "mae": 2.854609871092579,
+          "mase": 0.8729693795390149,
+          "r2": 0.98264617410013,
+          "rmse": 4.03736403894671
+        },
+        "lstm": {
+          "mae": 2.956038600181847,
+          "mase": 0.9039873395051518,
+          "r2": 0.9816459026739652,
+          "rmse": 4.152090467172854
+        },
+        "naive": {
+          "mae": 2.8518518518518516,
+          "mase": 0.8721259485785477,
+          "r2": 0.9826689341616817,
+          "rmse": 4.034715608460188
+        }
+      },
+      "principalWinnerByRmse": "lag_reg",
+      "symbol": "JFC"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            2,
+            1,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.1,
+          "selectedFeatureCount": 1,
+          "selectedFeatures": [
+            "oc_return_pct"
+          ]
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 51,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 30,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-09-05",
+          "2026-03-06"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "d47c6a963317f7cbabcae0cf6c2714e2805edc4ec7b5f6f55b804c01e779e7e5",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.09531091638741218,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.04765545819370609,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.0025940149963843417,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.0008646716654614472,
+          "significantlyBeatsNaive": true
+        },
+        "lstm": {
+          "adjustedPValue": 0.40840742596435975,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.40840742596435975,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "arima"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.8485324879979806,
+          "mase": 1.0490725975964998,
+          "r2": 0.8624109820518718,
+          "rmse": 1.1466252711938154
+        },
+        "lag_reg": {
+          "mae": 0.8525918500532889,
+          "mase": 1.054091339431588,
+          "r2": 0.860258853472421,
+          "rmse": 1.1555580700603458
+        },
+        "lstm": {
+          "mae": 0.8633620327624109,
+          "mase": 1.0674069209927672,
+          "r2": 0.8606176741327062,
+          "rmse": 1.1540735229735162
+        },
+        "naive": {
+          "mae": 0.8600823045267492,
+          "mase": 1.0633520697428003,
+          "r2": 0.8577465608591308,
+          "rmse": 1.1658992184808776
+        }
+      },
+      "principalWinnerByRmse": "arima",
+      "symbol": "MBT"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.01584893192461114,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 2,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 30,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2026-08-26"
+        ],
+        "remainingHoldoutCount": 242,
+        "status": "complete",
+        "verifiedEventCount": 1
+      },
+      "dataSha256": "48637122865abf299ebdc46c0aa3091de114d165b1e60ef50dc96bc31f347a5b",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.7834667388100267,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.39514510649292656,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.7834667388100267,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.39173336940501335,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.024175410419398302,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.008058470139799434,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "naive"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.01998045270750919,
+          "mase": 0.5318870512415642,
+          "r2": 0.9220901268158999,
+          "rmse": 0.027725181333031198
+        },
+        "lag_reg": {
+          "mae": 0.0198607060989532,
+          "mase": 0.5286993521712079,
+          "r2": 0.9222043710840626,
+          "rmse": 0.027704846265534832
+        },
+        "lstm": {
+          "mae": 0.021143449000983573,
+          "mase": 0.5628464433132202,
+          "r2": 0.9181276977504864,
+          "rmse": 0.028421477297118254
+        },
+        "naive": {
+          "mae": 0.01946502057613171,
+          "mase": 0.5181660570035063,
+          "r2": 0.9225450216255535,
+          "rmse": 0.027644122899166092
+        }
+      },
+      "principalWinnerByRmse": "lag_reg",
+      "symbol": "MEG"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            3,
+            1,
+            2
+          ],
+          "trend": "t"
+        },
+        "lagRegression": {
+          "alpha": 0.3981071705534973,
+          "selectedFeatureCount": 3,
+          "selectedFeatures": [
+            "oc_return_pct",
+            "bb_percent_b",
+            "return_lag_1"
+          ]
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 43,
+          "hiddenSize": 50,
+          "learningRate": 0.01,
+          "lookback": 10,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2026-03-25",
+          "2026-08-27"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "21ec655cd47ad5b79475523f0cc693d65436af438ee6c58d8ef1940e9b9aff99",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.6978953465693474,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 1.0,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.5238441105324858,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.6710678659363309,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "lag_reg"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 7.187860281749491,
+          "mase": 1.5089520489251396,
+          "r2": 0.9361004357901563,
+          "rmse": 10.276872915934133
+        },
+        "lag_reg": {
+          "mae": 7.1585330407338414,
+          "mase": 1.5027953626951291,
+          "r2": 0.9384091650841566,
+          "rmse": 10.08951019693236
+        },
+        "lstm": {
+          "mae": 7.213746116092667,
+          "mase": 1.5143862784787452,
+          "r2": 0.9359989445037928,
+          "rmse": 10.285031024997055
+        },
+        "naive": {
+          "mae": 7.261728395061729,
+          "mase": 1.5244592286091618,
+          "r2": 0.9376198554215952,
+          "rmse": 10.153954813466006
+        }
+      },
+      "principalWinnerByRmse": "lag_reg",
+      "symbol": "MER"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.025118864315095822,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 32,
+          "finalFitSeed": 42,
+          "fixedEpochs": 8,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 10,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-11-27",
+          "2026-03-11"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "f8de815ea0e4ac757614ad75dd0a26754359468807e17dd8fb67d7ff906c28cd",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.7947077221160579,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 1.0,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.5805675638605754,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.8852098964224726,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.29506996547415754,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "lag_reg"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.11218303245331022,
+          "mase": 1.2339597065643877,
+          "r2": 0.9444126746191149,
+          "rmse": 0.1517747110756399
+        },
+        "lag_reg": {
+          "mae": 0.11201727849998638,
+          "mase": 1.2321364923480087,
+          "r2": 0.9444366096892007,
+          "rmse": 0.15174203159828745
+        },
+        "lstm": {
+          "mae": 0.11281278527477331,
+          "mase": 1.2408866864274442,
+          "r2": 0.9441765966919267,
+          "rmse": 0.15209666123734764
+        },
+        "naive": {
+          "mae": 0.1120164609053498,
+          "mase": 1.2321274991980127,
+          "r2": 0.9444349366927998,
+          "rmse": 0.15174431603377989
+        }
+      },
+      "principalWinnerByRmse": "lag_reg",
+      "symbol": "NIKL"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            1,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.15848931924611143,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 5,
+          "hiddenSize": 25,
+          "learningRate": 0.01,
+          "lookback": 5,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2026-04-16",
+          "2026-08-14"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "b2f8dfa3e2c9574bd426cd00c4549a1fe9edecbf608b90eb43a1c0de1ee6d1da",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 1.0,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.7484453955186305,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.9448477947605369,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.5668987358395132,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "arima"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.6329075071644485,
+          "mase": 1.2714351261182604,
+          "r2": 0.8982756850720142,
+          "rmse": 0.8594153622767774
+        },
+        "lag_reg": {
+          "mae": 0.6340982385377771,
+          "mase": 1.273827162358443,
+          "r2": 0.8979282549890445,
+          "rmse": 0.8608817385131576
+        },
+        "lstm": {
+          "mae": 0.6375938569741716,
+          "mase": 1.2808494397326686,
+          "r2": 0.8971426055981602,
+          "rmse": 0.8641885043772942
+        },
+        "naive": {
+          "mae": 0.6339506172839506,
+          "mase": 1.2735306089989835,
+          "r2": 0.8979305336326274,
+          "rmse": 0.8608721293230879
+        }
+      },
+      "principalWinnerByRmse": "arima",
+      "symbol": "PGOLD"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            0,
+            1,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.15848931924611143,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 32,
+          "finalFitSeed": 42,
+          "fixedEpochs": 14,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 30,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-11-03"
+        ],
+        "remainingHoldoutCount": 242,
+        "status": "complete",
+        "verifiedEventCount": 1
+      },
+      "dataSha256": "65ef821e6a0cc6b2bf02b5d2c1fa45ca380f9a4cbabf027bda3e16c3a85cfffb",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 1.0,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.9999999995597202,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.41111122352826346,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.13703707450942115,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.7131509411084207,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "arima",
+        "naive"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.4623045267489712,
+          "mase": 1.202284499686379,
+          "r2": 0.9708922579549277,
+          "rmse": 0.7901143325090452
+        },
+        "lag_reg": {
+          "mae": 0.46424268025690596,
+          "mase": 1.2073249260412522,
+          "r2": 0.9708326430616979,
+          "rmse": 0.7909230260988394
+        },
+        "lstm": {
+          "mae": 0.4623978017680605,
+          "mase": 1.2025270737975338,
+          "r2": 0.9707973948434425,
+          "rmse": 0.7914007898175157
+        },
+        "naive": {
+          "mae": 0.4623045267489712,
+          "mase": 1.202284499686379,
+          "r2": 0.9708922579549277,
+          "rmse": 0.7901143325090452
+        }
+      },
+      "principalWinnerByRmse": "arima",
+      "symbol": "SCC"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            0,
+            0
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.25118864315095824,
+          "selectedFeatureCount": 1,
+          "selectedFeatures": [
+            "volume_ma_5"
+          ]
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 2,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 20,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2025-11-11",
+          "2026-04-22"
+        ],
+        "remainingHoldoutCount": 241,
+        "status": "complete",
+        "verifiedEventCount": 2
+      },
+      "dataSha256": "e4015b1da572c292ade95c7911d24b62f87d2599683ed827836cce2c5ff80d7b",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.9004395090067474,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.4502197545033737,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.6498715933787711,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.21662386445959037,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.9004395090067474,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.5187551307952774,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "arima"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.7093884586403599,
+          "mase": 0.5213869157028636,
+          "r2": 0.8995775790087065,
+          "rmse": 0.9792709944864729
+        },
+        "lag_reg": {
+          "mae": 0.7258709846846609,
+          "mase": 0.5335012563191478,
+          "r2": 0.8972805586465833,
+          "rmse": 0.9904073893496731
+        },
+        "lstm": {
+          "mae": 0.7225437357592486,
+          "mase": 0.5310557921536871,
+          "r2": 0.898431547786569,
+          "rmse": 0.9848429145016485
+        },
+        "naive": {
+          "mae": 0.7090534979423868,
+          "mase": 0.5211407260121931,
+          "r2": 0.8994935963776131,
+          "rmse": 0.9796803879589714
+        }
+      },
+      "principalWinnerByRmse": "arima",
+      "symbol": "SECB"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            0,
+            1,
+            3
+          ],
+          "trend": "t"
+        },
+        "lagRegression": {
+          "alpha": 0.15848931924611143,
+          "selectedFeatureCount": 0,
+          "selectedFeatures": []
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 11,
+          "hiddenSize": 25,
+          "learningRate": 0.001,
+          "lookback": 10,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2026-04-10"
+        ],
+        "remainingHoldoutCount": 242,
+        "status": "complete",
+        "verifiedEventCount": 1
+      },
+      "dataSha256": "6f8fc34f631e6c81e5a21552c085efd48b8042675fab228666158ae7fe6fe4f9",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 1.0,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.9664844194403659,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.3979996096551637,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 1.0,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.9464191945723468,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "arima"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.18679944006446803,
+          "mase": 1.0197524715731077,
+          "r2": 0.9766157994146553,
+          "rmse": 0.3108036269439001
+        },
+        "lag_reg": {
+          "mae": 0.18414550762028484,
+          "mase": 1.0052644507931212,
+          "r2": 0.9764414702244775,
+          "rmse": 0.3119599961150449
+        },
+        "lstm": {
+          "mae": 0.1869327823823862,
+          "mase": 1.02048039751451,
+          "r2": 0.9765715640873318,
+          "rmse": 0.31109745790761284
+        },
+        "naive": {
+          "mae": 0.18189300411522635,
+          "mase": 0.9929678613830151,
+          "r2": 0.9765983972619336,
+          "rmse": 0.31091925301113804
+        }
+      },
+      "principalWinnerByRmse": "arima",
+      "symbol": "SHLPH"
+    },
+    {
+      "configuration": {
+        "arima": {
+          "converged": true,
+          "order": [
+            1,
+            0,
+            1
+          ],
+          "trend": "n"
+        },
+        "lagRegression": {
+          "alpha": 0.039810717055349734,
+          "selectedFeatureCount": 3,
+          "selectedFeatures": [
+            "oc_return_pct",
+            "bb_percent_b",
+            "return_lag_1"
+          ]
+        },
+        "lstm": {
+          "batchSize": 16,
+          "finalFitSeed": 42,
+          "fixedEpochs": 11,
+          "hiddenSize": 25,
+          "learningRate": 0.01,
+          "lookback": 10,
+          "tuningSeeds": [
+            42,
+            123,
+            2026
+          ]
+        }
+      },
+      "corporateActions": {
+        "excludedTargetDates": [
+          "2026-05-12"
+        ],
+        "remainingHoldoutCount": 242,
+        "status": "complete",
+        "verifiedEventCount": 1
+      },
+      "dataSha256": "0608a5a1948e045b1c6903155f26b1626f3b62efdbdfe79d522b58c623f3ac4a",
+      "dmSquaredErrorVsNaive": {
+        "arima": {
+          "adjustedPValue": 0.28475913686450083,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.14237956843225041,
+          "significantlyBeatsNaive": false
+        },
+        "lag_reg": {
+          "adjustedPValue": 0.2654498001873866,
+          "direction": "model_a_lower_loss",
+          "rawPValue": 0.08848326672912887,
+          "significantlyBeatsNaive": false
+        },
+        "lstm": {
+          "adjustedPValue": 0.45779177965387285,
+          "direction": "model_b_lower_loss",
+          "rawPValue": 0.45779177965387285,
+          "significantlyBeatsNaive": false
+        }
+      },
+      "lowestRmseIncludingNaive": [
+        "lag_reg"
+      ],
+      "metrics": {
+        "arima": {
+          "mae": 0.29958709283356216,
+          "mase": 0.5581237774017086,
+          "r2": 0.955620721396343,
+          "rmse": 0.41692956354436067
+        },
+        "lag_reg": {
+          "mae": 0.29905742270686053,
+          "mase": 0.5571370142902025,
+          "r2": 0.9559259155982974,
+          "rmse": 0.41549348787494716
+        },
+        "lstm": {
+          "mae": 0.30674494932859797,
+          "mase": 0.5714586973654608,
+          "r2": 0.9532522806186524,
+          "rmse": 0.4279103451131929
+        },
+        "naive": {
+          "mae": 0.30312757201646084,
+          "mase": 0.5647196076715705,
+          "r2": 0.9543754692579289,
+          "rmse": 0.42273847580985696
+        }
+      },
+      "principalWinnerByRmse": "lag_reg",
+      "symbol": "SMPH"
+    }
+  ],
+  "runId": "FORMAL_CORRECTED_20260828_02",
+  "schemaVersion": 1,
+  "status": "complete"
+}
