@@ -19,6 +19,8 @@ This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
 ## Current status
 
+Phase 10 adds the operational frontend exporter. It accepts only the new typed evaluation and next-day inference results plus validated raw OHLCV records, emits the documented 34 operational files, and validates every JSON document before atomic replacement. It does not read existing frontend JSON as model input and does not touch the preserved formal-study file.
+
 Phase 9 adds one lightweight generated-artifact layout. Ordinary training-run manifests in `artifacts/logs/` record timing, environment versions, the source-data boundary, processed symbols, status, and errors. They are operational records only, not immutable formal experiments.
 
 Phase 8 adds fresh production refitting and next-PSE-session inference. Selected hyperparameters are carried forward from chronological evaluation, but every principal model, scaler, and fitted state is rebuilt using all currently available raw history.
