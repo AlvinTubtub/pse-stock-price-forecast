@@ -4,13 +4,13 @@ from dataclasses import replace
 from datetime import date, timedelta
 import json
 import math
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import torch
 
 from config.model_config import LstmConfig, ModelConfig
+from config.settings import SETTINGS
 from src.data.split import build_company_evaluation_plan
 from src.data.validator import OhlcvRecord
 from src.features.targets import build_next_day_pairs
@@ -322,16 +322,22 @@ def test_model_and_scaler_state_are_persisted_under_artifacts(
     tmp_path,
     tuning_fixture,
 ) -> None:
+    production_paths = (
+        SETTINGS.artifacts_dir / "evaluations" / "lstm" / "BPI.json",
+        SETTINGS.artifacts_dir / "evaluations" / "lstm" / "BPI.pt",
+    )
+    production_before = tuple(
+        path.read_bytes() if path.is_file() else None for path in production_paths
+    )
     records, plan, config, tuning = tuning_fixture
     monkeypatch.setattr(train_lstm_module, "tune_lstm", lambda *args, **kwargs: tuning)
-    monkeypatch.setattr(
-        train_lstm_module,
-        "SETTINGS",
-        SimpleNamespace(artifacts_dir=tmp_path / "artifacts"),
-    )
     result = train_lstm_for_evaluation(records, plan, config=config)
 
-    paths = persist_lstm_artifacts(result, artifact_name="ALI-test")
+    paths = persist_lstm_artifacts(
+        result,
+        artifact_name="ALI-test",
+        artifacts_root=tmp_path / "artifacts",
+    )
     metadata = json.loads(paths.metadata.read_text(encoding="utf-8"))
     checkpoint = torch.load(paths.model_state, map_location="cpu", weights_only=True)
 
@@ -363,3 +369,6 @@ def test_model_and_scaler_state_are_persisted_under_artifacts(
         )
     )
     assert {key: metadata[key] for key in expected} == expected
+    assert tuple(
+        path.read_bytes() if path.is_file() else None for path in production_paths
+    ) == production_before

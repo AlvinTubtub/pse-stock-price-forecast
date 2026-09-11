@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from config.model_config import ArimaConfig, ModelConfig
+from config.settings import SETTINGS
 from src.data.split import build_company_evaluation_plan
 from src.data.validator import OhlcvRecord
 from src.models import arima as arima_model_module
@@ -348,6 +349,10 @@ def test_adf_records_result_or_explicit_unavailability() -> None:
 
 
 def test_metadata_is_written_only_below_arima_artifacts(monkeypatch, tmp_path) -> None:
+    production_path = SETTINGS.artifacts_dir / "evaluations" / "arima" / "BPI.json"
+    production_before = (
+        production_path.read_bytes() if production_path.is_file() else None
+    )
     records = synthetic_records(40)
     plan = build_company_evaluation_plan(
         "ALI",
@@ -385,11 +390,6 @@ def test_metadata_is_written_only_below_arima_artifacts(monkeypatch, tmp_path) -
         "fit_arima",
         lambda values, specification, *, config: _fake_walk_model(values[-1]),
     )
-    monkeypatch.setattr(
-        train_arima_module,
-        "SETTINGS",
-        SimpleNamespace(artifacts_dir=tmp_path / "artifacts"),
-    )
     result = train_arima_for_evaluation(records, plan, config=arima_config())
 
     destination = persist_arima_metadata(
@@ -413,3 +413,6 @@ def test_metadata_is_written_only_below_arima_artifacts(monkeypatch, tmp_path) -
     ]
     expected = json.loads(json.dumps(result.as_metadata_dict(), allow_nan=False))
     assert {key: payload[key] for key in expected} == expected
+    assert (
+        production_path.read_bytes() if production_path.is_file() else None
+    ) == production_before

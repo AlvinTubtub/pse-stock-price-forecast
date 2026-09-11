@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from config.model_config import LagRegressionConfig, ModelConfig, RegressionFeatureConfig
+from config.settings import SETTINGS
 from src.data.split import build_company_evaluation_plan
 from src.data.validator import OhlcvRecord
 from src.features.regression_features import (
@@ -249,7 +250,12 @@ def test_boundary_alpha_emits_an_explicit_warning(monkeypatch: pytest.MonkeyPatc
 
 def test_reproducibility_metadata_persists_only_under_artifacts(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
 ) -> None:
+    production_path = SETTINGS.artifacts_dir / "evaluations" / "lir" / "BPI.json"
+    production_before = (
+        production_path.read_bytes() if production_path.is_file() else None
+    )
     source = synthetic_records()
     dataset = build_regression_dataset(source)
     plan = build_company_evaluation_plan("ALI", source)
@@ -261,36 +267,40 @@ def test_reproducibility_metadata_persists_only_under_artifacts(
         warnings.simplefilter("ignore", AlphaGridBoundaryWarning)
         result = train_lir_for_evaluation(dataset, plan, config=quick_config())
 
-    destination = persist_lir_metadata(result, artifact_name="phase4_test_metadata")
-    try:
-        payload = json.loads(destination.read_text(encoding="utf-8"))
-        assert destination.parent.name == "lir"
-        assert destination.parents[1].name == "evaluations"
-        assert destination.parents[2].name == "artifacts"
-        assert payload["schema_id"] == LIR_EVALUATION_SCHEMA_ID
-        assert payload["schema_version"] == 1
-        assert payload["tuning"]["chosen_alpha"] == result.tuning.chosen_alpha
-        assert payload["development_fit"]["selected_features"] == list(
-            result.fitted.fit_metadata.selected_features
-        )
-        assert payload["development_fit"]["coefficients"]
-        assert payload["development_fit"]["scaler"]["mean"]
-        assert payload["development_fit"]["pacf_selected_lags"] == [1]
-        assert len(payload["tuning"]["mean_validation_rmse"]) == len(
-            result.configuration.alpha_grid
-        )
-        assert len(payload["tuning"]["fold_scores"]) == (
-            len(result.configuration.alpha_grid) * result.configuration.cv_splits
-        )
-        assert all(
-            fold["pacf_selected_lags"]
-            and fold["feature_names"]
-            and fold["scaler_mean"]
-            and fold["scaler_scale"]
-            for fold in payload["tuning"]["fold_scores"]
-        )
-        expected = json.loads(json.dumps(result.as_metadata_dict(), allow_nan=False))
-        assert {key: payload[key] for key in expected} == expected
-    finally:
-        destination.unlink(missing_ok=True)
-        destination.parent.rmdir()
+    artifacts_root = tmp_path / "artifacts"
+    destination = persist_lir_metadata(
+        result,
+        artifact_name="phase4_test_metadata",
+        artifacts_root=artifacts_root,
+    )
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    assert destination == (
+        artifacts_root / "evaluations" / "lir" / "phase4_test_metadata.json"
+    )
+    assert payload["schema_id"] == LIR_EVALUATION_SCHEMA_ID
+    assert payload["schema_version"] == 1
+    assert payload["tuning"]["chosen_alpha"] == result.tuning.chosen_alpha
+    assert payload["development_fit"]["selected_features"] == list(
+        result.fitted.fit_metadata.selected_features
+    )
+    assert payload["development_fit"]["coefficients"]
+    assert payload["development_fit"]["scaler"]["mean"]
+    assert payload["development_fit"]["pacf_selected_lags"] == [1]
+    assert len(payload["tuning"]["mean_validation_rmse"]) == len(
+        result.configuration.alpha_grid
+    )
+    assert len(payload["tuning"]["fold_scores"]) == (
+        len(result.configuration.alpha_grid) * result.configuration.cv_splits
+    )
+    assert all(
+        fold["pacf_selected_lags"]
+        and fold["feature_names"]
+        and fold["scaler_mean"]
+        and fold["scaler_scale"]
+        for fold in payload["tuning"]["fold_scores"]
+    )
+    expected = json.loads(json.dumps(result.as_metadata_dict(), allow_nan=False))
+    assert {key: payload[key] for key in expected} == expected
+    assert (
+        production_path.read_bytes() if production_path.is_file() else None
+    ) == production_before
