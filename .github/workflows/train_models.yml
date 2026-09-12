@@ -2,7 +2,9 @@ name: PSE Fresh Model Training
 
 on:
   schedule:
-    - cron: "0 0 3 * *"
+    # GitHub cron uses UTC: 00:00 UTC is 08:00 Philippine Time (UTC+8).
+    # Run quarterly on February, May, August, and November 28.
+    - cron: "0 0 28 2,5,8,11 *"
   workflow_dispatch: {}
 
 concurrency:
