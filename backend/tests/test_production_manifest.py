@@ -29,6 +29,28 @@ MANILA = ZoneInfo("Asia/Manila")
 SOURCE_SHA = "a" * 40
 
 
+@pytest.mark.parametrize("value", [True, False, 1.0, "1", None, 999, [], {}])
+def test_schema_version_requires_exact_integer(value: object) -> None:
+    payload = valid_payload()
+    payload["schema_version"] = value
+    with pytest.raises(ProductionArtifactValidationError, match="identity"):
+        parse_production_manifest(payload)
+
+
+def test_schema_version_integer_one_is_accepted() -> None:
+    payload = valid_payload()
+    payload["schema_version"] = 1
+    assert parse_production_manifest(payload).schema_version == 1
+
+
+@pytest.mark.parametrize("value", [True, False, 15.0, "15", None, 999])
+def test_symbol_count_requires_exact_integer(value: object) -> None:
+    payload = valid_payload()
+    payload["symbol_count"] = value
+    with pytest.raises(ProductionArtifactValidationError, match="symbol_count"):
+        parse_production_manifest(payload)
+
+
 def valid_payload() -> dict[str, object]:
     symbols = configured_symbols()
     return {

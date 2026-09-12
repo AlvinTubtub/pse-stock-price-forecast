@@ -32,3 +32,31 @@ def test_display_timestamp_uses_asia_manila() -> None:
 def test_naive_timestamp_is_rejected() -> None:
     with pytest.raises(ValueError, match="timezone-aware"):
         timestamp_for_display(datetime(2024, 1, 1, 0, 0))
+
+
+@pytest.mark.parametrize(("origin", "expected"), [
+    (date(2026, 9, 10), date(2026, 9, 11)),
+    (date(2026, 9, 11), date(2026, 9, 14)),
+    (date(2026, 11, 27), date(2026, 12, 1)),
+    (date(2026, 12, 23), date(2026, 12, 28)),
+    (date(2026, 4, 1), date(2026, 4, 6)),
+])
+def test_configured_closures_are_default(origin: date, expected: date) -> None:
+    assert PSETradingCalendar().next_trading_day(origin) == expected
+    assert next_pse_trading_day(origin) == expected
+    assert PSETradingCalendar.with_holidays([]).next_trading_day(origin) == expected
+
+
+def test_cli_emergency_closure_preserves_configured_closures() -> None:
+    import argparse
+    from scripts._common import add_runtime_options
+
+    parser = argparse.ArgumentParser()
+    add_runtime_options(parser)
+    arguments = parser.parse_args(["--holiday", "2026-12-28"])
+    calendar = PSETradingCalendar.with_holidays(arguments.holiday)
+    assert calendar.next_trading_day(date(2026, 12, 23)) == date(2026, 12, 29)
+
+
+def test_special_working_holiday_is_not_a_closure() -> None:
+    assert PSETradingCalendar().is_trading_day(date(2026, 2, 25))

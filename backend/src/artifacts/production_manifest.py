@@ -157,6 +157,7 @@ def parse_production_manifest(payload: Mapping[str, Any]) -> ProductionManifest:
         )
     if (
         payload["schema_id"] != PRODUCTION_MANIFEST_SCHEMA_ID
+        or type(payload["schema_version"]) is not int
         or payload["schema_version"] != PRODUCTION_MANIFEST_SCHEMA_VERSION
         or payload["artifact_generation"] != PRODUCTION_ARTIFACT_GENERATION
         or payload["artifact_name"] != PRODUCTION_ARTIFACT_NAME
@@ -202,8 +203,7 @@ def parse_production_manifest(payload: Mapping[str, Any]) -> ProductionManifest:
             "Manifest symbol universe does not match configured companies"
         )
     if (
-        isinstance(payload["symbol_count"], bool)
-        or not isinstance(payload["symbol_count"], int)
+        type(payload["symbol_count"]) is not int
         or payload["symbol_count"] != len(symbols)
     ):
         raise ProductionArtifactValidationError("Manifest symbol_count is invalid")
@@ -329,6 +329,7 @@ def _validate_model_evidence(
         payload = _load_json_object(path)
         if (
             payload.get("schema_id") != schema_id
+            or type(payload.get("schema_version")) is not int
             or payload.get("schema_version") != schema_version
             or payload.get("symbol") != symbol
             or payload.get("evaluation_target_dates") != expected_date_strings
@@ -353,6 +354,7 @@ def _validate_model_evidence(
     if (
         not isinstance(state, dict)
         or state.get("schema_id") != LSTM_EVALUATION_SCHEMA_ID
+        or type(state.get("schema_version")) is not int
         or state.get("schema_version") != LSTM_EVALUATION_SCHEMA_VERSION
         or not state.get("model_state_dict")
     ):
@@ -367,6 +369,7 @@ def _validate_forecast(artifacts_root: Path, symbol: str, latest_date: date) -> 
     predictions = payload.get("predictions")
     if (
         payload.get("schema_id") != "forecastph.next-day-forecast"
+        or type(payload.get("schema_version")) is not int
         or payload.get("schema_version") != 1
         or payload.get("symbol") != symbol
         or payload.get("origin_date") != latest_date.isoformat()

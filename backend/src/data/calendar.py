@@ -5,21 +5,19 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 from config.settings import MANILA_TIMEZONE, as_manila_time
+from config.pse_holidays import PSE_CLOSURES
 
 
 @dataclass(frozen=True, slots=True)
 class PSETradingCalendar:
-    """Weekend-aware calendar with explicitly supplied PSE closure dates.
+    """Weekend-aware calendar using reviewed PSE closures by default."""
 
-    PSE closures can differ from generic public-holiday calendars, so callers must
-    supply the authoritative closure dates for the relevant forecast horizon.
-    """
-
-    holidays: frozenset[date] = field(default_factory=frozenset)
+    holidays: frozenset[date] = field(default_factory=lambda: PSE_CLOSURES)
 
     @classmethod
     def with_holidays(cls, holidays: Iterable[date]) -> "PSETradingCalendar":
-        return cls(frozenset(holidays))
+        """Add emergency/caller closures without discarding configured dates."""
+        return cls(PSE_CLOSURES | frozenset(holidays))
 
     def is_trading_day(self, candidate: date) -> bool:
         return candidate.weekday() < 5 and candidate not in self.holidays
