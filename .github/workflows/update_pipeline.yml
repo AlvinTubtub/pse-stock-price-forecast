@@ -1,19 +1,4 @@
-name: Fast Pipeline (data + inference, no training)
-
-# Triggered externally by Cron-job.org (Mon-Fri, 4:00 PM Philippine Time)
-# via repository_dispatch.
-# workflow_dispatch is included for manual/debug runs.
-#
-# This workflow NEVER trains models.
-# It:
-#   1. Checks the PSE trading calendar (skips if weekend or Philippine holiday)
-#   2. Ingests the latest PSE EOD data
-#   3. Runs daily inference using persisted approved deployment models
-#   4. Exports frontend JSON artifacts
-#   5. Validates the exported artifacts
-#   6. Commits and pushes updated artifacts
-#
-# Monthly deployment refitting is handled separately; retuning remains manual.
+name: PSE EOD Update and Persisted Model Forecast
 
 on:
   repository_dispatch:
@@ -25,69 +10,132 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
-  update:
+  forecast:
+    name: Ingest EOD and forecast from verified persisted models
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version-file: backend/.python-version
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-fast.txt
-          pip install -r requirements-inference.txt
+          python -m pip install -r requirements.txt
 
-      - name: Check PSE Trading Calendar
-        id: check_calendar
+      - name: Locate latest valid Phase 14 training artifact
+        id: production_artifact
+        working-directory: backend
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          found=false
+          while IFS=$'\t' read -r run_id source_commit; do
+            if [ -z "$run_id" ] || [ -z "$source_commit" ]; then
+              continue
+            fi
+            candidate_root="$RUNNER_TEMP/forecastph-artifact-$run_id"
+            mkdir -p "$candidate_root"
+            if ! gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name forecastph-backend-artifacts \
+              --dir "$candidate_root"; then
+              echo "Training run $run_id has no downloadable production artifact; checking older runs."
+              continue
+            fi
+            if python scripts/validate_production_artifacts.py \
+              --artifacts-root "$candidate_root" \
+              --expected-run-id "$run_id" \
+              --expected-source-commit "$source_commit" \
+              --expected-source-branch "$TARGET_BRANCH" \
+              --verbose; then
+              echo "artifact_root=$candidate_root" >> "$GITHUB_OUTPUT"
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+              found=true
+              break
+            fi
+            echo "Training run $run_id did not contain a valid Phase 14 package; checking older runs."
+          done < <(
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow train_models.yml \
+              --branch "$TARGET_BRANCH" \
+              --status success \
+              --limit 50 \
+              --json databaseId,headSha \
+              --jq '.[] | [.databaseId, .headSha] | @tsv'
+          )
+          if [ "$found" != true ]; then
+            echo "No valid Phase 14 production model artifact exists. Run PSE Fresh Model Training manually first." >&2
+            exit 1
+          fi
+
+      - name: Restore verified production artifact layout
+        working-directory: backend
+        env:
+          ARTIFACT_ROOT: ${{ steps.production_artifact.outputs.artifact_root }}
+        run: |
+          python scripts/reset_artifacts.py --yes
+          cp -a "$ARTIFACT_ROOT/." artifacts/
+
+      - name: Validate restored production artifacts
         working-directory: backend
         run: |
-          python scripts/check_pse_trading_day.py
+          python scripts/validate_production_artifacts.py \
+            --expected-run-id "${{ steps.production_artifact.outputs.run_id }}" \
+            --expected-source-commit "${{ steps.production_artifact.outputs.source_commit }}" \
+            --expected-source-branch "${{ github.ref_name }}" \
+            --verbose
 
-      - name: Run pipeline (ingestion) and Run daily inference (no training)
-        if: steps.check_calendar.outputs.is_trading_day == 'true'
+      - name: Ingest official PSE EDGE EOD reports
+        id: ingestion
         working-directory: backend
         run: |
-          python run_pipeline.py --no-train
+          python scripts/update_eod.py --verbose
+          if git diff --quiet -- data/raw; then
+            echo "raw_changed=false" >> "$GITHUB_OUTPUT"
+            echo "No new market-session rows were added; persisted inference will not be regenerated."
+          else
+            echo "raw_changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Export frontend JSON artifacts
-        if: steps.check_calendar.outputs.is_trading_day == 'true'
+      - name: Validate raw OHLCV inputs
         working-directory: backend
-        run: |
-          python scripts/export_forecast_artifacts.py
+        run: python scripts/validate_raw.py --all --verbose
 
-      - name: Validate exported artifacts
-        if: steps.check_calendar.outputs.is_trading_day == 'true'
+      - name: Forecast from persisted models without training
+        if: steps.ingestion.outputs.raw_changed == 'true'
         working-directory: backend
-        run: |
-          python scripts/validate_exports.py
+        run: python scripts/forecast_all.py --all --verbose
 
-      - name: Commit and push changed artifacts
-        if: steps.check_calendar.outputs.is_trading_day == 'true'
+      - name: Validate generated frontend JSON
+        if: steps.ingestion.outputs.raw_changed == 'true'
+        working-directory: backend
+        run: python scripts/validate_frontend_forecasts.py --verbose
+
+      - name: Commit raw and forecast data if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add \
-            backend/data/raw/*.csv \
-            backend/prediction_cache/*.json \
-            backend/production_history \
-            backend/latest_processed.json \
-            frontend/public/forecasts
-
+          git add -- backend/data/raw frontend/public/forecasts
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No raw or frontend forecast changes to commit."
           else
-            git commit -m "Automated data + inference update ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git commit -m "Automated persisted-model forecast ($(date -u +'%Y-%m-%d %H:%M UTC'))"
             git push
           fi

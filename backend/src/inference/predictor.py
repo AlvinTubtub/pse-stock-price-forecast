@@ -133,13 +133,17 @@ def _load_lstm(
 def load_production_model(
     symbol: str,
     model: ModelId,
+    *,
+    artifacts_root: Path | None = None,
 ) -> ProductionModelArtifact:
     """Validate metadata/checksum first, then load one current model artifact."""
 
     company = get_company(symbol)
     if model not in ARTIFACT_FORMATS:
         raise ModelArtifactCompatibilityError(f"Unsupported production model {model.value}")
-    root = ArtifactDirectories.from_root(SETTINGS.artifacts_dir).models
+    root = ArtifactDirectories.from_root(
+        SETTINGS.artifacts_dir if artifacts_root is None else Path(artifacts_root)
+    ).models
     metadata, model_path, metadata_path = _load_metadata(
         symbol=company.symbol,
         model=model,
