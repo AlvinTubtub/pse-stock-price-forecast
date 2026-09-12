@@ -1,14 +1,6 @@
 name: PSE EOD Update and Persisted Model Forecast
 
 on:
-  # TEMPORARY PHASE 14 BOOTSTRAP: remove this push trigger before Phase 15
-  # cutover to main. It remains dormant until a deliberate follow-up commit
-  # adds/changes the marker after a valid training artifact has been created.
-  push:
-    branches:
-      - refactor/backend-from-scratch
-    paths:
-      - .github/phase14-update-bootstrap.trigger
   repository_dispatch:
     types: [update-pse-data]
   workflow_dispatch: {}
