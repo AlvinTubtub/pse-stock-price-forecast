@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-10T23:00:49.885920+08:00",
-  "forecastDate": "2026-09-11",
-  "lastRunAt": "2026-09-10T15:00:44+00:00",
-  "status": "ok",
+  "generatedAt": "2026-09-12T16:04:31.738852+08:00",
+  "forecastDate": "2026-09-14",
+  "lastRunAt": "2026-09-12T16:04:31.738852+08:00",
+  "status": "complete",
   "totalCompanies": 15,
   "missingCompanies": [],
   "sectors": [
@@ -29,31 +29,29 @@
   ],
   "marketSummary": {
     "gainers": 7,
-    "losers": 7,
-    "unchanged": 1
+    "losers": 8,
+    "unchanged": 0
   },
   "topGainer": {
-    "symbol": "APX",
-    "name": "Apex Mining Co., Inc.",
-    "sector": "Mining and Oil",
-    "latestClose": 18.2,
-    "predictedClose": 18.3,
-    "pctChange": 0.55,
+    "symbol": "MBT",
+    "name": "Metropolitan Bank & Trust Company",
+    "sector": "Financials",
+    "latestClose": 63.05,
+    "predictedClose": 63.24423755006485,
+    "pctChange": 0.3080690722678116,
     "direction": "bullish",
-    "bestModel": "Lag-Informed Regression",
-    "confidence": 96.3,
-    "forecastDate": "2026-09-11"
+    "bestModel": "ARIMA",
+    "forecastDate": "2026-09-14"
   },
   "topLoser": {
-    "symbol": "JFC",
-    "name": "Jollibee Foods Corporation",
+    "symbol": "SHLPH",
+    "name": "Shell Pilipinas Corporation",
     "sector": "Industrial",
-    "latestClose": 148.5,
-    "predictedClose": 148.08,
-    "pctChange": -0.28,
+    "latestClose": 7.82,
+    "predictedClose": 7.78637883686876,
+    "pctChange": -0.4299381474583145,
     "direction": "bearish",
-    "bestModel": "LSTM",
-    "confidence": 98.3,
-    "forecastDate": "2026-09-11"
+    "bestModel": "ARIMA",
+    "forecastDate": "2026-09-14"
   }
 }

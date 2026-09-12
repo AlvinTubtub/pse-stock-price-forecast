@@ -33,14 +33,11 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
-# Local pipeline artifacts/logs
-backend/data/pdf_reports/
-backend/data/pdf_pipeline/
+# Backend runtime artifacts and logs
+/backend/artifacts/
+/backend/data/pdf_reports/
 backend/*.log
 
 # IDE
 .vscode/
 .idea/
-
-# Generated formal research result artifacts
-/backend/results/

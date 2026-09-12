@@ -853,7 +853,7 @@ export default function LearnStocksPage() {
                     60-Session Backtest Comparison
                   </h4>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Overlays actual historical closing prices against what the models would have predicted for each session. A vertical demarcation marker separates the audited research holdout from live forecasts.
+                    Overlays actual closing prices against the stored deployment-evaluation forecasts and later prospective operational forecasts. The immutable formal-study results are reported separately on the Models page.
                   </p>
                 </div>
 
@@ -1156,8 +1156,8 @@ export default function LearnStocksPage() {
                 <h4 className="font-bold text-slate-200 uppercase tracking-wide">Research Governance & Dual-Track Separation:</h4>
                 <ul className="list-disc list-inside space-y-1 text-slate-300">
                   <li><strong className="text-white">Formal Benchmark Track:</strong> Frozen cross-validation folds (5 expanding-window folds) evaluated with non-parametric hypothesis tests (Friedman test, Wilcoxon signed-rank test with Holm correction).</li>
-                  <li><strong className="text-white">Production Refresh Track:</strong> Deployed models refreshed weekly with challenger gatekeeping to serve daily live predictions without mutating formal research baselines.</li>
-                  <li><strong className="text-white">Baseline Naive Benchmark:</strong> Every model is evaluated against the random walk naive benchmark (tomorrow&apos;s price = today&apos;s price) to ensure real added predictive value (MASE &lt; 1.0).</li>
+                  <li><strong className="text-white">Production Refresh Track:</strong> Approved deployment configurations are refitted monthly to serve daily live predictions without mutating formal research baselines. Retuning and promotion remain separate manual decisions.</li>
+                  <li><strong className="text-white">Baseline Naive Benchmark:</strong> Every formal model is evaluated against the random-walk Naive benchmark (tomorrow&apos;s price = today&apos;s price). MASE below one is a useful scale comparison, but statistical improvement requires the declared benchmark-first test.</li>
                 </ul>
               </div>
             </div>

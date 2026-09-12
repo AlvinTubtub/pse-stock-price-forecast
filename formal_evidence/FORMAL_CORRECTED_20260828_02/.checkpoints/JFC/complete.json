@@ -1,0 +1,12 @@
+{
+  "artifact_sha256": {
+    "development_close.json": "7412168ff5dd4586f4b3b3427fd29e3cb965af6a5d8dd3d42f3cfbe7209a5ab5",
+    "diagnostics.json": "2310993766b4b1c73045ba4fccb37810042ecbc5cd92b6d82c635fe5aa618500",
+    "holdout_predictions.csv": "c3049437963edde6669a19e2ef2b841fa583e942ce9c6c534197bf2fb6954c14",
+    "metrics.json": "c1a32a61644ac759c044278c6f597756513e2296dd32477309a0ad094f8acfc5",
+    "plan.json": "9a7b874c93e9b9ebd8da6e28407285049131f038158cc7a0de1745bce45215ac",
+    "source_data.json": "b49e1dd38234dd2f9b3fa1f2e085f65baffdfb762efba8d65e7a7a18cdf1adfa"
+  },
+  "completed_at": "2026-09-04T16:19:28.602871+00:00",
+  "symbol": "JFC"
+}

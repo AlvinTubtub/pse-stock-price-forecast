@@ -1,403 +1,110 @@
-# ForecastPH — Backend (Data/ML Pipeline)
+# ForecastPH backend
 
-ForecastPH forecasts next-session closing prices for selected PSE-listed companies. **This directory
-is the data/ML pipeline only** — it scrapes, cleans, engineers features, trains, evaluates, and
-produces forecasts, then exports the results as static JSON consumed by the frontend.
+This directory is the clean foundation for the ForecastPH forecasting pipeline.
 
-This is one half of a monorepo — see the [repo root README](../README.md) for the overall layout.
-The UI lives in the sibling `../frontend/` directory (Next.js, deployed on Vercel). It contains no
-Python and calls no backend — it reads the JSON files this pipeline's GitHub Actions workflows
-commit straight to `../frontend/public/forecasts/`. Because both live in the same repo, that commit
-*is* the frontend's data update, and Vercel's own Git integration (Root Directory: `frontend/`)
-redeploys automatically on every push — no deploy hook or cross-repo wiring required.
+## Layout
 
-**This directory is a pure, read-only-to-the-frontend data pipeline.** There is no server, no API,
-and no upload/retraining capability triggered from the UI — every number the frontend shows comes
-from files already committed here by the automated pipeline described below.
-`scripts/export_forecast_artifacts.py` is the only piece written specifically for the frontend: it
-reshapes this pipeline's existing outputs (`data/raw/`, `prediction_cache/`, `best_models.json`,
-`latest_processed.json`, `statistical_tests.json`) into the flat JSON contract the frontend expects,
-and runs as the last step of both GitHub Actions workflows below.
+- `data/raw/`: preserved source market data. Pipeline code must treat these files as immutable inputs.
+- `data/pdf_reports/`: ignored staging area for downloaded official PSE EDGE EOD PDFs.
+- `config/`: pipeline configuration added in later phases.
+- `src/data/`: data loading and validation.
+- `src/features/`: feature engineering.
+- `src/models/`: model definitions.
+- `src/training/`: training orchestration.
+- `src/evaluation/`: backtesting and metrics.
+- `src/inference/`: next-session inference.
+- `src/export/`: frontend-contract export logic.
+- `src/ingestion/`: ingestion-only PSE EOD download, parse, validation, and conflict-safe merge logic.
+- `artifacts/`: ignored generated outputs split into `models/`, `evaluations/`, `forecasts/`, and `logs/`.
+- `scripts/`: command-line entry points added in later phases.
+- `tests/`: backend tests added with each implementation phase.
 
-> The previous Streamlit UI (`app.py`, `ui/`, `pages_app/`) has been removed — it's fully superseded
-> by `../frontend/`.
+## Current status
 
-## Features
+Phase 11.5 restores automated official PSE EDGE EOD ingestion without restoring the old services or model lifecycle. It derives target symbols from `config/companies.py`, treats 404 dates as unpublished, rejects conflicting historical rows, validates every merge with the new raw validator, and never starts training or forecast export.
 
-- Home dashboard with project overview
-- Company list and sector browsing
-- Company details with historical charts, next-day forecast, and actual-vs-predicted backtests
-- Model comparison across forecasting methods (RMSE/MAE/MASE/R²)
-- Educational section explaining OHLCV and forecasting models
-- About page for project context and capstone background
-- A "data last refreshed" indicator sourced directly from the automated pipeline's own run metadata
+Phase 11 adds four authoritative commands with structured JSON logging. The training command always tunes and fits from raw data; `--fresh` additionally resets all generated artifacts first. Single-symbol runs require `--no-export` because the frontend contract requires one complete 15-company dataset. The forecast command loads only compatible new production and evaluation artifacts and never retunes models.
 
-## Architecture
+Phase 10 adds the operational frontend exporter. It accepts only the new typed evaluation and next-day inference results plus validated raw OHLCV records, emits the documented 34 operational files, and validates every JSON document before atomic replacement. It does not read existing frontend JSON as model input and does not touch the preserved formal-study file.
 
-```text
-Cron-job.org (Mon–Fri, 4:00 PM PHT)         GitHub Actions cron (Sun, 8:00 AM PHT)
-        │  POST repository_dispatch                  │  schedule trigger
-        ▼                                             ▼
-.github/workflows/update_pipeline.yml       .github/workflows/train_models.yml
-        │  ("Fast Pipeline")                          │  ("Heavy Training")
-        ▼                                             ▼
-run_pipeline.py --no-train                  model_selector --mode deployment-refresh --strict
-  1. Download latest PSE EDGE disclosures      1. Load approved configurations
-  2. Extract and validate PDF tables           2. Refit Lag Regression, ARIMA, and LSTM
-  3. Update OHLCV datasets                        without retuning or formal evaluation
-     (data/raw/<SYMBOL>.csv)                   3. Preserve approved model families and metrics
-  4. Update latest_processed.json              4. Update deployment models + operational cache
-        │
-        ▼
-Commit changed artifacts only
-(idempotent — no-op if nothing changed)               │
-        │                                             ▼
-        │                                    Commit changed artifacts only
-        │                                    (idempotent — no-op if nothing changed)
-        ▼                                             │
-        └──────────────────┬──────────────────────────┘
-                            ▼
-        Vercel (Root Directory: frontend/) auto-redeploys from the new commit
-        via its normal Git integration — no deploy hook needed
-                            │
-                            ▼
-        Dashboard reflects the latest data/models — no user interaction required
-```
+Phase 9 adds one lightweight generated-artifact layout. Ordinary training-run manifests in `artifacts/logs/` record timing, environment versions, the source-data boundary, processed symbols, status, and errors. They are operational records only, not immutable formal experiments.
 
-Data refreshes daily (Mon-Fri); models retrain weekly (Sun) — see
-"Automated Pipeline" below for why, and the runtime numbers behind that
-split.
+Phase 8 adds fresh production refitting and next-PSE-session inference. Selected hyperparameters are carried forward from chronological evaluation, but every principal model, scaler, and fitted state is rebuilt using all currently available raw history.
 
-The frontend (`../frontend/`) only ever:
-- reads the JSON `scripts/export_forecast_artifacts.py` exports from `data/raw/*.csv`, `prediction_cache/`, `best_models.json`, `latest_processed.json`
-- displays the Company List, Company Details, Forecast Results, Model Performance, charts, and dashboard metrics built from what it read
+Lag-Informed Regression keeps evaluation and production fitting separate. Generated evaluation metadata is written under `artifacts/evaluations/lir/`.
 
-The frontend never downloads PDFs, processes data, retrains models, executes any forecasting pipeline, or writes anything back to the repository. There is no "Update Data" page, no upload widget, and no button anywhere in the app that triggers processing — the only way data changes is a commit from the automated pipeline landing in the repo.
+ARIMA likewise keeps evaluation and production fitting separate. Generated evaluation metadata is written under `artifacts/evaluations/arima/`.
 
-## Tech Stack
+LSTM early stopping uses a chronological tail inside each training block. Each final fit first selects an epoch count, then creates a fresh scaler and model and trains on the entire development or production block. Generated evaluation metadata and state are written under `artifacts/evaluations/lstm/`.
 
-- Python
-- Pandas
-- NumPy
-- scikit-learn
-- Statsmodels (ADF test, CV-scored ARIMA order search, Ljung-Box diagnostics)
-- Torch
-- Joblib (model persistence)
-- pdfplumber, requests (PDF ingestion pipeline)
+PyTorch deterministic algorithms and fixed seeds are enabled. Exact floating-point results can still vary across PyTorch releases, operating systems, CPU architectures, and other hardware/software differences.
 
-## Model Training Pipeline
+Unified evaluation emits canonical one-step-ahead records and computes full-precision RMSE, MAE, MASE, and R-squared. Every model uses the same MASE denominator calculated once from the company's development Close series. Principal models are ranked by evaluation RMSE; production refitting remains a separate later operation.
 
-Training happens exclusively inside the automated pipeline (never in the frontend):
+Production model files and compatibility metadata live only under `artifacts/models/{SYMBOL}/`. Fresh refits never load existing files. Inference validates schema, implementation version, model identity, artifact format, SHA-256, training boundary, row count, and family-specific model state before predicting. A configured PSE calendar determines the next trading session.
 
-```text
-PSE EDGE PDF -> PDF Extraction -> CSV Generation -> Data Validation
-    -> Feature Engineering -> Model Training (x3) -> Model Evaluation
-    -> Statistical Significance Tests -> Best Model Selection
-    -> Saved Models -> export_forecast_artifacts.py -> Frontend Dashboard (read-only)
-```
+## Development setup
 
-All three models predict next-day **ΔClose** = Close(t+1) − Close(t)
-rather than the raw Close level, and reconstruct
-`Predicted Close(t+1) = Close(t) + Predicted ΔClose(t+1)` before any
-metric is computed — this matches the capstone paper's methodology and
-keeps RMSE/MAE/MASE/R² reported in peso terms, not on an internal
-differenced/scaled target.
-
-- `services/feature_engineering.py` — lag features + technical indicators
-  (EMA 10/20, RSI 14, MACD/Signal, Bollinger Bands, daily return, rolling
-  volatility, High-Low and Open-Close spreads) plus the expanded return
-  feature set (lagged returns 1-20, rolling return mean/volatility at
-  5/10/20, high-low range %, log volume, rolling volume means), shared by
-  every model.
-- `services/time_series_cv.py` — shared expanding-window rolling-origin
-  CV splitter (5 folds, shrinking only for short series), used by both
-  the regression's lambda selection and the ARIMA order search.
-- `services/forecasting/lag_regression.py` — training-only StandardScaler
-  -> PACF-assisted lag selection -> LASSO as the *final* estimator (no
-  secondary OLS refit), lambda chosen by 5-fold expanding-window CV over
-  the predeclared expanded 10^-4 through 10^3 grid. The full grid evidence
-  is retained, and a boundary winner blocks formal finalization.
-- `services/forecasting/arima_model.py` — ADF stationarity test +
-  (p, d, q) search restricted to p<=3, d<=2, q<=3, scored by
-  expanding-window rolling-origin CV with walk-forward one-step
-  forecasting (not AIC), plus Ljung-Box residual diagnostics.
-- `services/forecasting/lstm_model.py` — single LSTM layer + linear head,
-  predicting scaled ΔClose (Min-Max scaler fit on the training split
-  only), hyperparameters chosen by grid search over lookback
-  (5/10/20/30), hidden units (25/50/100), learning rate (0.01/0.001), and
-  batch size (16/32) — 48 configurations. Every configuration is evaluated
-  on the same five target-date folds using seeds 42, 123, and 2026; all 720
-  fold/seed results are retained. A stopping-tail epoch choice is followed by
-  a fresh seed-42 refit on every development sequence.
-- `services/corporate_actions.py` — keeps every validated raw-Close row in
-  the primary analysis, never removes observations because of large errors,
-  and records a separate sensitivity analysis when verified event dates are
-  supplied.
-- `services/evaluation.py` — shared RMSE/MAE/MASE/R² metrics (computed on
-  reconstructed peso prices; MASE is scaled against the in-sample naive
-  one-step forecast), plus the cross-model statistical-significance
-  suite: Diebold-Mariano with Newey-West HAC variance and the
-  Harvey-Leybourne-Newbold small-sample correction (within each company),
-  Holm-Bonferroni correction, a Friedman rank test and Holm-adjusted
-  Wilcoxon signed-rank post-hoc tests (across companies), and a
-  best-model consistency check (lowest RMSE on >=8 of 15 companies).
-- `services/model_selector.py` — keeps formal evaluation, scheduled
-  deployment refresh, and manual challenger retuning as explicit operations.
-  Refresh reads approved configuration metadata and never reruns formal tests.
-
-Deployment refresh is decoupled from data ingestion:
-`refresh_deployment_all()` is called directly by
-`.github/workflows/train_models.yml` (weekly), *not* by every run of
-`services/pdf_pipeline/pipeline.py`/`run_pipeline.py` (Fast Pipeline,
-Monday-Friday — see "Automated Pipeline" below for the full split and
-why). `run_pipeline.py` still supports training inline via its
-`train_models=True` default, for local/manual use:
+Create a Python 3.11 or newer virtual environment, then install the requirements from this directory:
 
 ```bash
-python -m services.model_selector --mode deployment-refresh  # refit approved configurations
-python -m services.model_selector --mode deployment-retune --symbols BPI  # manual challenger only
-python scripts/smoke_formal_runner.py --symbols BPI --epochs 2  # development only; writes no formal run
-python run_pipeline.py                     # ingest + train in one go (local/dev; CI never does both together)
-python run_pipeline.py --no-train           # ingest new data only, skip retraining (what the Fast Pipeline runs)
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-An optional formal corporate-action registry is passed with
-`--corporate-actions-file`. It must be reviewed before the run and use this
-shape:
-
-```json
-{
-  "schema_version": 1,
-  "review_status": "complete",
-  "reviewed_symbols": ["BPI"],
-  "review_period": {
-    "start_date": "2025-09-02",
-    "end_date": "2026-08-28"
-  },
-  "events": [
-    {
-      "symbol": "BPI",
-      "event_date": "2026-01-05",
-      "event_type": "stock_split",
-      "source": "exchange disclosure reference"
-    }
-  ]
-}
-```
-
-`reviewed_symbols` must cover every requested company and `review_period` must
-cover every formal holdout target date. The reviewed 15-company registry for
-the frozen August 28, 2026 experiment is
-`config/formal_corporate_actions_20250902_20260828.json`. The registry hash
-becomes part of the resume contract, so its contents cannot change during a
-resumed run. If no reviewed registry is supplied, the formal evidence records
-that limitation rather than claiming that no events occurred.
-
-The expensive ARIMA and LSTM searches run only during explicitly requested
-manual challenger retuning or formal research. The Sunday workflow performs
-refresh only and fails if approved configuration metadata is unavailable.
-
-## Project Structure
-
-This directory is one half of the monorepo — see the [repo root README](../README.md) for
-`../frontend/`'s structure.
-
-```text
-backend/
-├── run_pipeline.py            # headless CLI entrypoint for the Fast Pipeline (and local dev)
-├── requirements-fast.txt      # deps for the Fast Pipeline (no ML stack)
-├── requirements-pipeline.txt  # deps for the Heavy Training pipeline / local full-pipeline dev
-├── README.md
-├── data/
-│   ├── raw/                # <TICKER>.csv — the data the frontend's exported JSON is built from
-│   ├── pdf_reports/        # staged PSE EDGE EOD PDFs (gitignored, except bundled samples)
-│   └── pdf_pipeline/       # intermediate ETL artifacts + pipeline.log (gitignored)
-├── models/
-│   ├── lag_regression/     # <TICKER>.pkl
-│   ├── arima/              # <TICKER>.pkl
-│   └── lstm/                # <TICKER>.pth
-├── prediction_cache/        # <TICKER>.json — cached metrics/predictions, read by the export script
-├── best_models.json         # {"<TICKER>": "<best model label>"} per ticker, lowest RMSE
-├── statistical_tests.json   # cross-model significance tests (DM/HLN, Friedman, Wilcoxon-Holm, consistency check)
-├── latest_processed.json    # metadata about the most recent automated pipeline run
-├── scripts/
-│   └── export_forecast_artifacts.py   # reshapes the above into ../frontend/public/forecasts/*.json
-└── services/
-    ├── data_loader.py
-    ├── data_validator.py
-    ├── feature_engineering.py   # lag + technical-indicator + return features, shared by all models
-    ├── time_series_cv.py        # shared expanding-window rolling-origin CV splitter
-    ├── evaluation.py            # shared RMSE/MAE/MASE/R² metrics + statistical significance suite
-    ├── model_selector.py        # trains all 3 models per ticker, saves them, picks the best
-    ├── forecasting/
-    │   ├── __init__.py
-    │   ├── lag_regression.py
-    │   ├── arima_model.py
-    │   └── lstm_model.py
-    └── pdf_pipeline/       # PDF ingestion pipeline (download, parser, cleaner, validator, merge)
-        ├── config.py
-        ├── downloader.py
-        ├── parser.py
-        ├── cleaner.py
-        ├── validator.py
-        ├── merge.py
-        └── pipeline.py     # single orchestration layer: ingestion -> training -> metadata
-```
-
-The root `.github/workflows/` (not inside `backend/`) runs everything below against these paths —
-see the repo root README for exactly how.
-
-## Requirements
-
-- Python 3.10 or newer
-- pip
-
-Running the actual dashboard UI is a separate, Node-based step — see
-[`../frontend/README.md`](../frontend/README.md). This directory only produces the data it reads.
-
-## Data Format
-
-Each company CSV in `data/raw/` contains: `Date, Open, High, Low, Close, Volume`, named by ticker symbol (e.g. `ALI.csv`, `BPI.csv`, ...). The full list of 15 tracked tickers: ALI, APX, BPI, GLO, ICT, JFC, MBT, MEG, MER, NIKL, PGOLD, SCC, SECB, SHLPH, SMPH.
-
-## Notes
-
-- `SECB.csv` replaces `BDO.csv` throughout the project.
-- `services/data_loader.py` maps ticker symbols to the company metadata used in the dashboard.
-- If a company CSV or trained model is missing, the app shows a placeholder or an in-app "not processed yet" message instead of failing — see [Architecture](#architecture).
-
-## Automated Pipeline
-
-The pipeline is split across two workflows so the expensive part doesn't
-run daily:
-
-| | `.github/workflows/update_pipeline.yml` ("Fast Pipeline") | `.github/workflows/train_models.yml` ("Heavy Training") |
-|---|---|---|
-| Does | PDF ingestion -> `backend/data/raw/` CSVs only (`python backend/run_pipeline.py --no-train`) | Refits approved configurations (`python -m services.model_selector --mode deployment-refresh --strict`) |
-| Schedule | Monday-Friday, 4:00 PM Philippine Time | Sunday, 8:00 AM Philippine Time |
-| Trigger | External: [Cron-job.org](https://cron-job.org) `repository_dispatch` (no GitHub-native cron) | GitHub Actions' own `schedule: cron` |
-| Dependencies | `backend/requirements-fast.txt` (pandas/numpy/pdfplumber/requests) | `backend/requirements-pipeline.txt` (adds scikit-learn/statsmodels/torch) |
-| Typical runtime | A couple of minutes | Refit-dependent; no scheduled ARIMA/LSTM grid search |
-| Commits | `backend/data/raw/`, `backend/latest_processed.json`, `frontend/public/forecasts/` | `backend/models/deployment/current/`, `backend/prediction_cache/`, `frontend/public/forecasts/` |
-
-Both share the `pse-pipeline` concurrency group, so they queue instead of
-racing each other if a run overlaps. Since PSE doesn't trade weekends,
-Heavy Training doesn't re-fetch PDFs itself — by Sunday, `data/raw/` is
-already current through Friday's close via the week's Fast Pipeline runs.
-
-### Setting up the Cron-job.org trigger (Fast Pipeline only)
-
-Heavy Training needs no external setup — it's a native GitHub Actions
-`schedule: cron` trigger, already configured in `train_models.yml`. Only
-the Fast Pipeline needs Cron-job.org:
-
-1. Create a GitHub Personal Access Token with `repo` + `workflow` scope (a fine-grained token scoped to just this repo's contents+actions permissions also works).
-2. In Cron-job.org, create a new job with:
-   - **Schedule**: Monday–Friday, 16:00 (4:00 PM) — set the job's timezone to `Asia/Manila`.
-   - **Request type**: Custom HTTP request (`POST`)
-   - **URL**: `https://api.github.com/repos/<OWNER>/<REPO>/dispatches`
-   - **Headers**:
-     - `Accept: application/vnd.github+json`
-     - `Authorization: Bearer <YOUR_GITHUB_PAT>`
-     - `X-GitHub-Api-Version: 2022-11-28`
-   - **Body**: `{"event_type": "run-pipeline"}`
-3. Save. Cron-job.org will now POST to GitHub on that schedule, which fires the `repository_dispatch` trigger and starts the Fast Pipeline workflow — no polling, no GitHub Actions schedule minute-drift.
-
-**Never commit the PAT to this repository.** Store it only in Cron-job.org's own encrypted request-header field.
-
-GitHub Actions' own cron (used by Heavy Training) can be delayed by a few
-minutes during periods of high platform load — not a concern for a
-weekly, non-latency-sensitive job, which is why it's only used there and
-not for the Fast Pipeline's tighter Monday-Friday schedule.
-
-### What each workflow does
-
-**Fast Pipeline** (Monday-Friday):
-
-1. Checks out the repo and installs `backend/requirements-fast.txt`.
-2. Runs `python backend/run_pipeline.py --no-train`, which downloads new EOD reports, extracts, cleans, validates, and merges them into `backend/data/raw/`, then writes `backend/latest_processed.json`. No model retraining.
-3. Verifies at least one non-empty CSV exists in `backend/data/raw/` — if not, the job fails loudly instead of silently pushing nothing.
-4. Runs `python backend/scripts/export_forecast_artifacts.py`, which writes `frontend/public/forecasts/*.json`.
-5. Stages `backend/data/raw/`, `backend/latest_processed.json`, and `frontend/public/forecasts/`, then checks `git diff --cached`. If nothing changed (e.g. a market holiday, or the pipeline already ran for that data), the job **finishes successfully without committing** — idempotent, no empty commits ever.
-6. If something changed, commits and pushes.
-7. Uploads `backend/data/pdf_pipeline/pipeline.log` as a build artifact either way, for troubleshooting.
-8. Vercel (Root Directory: `frontend/`) picks up the new commit and redeploys automatically via its Git integration — no separate step needed on this repo's side.
-
-**Heavy Training** (Sunday):
-
-1. Checks out the repo (already current through Friday, via the week's Fast Pipeline commits) and installs `backend/requirements-pipeline.txt`.
-2. Runs `python -m services.model_selector --mode deployment-refresh --strict` (from `backend/`), which refits each approved configuration and preserves existing formal metrics and model-family choices.
-3. Verifies `backend/best_models.json` and `backend/prediction_cache/` were actually populated.
-4. Runs `python backend/scripts/export_forecast_artifacts.py`, which writes `frontend/public/forecasts/*.json`.
-5. Stages `backend/models/deployment/current/`, `backend/prediction_cache/`, and `frontend/public/forecasts/`, then checks `git diff --cached` — same idempotency guarantee as the Fast Pipeline.
-6. If something changed, commits and pushes; Vercel redeploys automatically.
-
-Both workflows are granted only `contents: write` — nothing else.
-
-### Manual / ops trigger (workflow_dispatch)
-
-For a maintainer testing or backfilling outside the scheduled runs:
-**Actions → PSE Fast Data Pipeline → Run workflow** (optional `start_date`/`end_date` inputs, YYYY-MM-DD) or **Actions → PSE Weekly Model Training → Run workflow** (no inputs — trains on whatever `data/raw/` currently has). Both are operator actions taken directly in GitHub, entirely outside the deployed frontend.
-
-### Running it locally
-
-From the repo root:
+Run tests from `backend/` after tests are introduced:
 
 ```bash
-pip install -r backend/requirements-fast.txt       # PDF ingestion only
-pip install -r backend/requirements-pipeline.txt   # adds the ML stack, for training
-
-python backend/run_pipeline.py                     # fetch new reports, process, train, evaluate, select
-python backend/run_pipeline.py --no-download       # only process what's already in backend/data/pdf_reports/
-python backend/run_pipeline.py --no-train          # skip retraining (only refresh backend/data/raw/ CSVs)
-python backend/run_pipeline.py --start-date 2026-07-01 --end-date 2026-07-27
-cd backend && python -m services.model_selector --mode deployment-refresh  # refresh approved models
-python backend/scripts/export_forecast_artifacts.py  # refresh frontend/public/forecasts/ from whatever's on disk
+python -m pytest
 ```
 
-Exit code `0` means success (including "nothing new to do"); exit code `1` means a real failure — check `backend/data/pdf_pipeline/pipeline.log`.
+Safely clear generated artifacts and recreate the four artifact directories:
 
-### Disabling automation
+```bash
+python -m scripts.reset_artifacts
+```
 
-- In GitHub: **Actions → \<workflow name\> → ⋯ → Disable workflow** (do this for each of the two workflows independently).
-- Or delete/rename the corresponding file under `.github/workflows/`.
-- Independently, pause or delete the Cron-job.org job — that alone stops new Fast Pipeline runs from being triggered, without touching anything in this repo (Heavy Training is unaffected, since it doesn't depend on Cron-job.org).
+The reset command validates that its target is exactly `backend/artifacts`. It never deletes or rewrites `data/raw`.
 
-### Idempotency / duplicate-run protection
+Validate all configured raw files and report row counts and date ranges:
 
-Re-running either workflow on data/models it already has is safe and a
-no-op at the commit layer: `merge_into_raw()` upserts by date (identical
-rows produce an identical file), retraining on unchanged data reproduces
-bit-for-bit-equivalent models, and each workflow's `git diff --cached`
-check means an unchanged working tree never produces a commit —
-including two accidental triggers on the same day.
+```bash
+python -m scripts.validate_raw --all
+```
 
-## About the Forecasting Models
+Run the complete fresh lifecycle and publish frontend forecast data:
 
-The dashboard compares three forecasting approaches, each predicting
-next-day ΔClose and reconstructing a peso price from it (see "Model
-Training Pipeline" above for each model's methodology):
+```bash
+python -m scripts.train_all --all --fresh
+```
 
-- Lag-Informed Regression
-- ARIMA
-- LSTM
+Train one company for diagnostics without publishing a partial frontend dataset:
 
-against a naive (yesterday's close) baseline, using:
+```bash
+python -m scripts.train_all --symbol ALI --fresh --no-export --verbose
+```
 
-- RMSE
-- MAE
-- MASE
-- R²
+Generate forecasts from persisted models without tuning or refitting:
 
-Cross-model significance is assessed with Diebold-Mariano (Newey-West HAC
-variance, HLN small-sample correction) within each company, and a
-Friedman rank test with Holm-adjusted Wilcoxon signed-rank post-hoc tests
-across all companies — see `statistical_tests.json`, written only by an
-explicit formal-evaluation run.
+```bash
+python -m scripts.forecast_all --all
+```
 
-## Disclaimer
+Ingest all missing PSE EOD reports from the day after the newest raw date through the current Philippine date:
 
-This dashboard is intended for academic, educational, and analytical decision-support purposes only. It is not financial advice and should not be used as the sole basis for investment decisions.
+```bash
+python scripts/update_eod.py
+```
 
-## License
+Ingest an explicit inclusive date range without running any model code:
 
-For academic and internal project use.
+```bash
+python scripts/update_eod.py --start-date 2026-09-01 --end-date 2026-09-10 --verbose
+```
+
+Artifact reset requires interactive confirmation unless `--yes` is supplied:
+
+```bash
+python -m scripts.reset_artifacts --yes
+```

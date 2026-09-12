@@ -1,0 +1,12 @@
+{
+  "artifact_sha256": {
+    "development_close.json": "7bc80c0f87b19ebc13e22ea2655bb50cd8d72f5180b8d702696d7edb8bb1b617",
+    "diagnostics.json": "e42e5117927d1bf00698ed3efa9c88cce8c073c8f2b6090000ffe1307a6835d2",
+    "holdout_predictions.csv": "29b58e1e3fee6c458e555e7e382894325d85bda3580ba3168841119184f5d56c",
+    "metrics.json": "f6978084a7f408cecdd368e849129ccaaae5c3f71d703911424547716114cbcd",
+    "plan.json": "5a7738ad434f05836a4eb37fb96dd69cb4efd8903460c3692a68ce576200d26f",
+    "source_data.json": "d05e19ef457170bf24f9f256df5061485e77206b207ac2beff67eb534bbf8d91"
+  },
+  "completed_at": "2026-09-04T20:11:11.855124+00:00",
+  "symbol": "NIKL"
+}

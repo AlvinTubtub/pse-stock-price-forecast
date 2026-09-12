@@ -1,16 +1,8 @@
-name: PSE Scheduled Model Refresh
-
-# Scheduled model refresh is intentionally separate from the Fast Pipeline.
-# The Fast Pipeline runs daily inference against these persisted artifacts.
-# This workflow refits approved configurations for the canonical 15-ticker universe,
-# validates the generated artifacts, exports the frontend JSON, then commits the
-# complete training result only after every ticker succeeds.
+name: PSE Fresh Model Training
 
 on:
   schedule:
-    # Every November 3 at 00:00 UTC = 08:00 Philippine Time (UTC+8).
-    # Manual execution remains available through workflow_dispatch.
-    - cron: "0 0 3 11 *"
+    - cron: "0 0 3 * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -22,111 +14,97 @@ permissions:
 
 jobs:
   train:
-    name: Refresh all 15 PSE tickers
+    name: Train all configured PSE companies
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 360
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version-file: backend/.python-version
+          python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements-pipeline.txt
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Install training dependencies
+      - name: Install backend dependencies
         working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-pipeline.txt
+          python -m pip install -r requirements.txt
 
-      - name: Verify training environment
+      - name: Run backend test suite
+        working-directory: backend
+        run: python -m pytest -q
+
+      - name: Verify clean backend imports
         working-directory: backend
         run: |
           python - <<'PY'
-          import numpy, pandas, sklearn, scipy, statsmodels, torch, joblib
-          print("numpy", numpy.__version__)
-          print("pandas", pandas.__version__)
-          print("scikit-learn", sklearn.__version__)
-          print("scipy", scipy.__version__)
-          print("statsmodels", statsmodels.__version__)
-          print("torch", torch.__version__)
-          print("joblib", joblib.__version__)
+          import src.models.arima
+          import src.models.lag_regression
+          import src.models.lstm
+          import src.training.train_arima
+          import src.training.train_lir
+          import src.training.train_lstm
+          import src.training.orchestration
+          print("clean imports: PASS")
           PY
 
-      - name: Refresh approved deployment models strictly
+      - name: Validate raw OHLCV inputs
+        working-directory: backend
+        run: python scripts/validate_raw.py --all --verbose
+
+      - name: Run complete fresh training lifecycle
+        working-directory: backend
+        run: python scripts/train_all.py --all --fresh --verbose
+
+      - name: Validate complete fresh artifacts
         working-directory: backend
         run: |
-          python -m services.model_selector --mode deployment-refresh --strict
+          python scripts/validate_production_artifacts.py \
+            --skip-manifest \
+            --require-forecasts \
+            --require-current-data \
+            --verbose
 
-      - name: Verify all persisted model artifacts
+      - name: Validate generated frontend JSON
+        working-directory: backend
+        run: python scripts/validate_frontend_forecasts.py --verbose
+
+      - name: Create and validate production manifest
         working-directory: backend
         run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          from services.pdf_pipeline.config import TARGET_COMPANIES
+          python scripts/validate_production_artifacts.py \
+            --create-manifest \
+            --run-id "${{ github.run_id }}" \
+            --source-commit "${{ github.sha }}" \
+            --source-branch "${{ github.ref_name }}" \
+            --require-forecasts \
+            --require-current-data \
+            --verbose
 
-          root = Path(".")
-          tickers = sorted(TARGET_COMPANIES)
-          expected = {
-              "lag_regression": [root / "models" / "deployment" / "current" / "lag_regression" / f"{t}.pkl" for t in tickers],
-              "arima": [root / "models" / "deployment" / "current" / "arima" / f"{t}.pkl" for t in tickers],
-              "lstm": [root / "models" / "deployment" / "current" / "lstm" / f"{t}.pth" for t in tickers],
-              "prediction_cache": [root / "prediction_cache" / f"{t}.json" for t in tickers],
-          }
+      - name: Upload verified production artifact package
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecastph-backend-artifacts
+          path: |
+            backend/artifacts/models
+            backend/artifacts/evaluations
+            backend/artifacts/production_manifest.json
+          if-no-files-found: error
+          retention-days: 90
 
-          for kind, paths in expected.items():
-              missing = [str(p) for p in paths if not p.is_file()]
-              if missing:
-                  raise SystemExit(f"{kind}: missing {len(missing)} artifact(s): {missing}")
-              print(f"{kind}: {len(paths)}/{len(paths)} present")
-
-          best_models = root / "best_models.json"
-          statistical_tests = root / "statistical_tests.json"
-          if not best_models.is_file():
-              raise SystemExit("best_models.json was not generated")
-          if not statistical_tests.is_file():
-              raise SystemExit("statistical_tests.json was not generated")
-          deployment_manifest = root / "models" / "deployment" / "current" / "deployment_manifest.json"
-          if not deployment_manifest.is_file():
-              raise SystemExit("deployment_manifest.json was not generated")
-          manifest = json.loads(deployment_manifest.read_text())
-          if manifest.get("operation") != "refresh":
-              raise SystemExit("deployment_manifest.json does not record deployment refresh")
-          approved = manifest.get("approved_configurations", {})
-          missing_approved = sorted(set(tickers) - set(approved))
-          if missing_approved:
-              raise SystemExit(f"approved configuration metadata missing for: {missing_approved}")
-          print(f"Universe: {len(tickers)}/{len(tickers)} tickers")
-          PY
-
-      - name: Export frontend forecast artifacts
-        working-directory: backend
-        run: |
-          python scripts/export_forecast_artifacts.py
-
-      - name: Validate exported artifacts
-        working-directory: backend
-        run: |
-          python scripts/validate_exports.py
-
-      - name: Commit and push trained artifacts
+      - name: Commit frontend forecast data if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add \
-            backend/models/deployment/current \
-            backend/prediction_cache \
-            frontend/public/forecasts
-
+          git add -- frontend/public/forecasts
           if git diff --cached --quiet; then
-            echo "No training changes to commit."
+            echo "No frontend forecast changes to commit."
           else
-            git commit -m "Automated weekly model training ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git commit -m "Automated fresh model training ($(date -u +'%Y-%m-%d %H:%M UTC'))"
             git push
           fi

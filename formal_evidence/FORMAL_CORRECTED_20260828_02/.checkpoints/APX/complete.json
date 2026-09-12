@@ -1,0 +1,12 @@
+{
+  "artifact_sha256": {
+    "development_close.json": "ae6568828614d0d3b009cb9d6453e877b57fa13e24f50434deedb20ed711de56",
+    "diagnostics.json": "46a08a6a25eaa4d90ca799cc011e6432f4b315be3b99c8b6e44a096c44052d97",
+    "holdout_predictions.csv": "6f0eb58687d9ca077b2a0d2797b33a46be8404eabdf9b560b939bf4255f64811",
+    "metrics.json": "315f7af1be64977b0f2908d155beabcce155cd9ff06325b744463602aeeb7a25",
+    "plan.json": "e45667acc924be8aa9d420ce2e22e5a4363f532d9f6d5c25275d8ecd44667d4f",
+    "source_data.json": "c848b30b24647540750b56e07298fb123e4b2bd9a9a8d2bf16c16e7dd9752c65"
+  },
+  "completed_at": "2026-09-04T12:05:15.074574+00:00",
+  "symbol": "APX"
+}
