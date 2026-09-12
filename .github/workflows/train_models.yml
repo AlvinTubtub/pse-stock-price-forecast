@@ -1,6 +1,21 @@
 name: PSE Fresh Model Training
 
 on:
+  # TEMPORARY PHASE 14 BOOTSTRAP: remove this push trigger before Phase 15
+  # cutover to main. Branch and path filters prevent unrelated pushes from
+  # launching the expensive all-company fresh-training lifecycle.
+  push:
+    branches:
+      - refactor/backend-from-scratch
+    paths:
+      - .github/workflows/train_models.yml
+      - backend/requirements.txt
+      - backend/pyproject.toml
+      - backend/scripts/validate_frontend_forecasts.py
+      - backend/scripts/validate_production_artifacts.py
+      - backend/src/artifacts/production_manifest.py
+      - backend/src/export/validation.py
+      - backend/src/inference/predictor.py
   schedule:
     - cron: "0 0 3 * *"
   workflow_dispatch: {}
