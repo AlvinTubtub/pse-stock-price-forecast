@@ -13488,7 +13488,7 @@
   },
   "forecastDate": "2026-09-14",
   "dataAsOf": "2026-09-11",
-  "inferenceAt": "2026-09-12T15:53:24.691970+08:00",
+  "inferenceAt": "2026-09-12T22:25:20.921374+08:00",
   "backtestMethodology": {
     "source": "chronological_out_of_sample_evaluation",
     "alignment": "common_target_date",
