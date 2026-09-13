@@ -1,11 +1,6 @@
-import {
-  getCompanyDetail,
-  getCompanies,
-  getDashboard,
-  getMetrics,
-  getLatest,
-} from "@/lib/data";
-import { formatPeso, formatPct, formatNum } from "@/lib/format";
+import { getCompanyDetail, getCompanies, getDashboard, getLatest, getMetrics } from "@/lib/data";
+import { formatDate, formatDateTimePht, formatNum, formatPct, formatPeso } from "@/lib/format";
+import type { CompanyDetail, CompanySummary, ModelMetric } from "@/lib/types";
 
 export interface ContextOptions {
   route?: string;
@@ -13,327 +8,351 @@ export interface ContextOptions {
   watchlist?: string[];
 }
 
-/**
- * Builds a compact, accurate context string for a specific company page (/companies/[symbol]).
- */
+const PRINCIPAL_MODEL_IDS = ["lag_reg", "arima", "lstm"] as const;
+const MODEL_IDS = [...PRINCIPAL_MODEL_IDS, "naive"] as const;
+type ModelId = (typeof MODEL_IDS)[number];
+
+const MODEL_NAMES: Record<ModelId, string> = {
+  lag_reg: "Lag-Informed Regression",
+  arima: "ARIMA",
+  lstm: "LSTM",
+  naive: "Naive benchmark",
+};
+
+const NEXT_CLOSE_IDS: Record<string, (typeof PRINCIPAL_MODEL_IDS)[number]> = {
+  lag: "lag_reg",
+  arima: "arima",
+  lstm: "lstm",
+};
+
+function asContext(page: string, facts: Record<string, unknown>): string {
+  return JSON.stringify({ page, source: "current ForecastPH operational data", facts }, null, 2);
+}
+
+function finiteNumber(value: string | number | undefined): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function metricFacts(metrics: Record<string, ModelMetric> | undefined) {
+  return Object.fromEntries(
+    MODEL_IDS.flatMap((id) => {
+      const metric = metrics?.[id];
+      if (!metric) return [];
+      return [[MODEL_NAMES[id], {
+        rmsePhp: formatNum(metric.rmse, 4),
+        maePhp: formatNum(metric.mae, 4),
+        mase: formatNum(metric.mase, 4),
+        r2: formatNum(metric.r2, 4),
+      }]];
+    }),
+  );
+}
+
+function companySummary(company: CompanySummary) {
+  return {
+    ticker: company.symbol,
+    companyName: company.name,
+    sector: company.sector,
+    latestClose: formatPeso(company.latestClose),
+    predictedClose: formatPeso(company.predictedClose),
+    expectedChange: formatPct(company.pctChange),
+    selectedPrincipalModel: company.bestModel,
+    forecastTargetDate: company.forecastDate ? formatDate(company.forecastDate) : "unavailable",
+  };
+}
+
+function predictionFacts(company: CompanyDetail) {
+  return Object.fromEntries(
+    Object.entries(company.nextClose ?? {}).flatMap(([id, value]) => {
+      const modelId = NEXT_CLOSE_IDS[id];
+      return modelId && Number.isFinite(Number(value))
+        ? [[MODEL_NAMES[modelId], formatPeso(value)]]
+        : [];
+    }),
+  );
+}
+
+function selectedMetric(company: CompanyDetail): ModelMetric | undefined {
+  const selectedId = MODEL_IDS.find((id) => MODEL_NAMES[id] === company.model);
+  return selectedId ? company.metrics[selectedId] : undefined;
+}
+
+function modelPredictionSpread(company: CompanyDetail) {
+  const values = Object.entries(company.nextClose ?? {})
+    .filter(([id]) => Boolean(NEXT_CLOSE_IDS[id]))
+    .map(([, value]) => Number(value))
+    .filter(Number.isFinite);
+  if (values.length !== PRINCIPAL_MODEL_IDS.length) return null;
+  const spread = Math.max(...values) - Math.min(...values);
+  return {
+    amount: formatPeso(spread),
+    percentageOfLatestClose: company.previousClose > 0
+      ? formatPct((spread / company.previousClose) * 100)
+      : "unavailable",
+    definition: "Maximum principal-model forecast minus minimum principal-model forecast; not a confidence interval.",
+  };
+}
+
+function visibleBacktestFacts(company: CompanyDetail) {
+  const dates = company.backtestDates ?? [];
+  const actual = company.backtestActual ?? [];
+  const predicted = company.backtestByModel?.[company.model] ?? [];
+  const usable = Math.min(dates.length, actual.length, predicted.length);
+  const errors = Array.from({ length: usable }, (_, index) => predicted[index] - actual[index])
+    .filter(Number.isFinite);
+  const meanAbsoluteError = errors.length
+    ? errors.reduce((sum, error) => sum + Math.abs(error), 0) / errors.length
+    : null;
+  const rootMeanSquaredError = errors.length
+    ? Math.sqrt(errors.reduce((sum, error) => sum + error ** 2, 0) / errors.length)
+    : null;
+  return {
+    source: "Chronological out-of-sample predicted-versus-actual observations exported by ForecastPH.",
+    selectedModel: company.model,
+    sessions: usable,
+    firstTargetDate: dates[0] ? formatDate(dates[0]) : "unavailable",
+    lastTargetDate: usable ? formatDate(dates[usable - 1]) : "unavailable",
+    visibleWindowMae: meanAbsoluteError === null ? "unavailable" : formatPeso(meanAbsoluteError),
+    visibleWindowRmse: rootMeanSquaredError === null ? "unavailable" : formatPeso(rootMeanSquaredError),
+    latestObservation: usable ? {
+      targetDate: formatDate(dates[usable - 1]),
+      actualClose: formatPeso(actual[usable - 1]),
+      predictedClose: formatPeso(predicted[usable - 1]),
+      errorPredictedMinusActual: formatPeso(predicted[usable - 1] - actual[usable - 1]),
+    } : "unavailable",
+    chartMeaning: "Backtest compares one-step-ahead predicted closes with actual closes on unseen evaluation dates.",
+    errorChartMeaning: "Forecast Error Over Time plots predicted close minus actual close for those same out-of-sample dates.",
+  };
+}
+
 export async function buildCompanyContext(symbol: string): Promise<string> {
   const cleanSymbol = symbol.toUpperCase().trim();
   const company = await getCompanyDetail(cleanSymbol);
-
   if (!company) {
-    return `[Context: Company ${cleanSymbol}]
-Status: No specific data found for ticker symbol "${cleanSymbol}". Available tracked tickers: ALI, APX, BPI, GLO, ICT, JFC, MBT, MEG, MER, NIKL, PGOLD, SCC, SECB, SHLPH, SMPH.`;
+    const companies = await getCompanies();
+    return asContext("company", {
+      requestedTicker: cleanSymbol,
+      status: "That company is not available in the current ForecastPH data.",
+      trackedTickers: companies.map(({ symbol: ticker }) => ticker),
+    });
   }
 
-  const modelLabels: Record<string, string> = {
-    lag_reg: "Lag-Informed Regression",
-    arima: "ARIMA",
-    lstm: "LSTM",
-    naive: "Naive baseline",
-  };
-
-  const metricsLines = Object.entries(company.metrics)
-    .map(([key, m]) => {
-      const name = modelLabels[key] || key;
-      const maseVal = parseFloat(String(m.mase));
-      const maseNote =
-        !isNaN(maseVal) && maseVal < 1.0
-          ? "(beats naive)"
-          : !isNaN(maseVal) && maseVal === 1.0
-          ? "(equals naive)"
-          : "(worse than naive)";
-      return `- ${name}: RMSE=₱${formatNum(m.rmse, 4)}, MAE=₱${formatNum(m.mae, 4)}, MASE=${formatNum(m.mase, 4)} ${maseNote}, R²=${formatNum(m.r2, 4)}`;
-    })
-    .join("\n");
-
-  const nextCloseLines = Object.entries(company.nextClose || {})
-    .map(([key, price]) => {
-      const predictionLabels: Record<string, string> = {
-        lag: "Lag-Informed Regression",
-        arima: "ARIMA",
-        lstm: "LSTM",
-      };
-      const name = predictionLabels[key] || key;
-      return `- ${name}: ₱${Number(price).toFixed(2)}`;
-    })
-    .join("\n");
-
-  const selectedModelKey =
-    Object.keys(modelLabels).find((k) => modelLabels[k] === company.model) || "arima";
-  const selectedMetric = company.metrics[selectedModelKey];
-  const selectedMase = selectedMetric ? parseFloat(String(selectedMetric.mase)) : NaN;
-  const beatsNaive = !isNaN(selectedMase) && selectedMase < 1.0;
-
-  // Backtest recent summary (last 5 sessions)
-  let backtestSummary = "N/A";
-  if (
-    company.backtestDates &&
-    company.backtestDates.length > 0 &&
-    company.backtestActual &&
-    company.backtestActual.length > 0
-  ) {
-    const len = company.backtestDates.length;
-    const start = Math.max(0, len - 5);
-    const recentRows = [];
-    for (let i = start; i < len; i++) {
-      const d = company.backtestDates[i];
-      const act = company.backtestActual[i];
-      const pred = company.backtestByModel?.[company.model]?.[i];
-      recentRows.push(
-        `${d}: Actual=₱${act !== undefined ? act.toFixed(2) : "--"}, Predicted(${company.model})=₱${pred !== undefined ? pred.toFixed(2) : "--"}`
-      );
-    }
-    backtestSummary = recentRows.join("; ");
-  }
-
-  return `[Context: Company Detail — ${company.symbol} (${company.name})]
-- Sector: ${company.sector}
-- Data As Of: ${company.dataAsOf || "Recent"}
-- Forecast Target Date: ${company.forecastDate || "Next Trading Session"}
-- Previous Close: ${formatPeso(company.previousClose)}
-- Forecasted Close: ${formatPeso(company.predictedClose)}
-- Expected Change: ${formatPeso(company.pesoChange)} (${formatPct(company.pctChange)}) [${company.direction.toUpperCase()}]
-- Selected Model: ${company.model} (Selected based on lowest chronological-evaluation RMSE)
-- Selected Model Beats Naive Baseline? ${beatsNaive ? "Yes (MASE < 1.0)" : "No (MASE >= 1.0)"}
-
-Model Performance Metrics on the Held-out Evaluation Set:
-${metricsLines}
-
-Next-Day Price Predictions by Model:
-${nextCloseLines}
-
-Recent Backtest Observations (Last 5 sessions):
-${backtestSummary}`;
+  const chosenMetric = selectedMetric(company);
+  return asContext("company", {
+    company: { ticker: company.symbol, name: company.name, sector: company.sector },
+    currentForecast: {
+      latestObservedClose: formatPeso(company.previousClose),
+      projectedNextClose: formatPeso(company.predictedClose),
+      projectedPesoChange: formatPeso(company.pesoChange),
+      projectedPercentageChange: formatPct(company.pctChange),
+      directionLabel: company.direction,
+      selectedPrincipalModel: company.model,
+      selectionRule: "Lowest RMSE among the three principal models on the common chronological out-of-sample evaluation.",
+      principalModelPredictions: predictionFacts(company),
+      modelPredictionSpread: modelPredictionSpread(company),
+    },
+    dates: {
+      marketDataThrough: company.dataAsOf ? formatDate(company.dataAsOf) : "unavailable",
+      forecastTargetDate: company.forecastDate ? formatDate(company.forecastDate) : "unavailable",
+      inferenceGeneratedAtPht: company.inferenceAt ? formatDateTimePht(company.inferenceAt) : "unavailable",
+    },
+    evaluation: {
+      metricsByModel: metricFacts(company.metrics),
+      selectedModelMetrics: chosenMetric
+        ? {
+            rmsePhp: formatNum(chosenMetric.rmse, 4),
+            maePhp: formatNum(chosenMetric.mae, 4),
+            mase: formatNum(chosenMetric.mase, 4),
+            r2: formatNum(chosenMetric.r2, 4),
+          }
+        : "unavailable",
+      visibleBacktestWindow: visibleBacktestFacts(company),
+    },
+    limitations: [
+      "Forecasts are model estimates, not guarantees or trading recommendations.",
+      "The operational data contains price/volume history and model outputs, not news, sentiment, fundamentals, or causal explanations.",
+    ],
+  });
 }
 
-/**
- * Builds a compact, accurate context string for the Home Dashboard (/).
- */
 export async function buildHomeContext(): Promise<string> {
-  const [dashboard, companies, latest] = await Promise.all([
-    getDashboard(),
-    getCompanies(),
-    getLatest(),
-  ]);
-
-  const topGainerText = dashboard?.topGainer
-    ? `${dashboard.topGainer.symbol} (${dashboard.topGainer.name}): ${formatPct(dashboard.topGainer.pctChange)} (Forecast: ₱${dashboard.topGainer.predictedClose.toFixed(2)})`
-    : "N/A";
-
-  const topLoserText = dashboard?.topLoser
-    ? `${dashboard.topLoser.symbol} (${dashboard.topLoser.name}): ${formatPct(dashboard.topLoser.pctChange)} (Forecast: ₱${dashboard.topLoser.predictedClose.toFixed(2)})`
-    : "N/A";
-
-  const sectorsText = dashboard?.sectors
-    ? dashboard.sectors.map((s) => `${s.name} (${s.count} stocks)`).join(", ")
-    : "N/A";
-
-  const companiesList = companies
-    .map(
-      (c) =>
-        `- ${c.symbol} (${c.name}, ${c.sector}): Last=₱${c.latestClose.toFixed(2)}, Forecast=₱${c.predictedClose.toFixed(2)} (${formatPct(c.pctChange)}), Selected Model=${c.bestModel}`
-    )
-    .join("\n");
-
-  return `[Context: Home Dashboard / Market Overview]
-- Total Tracked PSE Companies: ${companies.length}
-- Forecast Target Date: ${latest?.forecastDate || dashboard?.forecastDate || "Next Trading Session"}
-- Market Outlook Summary: Gainers=${dashboard?.marketSummary?.gainers ?? 0}, Losers=${dashboard?.marketSummary?.losers ?? 0}, Unchanged=${dashboard?.marketSummary?.unchanged ?? 0}
-- Top Forecasted Gainer: ${topGainerText}
-- Top Forecasted Loser: ${topLoserText}
-- Tracked Sectors: ${sectorsText}
-
-All Tracked Companies Overview:
-${companiesList}`;
+  const [dashboard, companies, latest] = await Promise.all([getDashboard(), getCompanies(), getLatest()]);
+  return asContext("home", {
+    project: "ForecastPH is an educational next-session PSE closing-price forecasting and model-comparison project.",
+    trackedCompanyCount: companies.length,
+    marketDataThrough: "Not present in home summary data; use a company page for its symbol-specific dataAsOf date.",
+    forecastTargetDate: latest?.forecastDate ? formatDate(latest.forecastDate) : "unavailable",
+    generatedAtPht: latest?.generatedAt ? formatDateTimePht(latest.generatedAt) : "unavailable",
+    marketSnapshot: dashboard ? {
+      forecastedIncreases: dashboard.marketSummary.gainers,
+      forecastedDecreases: dashboard.marketSummary.losers,
+      unchanged: dashboard.marketSummary.unchanged,
+      strongestForecastedIncrease: dashboard.topGainer ? companySummary(dashboard.topGainer) : "unavailable",
+      strongestForecastedDecrease: dashboard.topLoser ? companySummary(dashboard.topLoser) : "unavailable",
+    } : "unavailable",
+    models: ["Lag-Informed Regression", "ARIMA", "LSTM"],
+    benchmark: "Naive benchmark (previous observed close as the next-close prediction)",
+    limitations: "Estimates reflect implemented historical-data patterns and may not capture unexpected events; they are not investment advice.",
+  });
 }
 
 export async function buildCompaniesContext(): Promise<string> {
   const companies = await getCompanies();
-  const directory = companies
-    .map((company) => `- ${company.symbol}: ${company.name} (${company.sector}), forecast ${formatPeso(company.predictedClose)} (${formatPct(company.pctChange)}), selected model ${company.bestModel}`)
-    .join("\n");
-
-  return `[Context: Companies Directory]
-- This page lists the PSE companies currently tracked by ForecastPH.
-- Users can open a company for its detailed prediction, charts, and evaluation metrics, or add up to five companies to a browser-only watchlist.
-
-Current Company Directory:
-${directory}`;
+  return asContext("companies", {
+    trackedCompanyCount: companies.length,
+    companies: companies.map(companySummary),
+    comparisonNote: "Expected change is projected close versus latest observed close; it is not a buy/sell signal.",
+  });
 }
 
 export async function buildWatchlistContext(watchlist?: string[]): Promise<string> {
-  const [companies, metrics] = await Promise.all([getCompanies(), getMetrics()]);
-  const requested = Array.isArray(watchlist) ? watchlist.map((symbol) => symbol.toUpperCase().trim()) : [];
+  const requested = [...new Set((Array.isArray(watchlist) ? watchlist : [])
+    .filter((symbol): symbol is string => typeof symbol === "string")
+    .map((symbol) => symbol.toUpperCase().trim()).filter(Boolean))].slice(0, 5);
+  const companies = await getCompanies();
   const selected = companies.filter((company) => requested.includes(company.symbol));
-
-  if (selected.length === 0) {
-    return `[Context: My Watchlist]
-- The watchlist is stored only in the user's current browser and device, with a maximum of five companies.
-- No company is currently selected in the supplied browser watchlist.
-- The page can compare expected percentage change and selected-model metrics once companies are added.`;
+  if (!selected.length) {
+    return asContext("watchlist", {
+      storage: "Browser-only, maximum five companies.",
+      pinnedCompanyCount: 0,
+      status: "No valid pinned companies were supplied by the current browser watchlist.",
+    });
   }
 
+  const details = (await Promise.all(selected.map(({ symbol }) => getCompanyDetail(symbol))))
+    .filter((detail): detail is CompanyDetail => Boolean(detail));
+  const detailBySymbol = new Map(details.map((detail) => [detail.symbol, detail]));
   const rows = selected.map((company) => {
-    const modelMetrics = metrics?.perCompany[company.symbol];
-    const modelLabels: Record<string, string> = {
-      lag_reg: "Lag-Informed Regression",
-      arima: "ARIMA",
-      lstm: "LSTM",
-      naive: "Naive baseline",
+    const detail = detailBySymbol.get(company.symbol);
+    const metric = detail ? selectedMetric(detail) : undefined;
+    return {
+      ...companySummary(company),
+      selectedModelRmsePhp: metric ? formatNum(metric.rmse, 4) : "unavailable",
+      modelPredictionSpread: detail ? modelPredictionSpread(detail) : null,
     };
-    const selectedMetric = Object.entries(modelMetrics?.metrics ?? {}).find(
-      ([key]) => modelLabels[key] === company.bestModel
-    )?.[1];
-    return `- ${company.symbol}: previous ${formatPeso(company.latestClose)}, forecast ${formatPeso(company.predictedClose)} (${formatPct(company.pctChange)}), selected model ${company.bestModel}, RMSE ${selectedMetric ? formatNum(selectedMetric.rmse) : "unavailable"}, MASE ${selectedMetric ? formatNum(selectedMetric.mase) : "unavailable"}`;
-  }).join("\n");
+  });
+  const byChange = [...selected].sort((a, b) => a.pctChange - b.pctChange);
+  const rowRmse = (row: (typeof rows)[number]) => {
+    const detail = detailBySymbol.get(row.ticker);
+    return finiteNumber(detail ? selectedMetric(detail)?.rmse : undefined) ?? Infinity;
+  };
+  const rmseRows = rows.filter((row) => rowRmse(row) !== Infinity);
+  const spreadValue = (row: (typeof rows)[number]) => {
+    const values = Object.entries(detailBySymbol.get(row.ticker)?.nextClose ?? {})
+      .filter(([id]) => Boolean(NEXT_CLOSE_IDS[id])).map(([, value]) => Number(value));
+    return values.length === 3 ? Math.max(...values) - Math.min(...values) : -Infinity;
+  };
+  const spreadRows = rows.filter((row) => spreadValue(row) !== -Infinity);
 
-  return `[Context: My Watchlist]
-- The watchlist is stored only in the user's current browser and device, with a maximum of five companies.
-- Currently watching ${selected.length} company or companies.
-- Expected Change comparison uses each selected company's next-session forecast percentage. It is not investment advice.
-
-Selected Watchlist Companies:
-${rows}`;
+  return asContext("watchlist", {
+    storage: "Browser-only, maximum five companies.",
+    pinnedCompanyCount: rows.length,
+    pinnedTickers: rows.map(({ ticker }) => ticker),
+    companies: rows,
+    strongestForecastedIncrease: companySummary(byChange[byChange.length - 1]),
+    strongestForecastedDecline: byChange[0].pctChange < 0
+      ? companySummary(byChange[0])
+      : "No pinned company has a negative expected change.",
+    lowestSelectedModelRmse: rmseRows.length
+      ? [...rmseRows].sort((a, b) => rowRmse(a) - rowRmse(b))[0]
+      : "unavailable",
+    largestModelPredictionSpread: spreadRows.length
+      ? [...spreadRows].sort((a, b) => spreadValue(b) - spreadValue(a))[0]
+      : "unavailable",
+    spreadDefinition: "Maximum principal-model prediction minus minimum principal-model prediction; not a confidence interval.",
+  });
 }
 
 export function buildLearnStocksContext(): string {
-  return `[Context: Learn Stocks]
-- This page is a beginner-focused educational guide to Philippine stock trading and ForecastPH interpretation.
-- Topics include Stock Trading 101, PSE trading basics, trading terms, forecast interpretation, RMSE/MAE/MASE/R², chart reading, official PSE educational videos, broker-directory guidance, and ForecastPH research methodology.
-- PSE schedules and broker participation may change; users should verify current details directly with the PSE, SEC, and the relevant broker.
-- ForecastPH forecasts are educational statistical estimates, not investment advice or buy/sell recommendations.`;
+  return asContext("learn-stocks", {
+    mode: "Beginner educational tutor for stocks, tickers, the PSE, OHLCV, closing price, forecasts, backtesting, metrics, the Naive benchmark, and model disagreement.",
+    modelNames: ["Lag-Informed Regression", "ARIMA", "LSTM"],
+    benchmark: "Naive benchmark uses the previous observed close as the next-close prediction.",
+    metricGuide: {
+      RMSE: "Lower is better; measured in pesos and penalizes larger errors more strongly.",
+      MAE: "Lower is better; average absolute forecast error in pesos.",
+      MASE: "Lower is better; compares absolute model error with the project's common naive forecasting scale. Below 1 generally means better than that scale.",
+      R2: "Higher is generally better; negative values can occur when predictions are worse than a constant-mean reference on the evaluated sample. It is not percentage accuracy.",
+    },
+    boundaries: "Explain concepts, not personalized investment decisions. Current schedules and broker details should be verified with official sources.",
+  });
 }
 
 export function buildAboutContext(): string {
-  return `[Context: About ForecastPH]
-- ForecastPH is an educational academic project for next-session Philippine stock price forecasting.
-- It compares ARIMA, Lag-Informed Regression, and LSTM against a naive baseline using held-out historical data.
-- Company-level model selection uses the lowest held-out evaluation RMSE. Forecasts are not guarantees or investment advice.`;
+  return asContext("about", {
+    objective: "Educational next-session closing-price forecasting for 15 PSE companies across five sectors.",
+    models: ["Lag-Informed Regression", "ARIMA", "LSTM"],
+    benchmark: "Naive benchmark only; not a production principal model.",
+    lifecycle: ["Chronological development and out-of-sample evaluation", "Company-level principal-model selection by lowest evaluation RMSE", "Fresh production refit of all three principal models", "Persisted-model next-session inference", "Frontend JSON export separated from the Python forecasting backend"],
+    data: "Validated official PSE end-of-day OHLCV history used by the implemented models.",
+    limitations: ["Historical patterns do not guarantee future prices.", "Unexpected news and events may not be captured.", "Performance varies by company.", "Educational and research use only; not investment advice."],
+  });
 }
 
-/**
- * Builds a compact context string for Model Performance & Comparison (/compare).
- */
 export async function buildCompareContext(): Promise<string> {
-  const [metrics, companies, latest] = await Promise.all([
-    getMetrics(), getCompanies(), getLatest(),
-  ]);
-  const details = await Promise.all(
-    companies.map((company) => getCompanyDetail(company.symbol)),
-  );
-  if (!metrics || companies.length === 0) {
-    return `[Context: Model Results]\nCurrent operational model-evaluation data is unavailable.`;
-  }
+  const [metrics, companies, latest] = await Promise.all([getMetrics(), getCompanies(), getLatest()]);
+  if (!metrics || !companies.length) return asContext("compare", { status: "Current operational model-evaluation data is unavailable." });
 
-  const modelIds = ["lag_reg", "arima", "lstm", "naive"] as const;
-  const principalIds = ["lag_reg", "arima", "lstm"] as const;
-  const labels: Record<(typeof modelIds)[number], string> = {
-    lag_reg: "Lag-Informed Regression",
-    arima: "ARIMA",
-    lstm: "LSTM",
-    naive: "Naive baseline",
-  };
-  const finiteMetric = (value: string | number | undefined): number | null => {
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-  const median = (values: number[]): number | null => {
-    if (values.length === 0) return null;
-    const ordered = [...values].sort((left, right) => left - right);
-    const middle = Math.floor(ordered.length / 2);
-    return ordered.length % 2
-      ? ordered[middle]
-      : (ordered[middle - 1] + ordered[middle]) / 2;
-  };
-
-  const wins = Object.fromEntries(principalIds.map((model) => [model, 0])) as Record<
-    (typeof principalIds)[number],
-    number
-  >;
-  const companyRows = companies.map((company) => {
-    const companyMetrics = metrics.perCompany[company.symbol]?.metrics;
-    const winner = principalIds
-      .map((model) => ({ model, rmse: finiteMetric(companyMetrics?.[model]?.rmse) }))
-      .filter((row): row is { model: (typeof principalIds)[number]; rmse: number } => row.rmse !== null)
-      .sort((left, right) => left.rmse - right.rmse || principalIds.indexOf(left.model) - principalIds.indexOf(right.model))[0];
-    if (winner) wins[winner.model] += 1;
-    return `${company.symbol}: ${winner ? labels[winner.model] : "unavailable"}`;
+  const wins = Object.fromEntries(PRINCIPAL_MODEL_IDS.map((id) => [MODEL_NAMES[id], 0])) as Record<string, number>;
+  const bestByCompany = companies.map((company) => {
+    const rows = PRINCIPAL_MODEL_IDS.map((id) => ({ id, rmse: finiteNumber(metrics.perCompany[company.symbol]?.metrics[id]?.rmse) }))
+      .filter((row): row is { id: (typeof PRINCIPAL_MODEL_IDS)[number]; rmse: number } => row.rmse !== null);
+    const minimum = rows.length ? Math.min(...rows.map(({ rmse }) => rmse)) : null;
+    const winners = minimum === null ? [] : rows.filter(({ rmse }) => rmse === minimum);
+    if (winners.length === 1) wins[MODEL_NAMES[winners[0].id]] += 1;
+    return { ticker: company.symbol, winner: winners.length ? winners.map(({ id }) => MODEL_NAMES[id]).join(" / ") : "unavailable", tie: winners.length > 1, winningRmsePhp: minimum === null ? "unavailable" : formatNum(minimum, 4) };
   });
 
-  const modelSummary = modelIds.map((model) => {
-    const rows = companies.flatMap((company) => {
-      const row = metrics.perCompany[company.symbol]?.metrics[model];
-      return row ? [row] : [];
-    });
-    const medianRmse = median(rows.map((row) => finiteMetric(row.rmse)).filter((value): value is number => value !== null));
-    const medianMase = median(rows.map((row) => finiteMetric(row.mase)).filter((value): value is number => value !== null));
-    const winText = model === "naive" ? "benchmark only" : `${wins[model]} principal-model RMSE wins`;
-    return `- ${labels[model]}: ${winText}; median RMSE ${medianRmse === null ? "unavailable" : formatNum(medianRmse, 4)}; median MASE ${medianMase === null ? "unavailable" : formatNum(medianMase, 4)}.`;
-  }).join("\n");
-
-  const completeDetails = details.filter((detail) => detail && detail.ohlcv.length > 1);
-  const evaluationCounts = completeDetails.map((detail) =>
-    Math.ceil(((detail?.ohlcv.length ?? 1) - 1) * 0.15),
-  );
-  const evaluationCount = new Set(evaluationCounts).size === 1 ? evaluationCounts[0] : null;
-
-  return `[Context: Current Operational Model Results]
-- Source: latest fresh-training chronological evaluation.
-- Companies evaluated: ${companies.length}.
-- Evaluation sessions per company: ${evaluationCount ?? "varies by company"}.
-- Forecast target date: ${latest?.forecastDate || metrics.forecastDate || "unavailable"}.
-- Metrics generated at: ${metrics.generatedAt || "unavailable"}.
-- LIR, ARIMA, and LSTM are the principal deployable models; Naive is an evaluation benchmark only.
-- RMSE, MAE, and MASE: lower is better. R²: higher is generally better.
-
-Current model summary:
-${modelSummary}
-
-Current best principal model by company:
-${companyRows.join(", ")}`;
+  return asContext("compare", {
+    source: "Current fresh-training chronological out-of-sample evaluation.",
+    companiesEvaluated: companies.length,
+    evaluationSessionCount: "Not present in metrics.json; do not infer or invent it.",
+    forecastTargetDate: latest?.forecastDate ? formatDate(latest.forecastDate) : "unavailable",
+    metricsGeneratedAtPht: metrics.generatedAt ? formatDateTimePht(metrics.generatedAt) : "unavailable",
+    principalModelWinnerCounts: wins,
+    bestPrincipalModelByCompany: bestByCompany,
+    aggregateMetrics: Object.fromEntries(
+      Object.entries(metrics.aggregate).map(([name, values]) => [
+        name === "Naive baseline" ? "Naive benchmark" : name,
+        {
+          rmsePhp: formatNum(values.rmse, 4),
+          maePhp: formatNum(values.mae, 4),
+          mase: formatNum(values.mase, 4),
+          r2: formatNum(values.r2, 4),
+        },
+      ]),
+    ),
+    perCompanyMetrics: Object.fromEntries(companies.map(({ symbol }) => [symbol, metricFacts(metrics.perCompany[symbol]?.metrics)])),
+    comparisonRules: {
+      selection: "Lowest RMSE per company on the common chronological out-of-sample evaluation.",
+      naive: "Benchmark only, not a production principal model.",
+      statisticalSignificance: "No statistical-significance claim is supplied in current operational context.",
+    },
+  });
 }
 
-/**
- * Builds context for general pages (/learn, /about, etc.).
- */
 export async function buildGeneralContext(): Promise<string> {
-  const [dashboard, companies] = await Promise.all([getDashboard(), getCompanies()]);
-  const symbols = companies.map((c) => c.symbol).join(", ");
-
-  return `[Context: General PSE Stock Price Forecast Dashboard]
-- Scope: Educational forecasting tool tracking ${companies.length} Philippine Stock Exchange (PSE) listed companies: ${symbols}.
-- Models Evaluated:
-  1. ARIMA (AutoRegressive Integrated Moving Average) - statistical classical time series model.
-  2. Lag-Informed Regression - linear model with historical lag price and volume features.
-  3. LSTM (Long Short-Term Memory) - recurrent neural network capturing non-linear temporal dynamics.
-  4. Naive Baseline - persistence benchmark where tomorrow's forecast equals today's closing price.
-- Evaluation Metrics: RMSE (Root Mean Squared Error), MAE (Mean Absolute Error), MASE (Mean Absolute Scaled Error), R² (Goodness of Fit).
-- Evaluation: The latest fresh-training run compares all four methods on one common chronological holdout and selects each company's principal model by lowest RMSE.
-- Deployment: Current next-day forecasts use persisted production models and can change as new official PSE data arrive.`;
+  const companies = await getCompanies();
+  return asContext("general", {
+    project: "ForecastPH is an educational next-session PSE closing-price forecasting project.",
+    trackedCompanyCount: companies.length,
+    trackedTickers: companies.map(({ symbol }) => symbol),
+    principalModels: ["Lag-Informed Regression", "ARIMA", "LSTM"],
+    benchmark: "Naive benchmark",
+    limitation: "Forecasts are estimates, not guarantees or investment advice.",
+  });
 }
 
-/**
- * Assembles the full page-aware context payload based on request options.
- */
 export async function buildContextForRequest(options?: ContextOptions): Promise<string> {
   const route = options?.route || "";
   const symbol = options?.symbol;
-
   if (symbol || route.startsWith("/companies/")) {
-    const sym = symbol || route.replace("/companies/", "").split("/")[0];
-    if (sym && sym !== "undefined") {
-      return buildCompanyContext(sym);
-    }
+    const resolved = symbol || route.replace("/companies/", "").split("/")[0];
+    if (resolved && resolved !== "undefined") return buildCompanyContext(resolved);
   }
-
-  if (route === "/compare") {
-    return buildCompareContext();
-  }
-
-  if (route === "/" || route === "") {
-    return buildHomeContext();
-  }
-
+  if (route === "/compare") return buildCompareContext();
+  if (route === "/" || route === "") return buildHomeContext();
   if (route === "/companies") return buildCompaniesContext();
   if (route === "/watchlist") return buildWatchlistContext(options?.watchlist);
   if (route === "/learn" || route === "/learn-stocks") return buildLearnStocksContext();

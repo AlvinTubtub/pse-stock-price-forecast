@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useWatchlist } from "@/context/WatchlistContext";
+import { getStarterQuestions } from "@/lib/ai/starterQuestions";
 
 interface Message {
   id: string;
@@ -10,61 +11,6 @@ interface Message {
   text: string;
   timestamp: string;
   isError?: boolean;
-}
-
-function getPageAssistantContent(pathname: string, symbol?: string) {
-  if (symbol) {
-    return {
-      label: `Context: ${symbol}`,
-      description: `Ask about ${symbol}'s forecast, selected model, metrics, or charts.`,
-      questions: [
-        `What does the forecasted close for ${symbol} mean?`,
-        `Why was this model selected for ${symbol}?`,
-        `How should I interpret ${symbol}'s RMSE and MASE?`,
-        `What does the backtest show for ${symbol}?`,
-      ],
-    };
-  }
-
-  const pages: Record<string, { label: string; description: string; questions: string[] }> = {
-    "/": {
-      label: "Context: Market Overview",
-      description: "Ask about the dashboard, tracked companies, and next-session forecasts.",
-      questions: ["Which companies have the largest expected moves?", "What does a next-session forecast mean?", "How are ForecastPH models selected?", "What should I check before interpreting a forecast?"],
-    },
-    "/companies": {
-      label: "Context: Companies Directory",
-      description: "Ask about tracked companies, sectors, forecasts, or adding a watchlist item.",
-      questions: ["Which sectors are tracked by ForecastPH?", "How do I add a company to My Watchlist?", "What does Forecasted Close mean?", "Where can I see a company's detailed metrics?"],
-    },
-    "/watchlist": {
-      label: "Context: My Watchlist",
-      description: "Ask about your selected companies and their forecast comparisons.",
-      questions: ["How is Expected Change (%) calculated?", "How should I compare my watched companies?", "What does MASE below 1 mean?", "Why is my watchlist saved only on this device?"],
-    },
-    "/compare": {
-      label: "Context: Models",
-      description: "Ask about ARIMA, Lag-Informed Regression, LSTM, and evaluation metrics.",
-      questions: ["How is the best model selected?", "What is the difference between RMSE and MAE?", "Why is MASE compared with a naive baseline?", "What does R² tell me here?"],
-    },
-    "/learn": {
-      label: "Context: Learn Stocks",
-      description: "Ask about PSE basics, trading terms, brokers, or forecast interpretation.",
-      questions: ["What is a stock?", "How do I read a ForecastPH prediction?", "What is the difference between bid and ask?", "How should I verify a broker?"],
-    },
-    "/learn-stocks": {
-      label: "Context: Learn Stocks",
-      description: "Ask about PSE basics, trading terms, brokers, or forecast interpretation.",
-      questions: ["What is a stock?", "How do I read a ForecastPH prediction?", "What is the difference between bid and ask?", "How should I verify a broker?"],
-    },
-    "/about": {
-      label: "Context: About ForecastPH",
-      description: "Ask about the research scope, methodology, or project limitations.",
-      questions: ["What is ForecastPH designed to do?", "Which forecasting models are evaluated?", "What are the project's limitations?", "Why is this not investment advice?"],
-    },
-  };
-
-  return pages[pathname] ?? pages["/"];
 }
 
 /**
@@ -144,7 +90,6 @@ export default function AIChatbot() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { watchlist } = useWatchlist();
 
   const pathname = usePathname() || "/";
@@ -161,8 +106,8 @@ export default function AIChatbot() {
   }, [pathname]);
 
   const pageAssistant = useMemo(
-    () => getPageAssistantContent(pathname, currentSymbol),
-    [pathname, currentSymbol]
+    () => getStarterQuestions(pathname, { symbol: currentSymbol, watchlistCount: watchlist.length }),
+    [pathname, currentSymbol, watchlist.length]
   );
   const pageContextLabel = pageAssistant.label;
 
@@ -205,7 +150,6 @@ export default function AIChatbot() {
 
     setMessages((prev) => [...prev, newMsg]);
     setInput("");
-    setErrorMessage(null);
     setIsLoading(true);
 
     try {
@@ -215,9 +159,12 @@ export default function AIChatbot() {
         text: m.text,
       }));
 
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           message: promptText,
           route: pathname,
@@ -225,25 +172,29 @@ export default function AIChatbot() {
           watchlist: pathname === "/watchlist" ? watchlist : undefined,
           history: historyPayload,
         }),
-      });
+      }).finally(() => window.clearTimeout(timeoutId));
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null) as { error?: string; reply?: string } | null;
 
       if (!res.ok) {
-        throw new Error(data.error || "Unable to retrieve response from assistant.");
+        throw new Error(data?.error || "Ask AI is temporarily unavailable. Please try again.");
       }
+      if (!data?.reply?.trim()) throw new Error("Ask AI returned an empty response. Please try again.");
 
       const assistantMsg: Message = {
         id: "msg-asst-" + Date.now(),
         role: "assistant",
-        text: data.reply || "I couldn't generate a response.",
+        text: data.reply.trim(),
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
-    } catch (err: any) {
-      const errMsg = err?.message || "An unexpected error occurred. Please try again.";
-      setErrorMessage(errMsg);
+    } catch (err: unknown) {
+      const errMsg = err instanceof DOMException && err.name === "AbortError"
+        ? "Ask AI took too long to respond. Please try again."
+        : err instanceof Error
+          ? err.message
+          : "Ask AI is temporarily unavailable. Please try again.";
       setMessages((prev) => [
         ...prev,
         {
@@ -268,7 +219,6 @@ export default function AIChatbot() {
 
   const clearChat = () => {
     setMessages([]);
-    setErrorMessage(null);
     inputRef.current?.focus();
   };
 
@@ -280,7 +230,7 @@ export default function AIChatbot() {
           type="button"
           onClick={() => setIsOpen(true)}
           aria-label="Open PSE Forecast AI Assistant"
-          className="group relative flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-brand-600 to-blue-600 hover:from-brand-500 hover:to-blue-500 text-white font-semibold text-sm rounded-full shadow-lg hover:shadow-brand-500/25 transition-all duration-200 cursor-pointer active:scale-95 border border-brand-400/30"
+          className="group relative flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-brand-600 to-blue-600 hover:from-brand-500 hover:to-blue-500 text-white font-semibold text-sm rounded-full shadow-lg hover:shadow-brand-500/25 transition-all duration-200 cursor-pointer active:scale-95 border border-brand-400/30 outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-bg"
         >
           {/* Sparkle Icon */}
           <svg
@@ -299,7 +249,7 @@ export default function AIChatbot() {
       {isOpen && (
         <div
           role="dialog"
-          aria-modal="true"
+          aria-modal="false"
           aria-label="PSE Forecast Assistant Chat"
           className="w-[calc(100vw-2rem)] sm:w-[420px] max-h-[85vh] sm:h-[580px] bg-dark-card border border-dark-border rounded-2xl shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl transition-all duration-200 animate-in fade-in slide-in-from-bottom-5"
         >
@@ -313,7 +263,7 @@ export default function AIChatbot() {
               </div>
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-white truncate">
-                  PSE Forecast Assistant
+                  ForecastPH Ask AI
                 </h3>
                 <p className="text-[10px] text-slate-400 truncate">
                   Educational AI &middot; {pageContextLabel}
@@ -328,7 +278,7 @@ export default function AIChatbot() {
                   onClick={clearChat}
                   title="Clear conversation"
                   aria-label="Clear chat"
-                  className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-dark-bg rounded-lg transition-colors cursor-pointer text-xs"
+                  className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-dark-bg rounded-lg transition-colors cursor-pointer text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -345,7 +295,7 @@ export default function AIChatbot() {
                 onClick={() => setIsOpen(false)}
                 title="Close chat (Esc)"
                 aria-label="Close chat"
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-dark-bg rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-dark-bg rounded-lg transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -361,7 +311,12 @@ export default function AIChatbot() {
           </div>
 
           {/* Messages Area */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-3.5 select-text">
+          <div
+            className="flex-1 p-4 overflow-y-auto space-y-3.5 select-text"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+          >
             {messages.length === 0 ? (
               <div className="space-y-4 pt-2">
                 <div className="text-center space-y-1">
@@ -392,9 +347,9 @@ export default function AIChatbot() {
                         key={idx}
                         type="button"
                         onClick={() => handleSendMessage(q)}
-                        className="w-full text-left px-3 py-2 rounded-xl bg-dark-bg/80 hover:bg-dark-bg border border-dark-border/80 hover:border-brand-500/40 text-xs text-slate-200 hover:text-white transition-all cursor-pointer flex items-center justify-between group"
+                        className="w-full text-left px-3 py-2 rounded-xl bg-dark-bg/80 hover:bg-dark-bg border border-dark-border/80 hover:border-brand-500/40 text-xs text-slate-200 hover:text-white transition-all cursor-pointer flex items-center justify-between group outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                       >
-                        <span className="truncate">{q}</span>
+                        <span className="min-w-0 whitespace-normal break-words">{q}</span>
                         <svg
                           className="w-3.5 h-3.5 text-slate-500 group-hover:text-brand-400 shrink-0 ml-2 transition-colors"
                           fill="none"
@@ -415,6 +370,7 @@ export default function AIChatbot() {
                   className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
                 >
                   <div
+                    role={msg.isError ? "alert" : undefined}
                     className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs shadow-sm ${
                       msg.role === "user"
                         ? "bg-brand-600 text-white rounded-br-xs"
@@ -436,7 +392,7 @@ export default function AIChatbot() {
 
             {/* Loading typing bubble */}
             {isLoading && (
-              <div className="flex flex-col items-start">
+              <div className="flex flex-col items-start" role="status" aria-label="Ask AI is preparing a response">
                 <div className="bg-dark-bg border border-dark-border rounded-2xl rounded-bl-xs px-4 py-3 flex items-center gap-1.5 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:-0.3s]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:-0.15s]" />
@@ -458,6 +414,7 @@ export default function AIChatbot() {
                 maxLength={1000}
                 rows={1}
                 disabled={isLoading}
+                aria-label="Ask ForecastPH AI a question"
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={isLoading ? "Waiting for response..." : "Ask a question about PSE forecasts..."}
@@ -469,7 +426,7 @@ export default function AIChatbot() {
                 onClick={() => handleSendMessage()}
                 disabled={isLoading || !input.trim()}
                 aria-label="Send question"
-                className="p-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:hover:bg-brand-600 text-white rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
+                className="p-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:hover:bg-brand-600 text-white rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -481,6 +438,9 @@ export default function AIChatbot() {
               <span>Shift + Enter for new line</span>
               <span>{input.length}/1000</span>
             </div>
+            <p className="text-[10px] leading-relaxed text-slate-500 px-1">
+              ForecastPH AI explains model outputs for educational purposes and does not provide investment advice.
+            </p>
           </div>
         </div>
       )}
