@@ -285,7 +285,7 @@ export const GLOSSARY_TERMS: TermDefinition[] = [
   {
     term: "R² (Goodness-of-Fit)",
     category: "forecastph",
-    shortDef: "Proportion of test-set variance explained by the model.",
+    shortDef: "Proportion of held-out evaluation variance explained by the model.",
     detailedDef: "Measures statistical goodness-of-fit against the mean. Note that in financial time-series forecasting, R² is an explanatory indicator and never a guarantee of accuracy.",
   },
 ];

@@ -606,7 +606,7 @@ export default function LearnStocksPage() {
                   <div className="p-3 bg-dark-card border border-dark-border rounded-xl">
                     <p className="text-xs text-slate-400">Selected Model</p>
                     <p className="text-base font-bold text-white mt-0.5">LSTM</p>
-                    <p className="text-[11px] text-brand-400">Best test-set RMSE</p>
+                    <p className="text-[11px] text-brand-400">Best evaluation RMSE</p>
                   </div>
                 </div>
 
@@ -853,7 +853,7 @@ export default function LearnStocksPage() {
                     60-Session Backtest Comparison
                   </h4>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Overlays actual closing prices against the stored deployment-evaluation forecasts and later prospective operational forecasts. The immutable formal-study results are reported separately on the Models page.
+                    Overlays actual closing prices against the stored chronological-evaluation forecasts and later prospective operational forecasts shown on company pages.
                   </p>
                 </div>
 
@@ -1151,13 +1151,13 @@ export default function LearnStocksPage() {
                 </div>
               </div>
 
-              {/* Research Methodology Notes */}
+              {/* Current Methodology Notes */}
               <div className="p-4.5 bg-dark-bg border border-dark-border rounded-xl space-y-2 text-xs text-slate-400">
-                <h4 className="font-bold text-slate-200 uppercase tracking-wide">Research Governance & Dual-Track Separation:</h4>
+                <h4 className="font-bold text-slate-200 uppercase tracking-wide">Current Evaluation and Production:</h4>
                 <ul className="list-disc list-inside space-y-1 text-slate-300">
-                  <li><strong className="text-white">Formal Benchmark Track:</strong> Frozen cross-validation folds (5 expanding-window folds) evaluated with non-parametric hypothesis tests (Friedman test, Wilcoxon signed-rank test with Holm correction).</li>
-                  <li><strong className="text-white">Production Refresh Track:</strong> Approved deployment configurations are refitted monthly to serve daily live predictions without mutating formal research baselines. Retuning and promotion remain separate manual decisions.</li>
-                  <li><strong className="text-white">Baseline Naive Benchmark:</strong> Every formal model is evaluated against the random-walk Naive benchmark (tomorrow&apos;s price = today&apos;s price). MASE below one is a useful scale comparison, but statistical improvement requires the declared benchmark-first test.</li>
+                  <li><strong className="text-white">Chronological Evaluation:</strong> LIR, ARIMA, LSTM, and Naive are compared on one common set of held-out target dates without random shuffling.</li>
+                  <li><strong className="text-white">Production Refresh:</strong> All three principal models are freshly refitted during quarterly training. Daily updates load persisted models and perform inference without retraining.</li>
+                  <li><strong className="text-white">Naive Benchmark:</strong> The benchmark predicts that tomorrow&apos;s price equals today&apos;s price. MASE below one indicates lower scaled error than that benchmark.</li>
                 </ul>
               </div>
             </div>

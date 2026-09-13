@@ -141,10 +141,7 @@ def test_every_operational_file_matches_contract_and_new_artifacts(
     export_bundle: FrontendExportBundle,
 ) -> None:
     output_root = tmp_path / "frontend" / "public" / "forecasts"
-    formal_path = output_root / "formal" / "FORMAL_CORRECTED_20260828_02.json"
-    formal_path.parent.mkdir(parents=True)
-    formal_bytes = b'{"preserve":"verbatim"}\n'
-    formal_path.write_bytes(formal_bytes)
+    output_root.mkdir(parents=True)
     output_root.joinpath("companies.json").write_text(
         '[{"latestClose":999999}]\n', encoding="utf-8"
     )
@@ -163,8 +160,6 @@ def test_every_operational_file_matches_contract_and_new_artifacts(
         expected_relative_paths
     )
     assert len(result.files) == 4 + 2 * len(COMPANIES)
-    assert formal_path.read_bytes() == formal_bytes
-    assert formal_path not in result.files
 
     for path in result.files:
         relative_path = path.relative_to(output_root).as_posix()

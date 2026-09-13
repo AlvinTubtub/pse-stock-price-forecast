@@ -1,110 +1,166 @@
-# ForecastPH backend
+# ForecastPH Backend
 
-This directory is the clean foundation for the ForecastPH forecasting pipeline.
+This directory contains the authoritative ForecastPH data, training, evaluation, production-refit, inference, ingestion, and frontend-export implementation.
 
-## Layout
+## Directory layout
 
-- `data/raw/`: preserved source market data. Pipeline code must treat these files as immutable inputs.
-- `data/pdf_reports/`: ignored staging area for downloaded official PSE EDGE EOD PDFs.
-- `config/`: pipeline configuration added in later phases.
-- `src/data/`: data loading and validation.
-- `src/features/`: feature engineering.
-- `src/models/`: model definitions.
-- `src/training/`: training orchestration.
-- `src/evaluation/`: backtesting and metrics.
-- `src/inference/`: next-session inference.
-- `src/export/`: frontend-contract export logic.
-- `src/ingestion/`: ingestion-only PSE EOD download, parse, validation, and conflict-safe merge logic.
-- `artifacts/`: ignored generated outputs split into `models/`, `evaluations/`, `forecasts/`, and `logs/`.
-- `scripts/`: command-line entry points added in later phases.
-- `tests/`: backend tests added with each implementation phase.
-
-## Current status
-
-Phase 11.5 restores automated official PSE EDGE EOD ingestion without restoring the old services or model lifecycle. It derives target symbols from `config/companies.py`, treats 404 dates as unpublished, rejects conflicting historical rows, validates every merge with the new raw validator, and never starts training or forecast export.
-
-Phase 11 adds four authoritative commands with structured JSON logging. The training command always tunes and fits from raw data; `--fresh` additionally resets all generated artifacts first. Single-symbol runs require `--no-export` because the frontend contract requires one complete 15-company dataset. The forecast command loads only compatible new production and evaluation artifacts and never retunes models.
-
-Phase 10 adds the operational frontend exporter. It accepts only the new typed evaluation and next-day inference results plus validated raw OHLCV records, emits the documented 34 operational files, and validates every JSON document before atomic replacement. It does not read existing frontend JSON as model input and does not touch the preserved formal-study file.
-
-Phase 9 adds one lightweight generated-artifact layout. Ordinary training-run manifests in `artifacts/logs/` record timing, environment versions, the source-data boundary, processed symbols, status, and errors. They are operational records only, not immutable formal experiments.
-
-Phase 8 adds fresh production refitting and next-PSE-session inference. Selected hyperparameters are carried forward from chronological evaluation, but every principal model, scaler, and fitted state is rebuilt using all currently available raw history.
-
-Lag-Informed Regression keeps evaluation and production fitting separate. Generated evaluation metadata is written under `artifacts/evaluations/lir/`.
-
-ARIMA likewise keeps evaluation and production fitting separate. Generated evaluation metadata is written under `artifacts/evaluations/arima/`.
-
-LSTM early stopping uses a chronological tail inside each training block. Each final fit first selects an epoch count, then creates a fresh scaler and model and trains on the entire development or production block. Generated evaluation metadata and state are written under `artifacts/evaluations/lstm/`.
-
-PyTorch deterministic algorithms and fixed seeds are enabled. Exact floating-point results can still vary across PyTorch releases, operating systems, CPU architectures, and other hardware/software differences.
-
-Unified evaluation emits canonical one-step-ahead records and computes full-precision RMSE, MAE, MASE, and R-squared. Every model uses the same MASE denominator calculated once from the company's development Close series. Principal models are ranked by evaluation RMSE; production refitting remains a separate later operation.
-
-Production model files and compatibility metadata live only under `artifacts/models/{SYMBOL}/`. Fresh refits never load existing files. Inference validates schema, implementation version, model identity, artifact format, SHA-256, training boundary, row count, and family-specific model state before predicting. A configured PSE calendar determines the next trading session.
-
-## Development setup
-
-Create a Python 3.11 or newer virtual environment, then install the requirements from this directory:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
+```text
+backend/
+├── config/             # Companies, models, paths, timezone, and PSE closures
+├── data/
+│   ├── raw/            # Canonical OHLCV modeling input
+│   └── pdf_reports/    # Generated PSE EOD download staging (gitignored)
+├── src/
+│   ├── artifacts/      # Runtime layout, checksums, and production manifest
+│   ├── data/           # Loading, validation, calendar, and split planning
+│   ├── evaluation/     # OOS records, metrics, alignment, and ranking
+│   ├── export/         # Frontend schemas, validation, and atomic export
+│   ├── features/       # Forecast targets and LIR features
+│   ├── inference/      # Persisted-model next-session prediction
+│   ├── ingestion/      # PSE EOD download, parsing, validation, and merge
+│   ├── models/         # LIR, ARIMA, and univariate LSTM
+│   └── training/       # CV, tuning, orchestration, and production refit
+├── scripts/            # Supported command-line entry points
+├── tests/              # Unit, integration, contract, and workflow tests
+└── artifacts/          # Generated runtime files (gitignored)
 ```
 
-Run tests from `backend/` after tests are introduced:
+## Canonical raw data
+
+`data/raw/<SYMBOL>.csv` is the sole historical modeling input. Company symbols and PSE issue names come from `config/companies.py`; model code does not maintain another company list.
+
+The loader and validator require canonical `YYYY-MM-DD` dates and finite Open, High, Low, Close, and Volume values. They reject duplicate dates, invalid price relationships, negative volume, and malformed observations. They do not forward-fill or backward-fill missing data.
+
+Validate every configured file:
 
 ```bash
-python -m pytest
+python scripts/validate_raw.py --all --verbose
 ```
 
-Safely clear generated artifacts and recreate the four artifact directories:
+## Evaluation design
 
-```bash
-python -m scripts.reset_artifacts
+Each adjacent pair of validated sessions produces one next-day target:
+
+```text
+origin_date  = Date[t]
+target_date  = Date[t+1]
+origin_close = Close[t]
+actual_close = Close[t+1]
+target_delta = Close[t+1] - Close[t]
 ```
 
-The reset command validates that its target is exactly `backend/artifacts`. It never deletes or rewrites `data/raw`.
+One dynamic company plan reserves approximately 85% of target pairs for development and the newest approximately 15% for evaluation. LIR, ARIMA, LSTM, and Naive must produce forecasts on exactly the same evaluation target dates.
 
-Validate all configured raw files and report row counts and date ranges:
+All model selection is chronological. The backend never uses shuffled validation or future-data backfilling.
 
-```bash
-python -m scripts.validate_raw --all
+Evaluation produces canonical out-of-sample prediction records and full-precision RMSE, MAE, MASE, and R². One development-Close MASE denominator is shared by all four methods for a company. The three principal models are ranked by evaluation RMSE.
+
+## Model training
+
+### Lag-Informed Regression
+
+LIR predicts next-day `ΔClose`. It uses causal OHLCV-derived candidates, fold-local PACF selection on training returns, a fold-local `StandardScaler`, and LASSO as the final estimator. Alpha is selected by mean expanding-window validation RMSE.
+
+### ARIMA
+
+ARIMA models the chronological Close series. It searches configured orders within `p=0..3`, `d=0..2`, and `q=0..3`, including `(0,d,0)`. Every eligible candidate must complete all expanding-window folds and satisfy convergence requirements. Evaluation updates the fitted state with revealed actuals using `append(..., refit=False)`.
+
+### LSTM
+
+The PyTorch LSTM is univariate: it consumes historical `ΔClose` sequences and predicts the next `ΔClose`. All lookbacks use common validation target dates based on the maximum configured lookback. Each fold uses three configured seeds, fold-local scaling, and an internal chronological stopping tail. Final fitting selects an epoch count, then trains a fresh model and scaler on the complete development block.
+
+## Production refit and artifacts
+
+After evaluation selects model configurations, production refitting creates fresh LIR, ARIMA, and LSTM models from all currently available validated raw history. Production refit never loads an earlier fitted model.
+
+Generated files are stored only under:
+
+```text
+artifacts/
+├── models/
+├── evaluations/
+├── forecasts/
+└── logs/
 ```
 
-Run the complete fresh lifecycle and publish frontend forecast data:
+Model metadata records the schema identity, symbol, family, training cutoff, data-row count, hyperparameters, timestamp, and model checksum. The production manifest validates the complete configured symbol/model set and rejects missing, inconsistent, corrupted, or incompatible artifacts.
+
+Start a complete fresh run:
 
 ```bash
-python -m scripts.train_all --all --fresh
+python scripts/train_all.py --all --fresh --verbose
 ```
 
-Train one company for diagnostics without publishing a partial frontend dataset:
+Useful options:
+
+- `--symbol SYMBOL --no-export` runs one company without publishing an incomplete frontend dataset.
+- `--all` processes the complete configured universe.
+- `--fresh` clears generated `artifacts/` content before training and prevents fitted-state reuse.
+- `--no-export` skips frontend publication.
+- `--verbose` enables debug-level structured logs.
+
+Reset generated artifacts without touching raw data:
 
 ```bash
-python -m scripts.train_all --symbol ALI --fresh --no-export --verbose
+python scripts/reset_artifacts.py --yes
 ```
 
-Generate forecasts from persisted models without tuning or refitting:
+## Persisted-model inference
+
+Inference loads only compatible models from `artifacts/models/`, verifies their checksums and training boundaries, and creates one next-PSE-session prediction for each principal model. It does not tune or refit.
 
 ```bash
-python -m scripts.forecast_all --all
+python scripts/forecast_all.py --all --verbose
 ```
 
-Ingest all missing PSE EOD reports from the day after the newest raw date through the current Philippine date:
+The command requires the matching persisted evaluation evidence used by the frontend exporter. A single-symbol inference check must use `--no-export`.
+
+## PSE EOD ingestion
+
+The ingestion pipeline downloads official PSE EDGE quotation PDFs into gitignored `data/pdf_reports/`, parses only configured companies, cleans and validates OHLCV values, and upserts by Date into canonical raw CSVs.
+
+Existing identical rows are idempotent no-ops. Conflicting historical rows fail rather than being overwritten silently. HTTP 404 means that a report is unpublished, a weekend, or a closure and is not itself a fatal failure.
 
 ```bash
-python scripts/update_eod.py
-```
-
-Ingest an explicit inclusive date range without running any model code:
-
-```bash
+python scripts/update_eod.py --verbose
 python scripts/update_eod.py --start-date 2026-09-01 --end-date 2026-09-10 --verbose
 ```
 
-Artifact reset requires interactive confirmation unless `--yes` is supplied:
+Ingestion performs no training, inference, or frontend export.
+
+## PSE calendar
+
+`config/pse_holidays.py` contains the reviewed PSE closure baseline. `PSETradingCalendar` automatically excludes weekends and configured closures. CLI `--holiday YYYY-MM-DD` values are additive emergency overrides.
+
+Review PSE/SCCP notices and add confirmed closures for the next year before year-end. The calendar does not infer an exchange closure merely because a PDF or raw observation is absent.
+
+## Frontend export
+
+The exporter builds the operational `frontend/public/forecasts/` documents from new evaluation results, production forecasts, and validated raw histories. It validates strict JSON, stages the complete payload, and atomically replaces destinations with rollback protection.
+
+Validate the committed frontend data without regenerating it:
 
 ```bash
-python -m scripts.reset_artifacts --yes
+python scripts/validate_frontend_forecasts.py --verbose
 ```
+
+## Production artifact validation
+
+GitHub Actions creates and restores the production-model package. Validate a restored package with:
+
+```bash
+python scripts/validate_production_artifacts.py --verbose
+```
+
+The daily workflow fails closed when a complete compatible package and manifest cannot be verified.
+
+## Tests
+
+Install dependencies and run the suite from `backend/`:
+
+```bash
+python -m pip install -r requirements.txt
+python -m pytest -q
+```
+
+Library modules use `logging.getLogger(__name__)`. CLI entry points configure structured logging so imports do not attach global handlers or retain stale test-capture streams.

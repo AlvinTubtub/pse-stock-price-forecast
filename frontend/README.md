@@ -1,14 +1,6 @@
-# ForecastPH — Frontend (Next.js, Vercel)
+# ForecastPH frontend
 
-A static, frontend-only Next.js 14 (App Router) dashboard for PSE stock forecasts. It contains **no
-Python, no backend, no database, and no API routes** — every page is a React Server Component that
-reads JSON files from `public/forecasts/` at build/request time.
-
-This is one half of a monorepo — see the [repo root README](../README.md) for the overall layout.
-Those JSON files are produced and committed by the sibling `../backend/` pipeline's GitHub Actions
-workflows (see `../backend/README.md` and `../backend/scripts/export_forecast_artifacts.py`). This
-app never fetches from a remote API and never runs model inference — it's a plain `fs.readFile`
-against files already sitting in this same repo by the time Vercel builds it.
+This is the Next.js 14 App Router website for ForecastPH. It reads generated operational JSON from `public/forecasts/`; model training and inference run in the repository's backend automation, not in Vercel or the browser.
 
 ## Local development
 
@@ -17,41 +9,46 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The app reads whatever JSON currently exists under `public/forecasts/`
-— that's committed to the repo, so a normal `git pull` keeps it current; no separate copy step is
-needed (unlike a two-repo setup).
+Open `http://localhost:3000`.
 
-## Data contract
+## Routes
 
-```
+- `/` — market overview
+- `/companies` — tracked company directory
+- `/companies/<SYMBOL>` — company forecast, metrics, and charts
+- `/watchlist` — browser-local watchlist
+- `/compare` — current operational Models dashboard
+- `/learn-stocks` — educational stock and forecast guide
+- `/learn` — redirect to `/learn-stocks`
+- `/about` — project architecture and limitations
+
+The AI assistant receives page-aware context built from the same operational forecast documents.
+
+## Forecast data
+
+```text
 public/forecasts/
-  dashboard.json        # home page summary: totals, sectors, top gainer/loser, pipeline status
-  latest.json           # lightweight freshness indicator (forecast date, last run, status)
-  metrics.json          # aggregate + per-company model performance (RMSE/MAE/MASE/R²)
-  companies.json        # flat list for the Company List page + search
-  company/<SYMBOL>.json # full detail: OHLCV, backtest series, per-model metrics
-  history/<SYMBOL>.json # full OHLCV history (superset of company/<SYMBOL>.json's trimmed series)
+├── companies.json
+├── dashboard.json
+├── latest.json
+├── metrics.json
+├── company/<SYMBOL>.json
+└── history/<SYMBOL>.json
 ```
 
-If a file or ticker is missing, the relevant page renders a "not available yet" state instead of
-throwing — a ticker the pipeline hasn't processed yet simply won't appear in `companies.json`.
+The backend exporter generates and validates this complete tree. See `../docs/frontend-forecast-contract.md` for schemas and cross-file invariants.
 
-## Deploying to Vercel
+The Models page uses current per-company evaluation metrics to derive model comparisons and RMSE win counts. It does not require a separate fixed-study JSON document.
 
-1. Import the repo root into Vercel. Framework preset: **Next.js** (auto-detected).
-2. **Root Directory**: Project Settings → Root Directory → `frontend/`. This is the only
-   monorepo-specific setting needed.
-3. No environment variables are required; there's nothing to configure secrets for, since there's no
-   API this app calls.
-4. Every commit that touches `frontend/public/forecasts/**` (i.e. every pipeline run in
-   `../backend/`) triggers a new Vercel deployment automatically via Vercel's normal Git
-   integration — no deploy hook, no cross-repo wiring, since it's all one push to one repo now.
-5. Free tier is sufficient: this is a static/SSR-light site with no serverless functions, cron jobs,
-   or image optimization pipeline in use (`next.config.js` sets `images.unoptimized = true`).
+## Production validation
 
-## What was intentionally left out
+```bash
+npm run build
+npx tsc --noEmit
+```
 
-The original HTML prototype included a "Live Prediction" flow (upload a CSV, run a prediction in the
-browser). That required Python model inference at request time, which conflicts directly with the
-"no backend, no Python on Vercel" requirement. `/live` now explains this trade-off instead of silently
-breaking; see the repo root README's architecture notes for the reasoning.
+## Vercel
+
+Set the Vercel project Root Directory to `frontend/`. Forecast JSON is committed by the GitHub Actions pipelines before Vercel builds the site. The application does not need a forecasting API or Python runtime.
+
+The AI route requires its configured provider credentials in the deployment environment. Forecast pages themselves read only repository JSON.

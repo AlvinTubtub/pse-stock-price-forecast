@@ -244,7 +244,7 @@ export default async function AboutPage() {
                 Backtest & Evaluation
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Continuous out-of-sample backtesting calculating RMSE, MAE, MASE (&lt; 1.0 threshold), and non-parametric hypothesis tests.
+                Chronological out-of-sample evaluation calculating RMSE, MAE, MASE (&lt; 1.0 threshold), and R² on common target dates.
               </p>
             </div>
             <div className="text-[11px] font-semibold text-amber-400 pt-2 border-t border-dark-border/50 flex items-center justify-between">
@@ -515,7 +515,7 @@ export default async function AboutPage() {
             <p className="text-xs text-slate-300 leading-relaxed">
               The gold-standard benchmark comparing model MAE against a <strong className="text-white">Naïve Persistence Baseline</strong> (predicting tomorrow equals today).
               <span className="block mt-1 text-emerald-300 font-semibold">
-                MASE &lt; 1.0 confirms genuine statistical skill over a random-walk guess.
+                MASE &lt; 1.0 indicates lower scaled error than the Naive benchmark.
               </span>
             </p>
           </div>
@@ -533,14 +533,14 @@ export default async function AboutPage() {
           </div>
         </div>
 
-        {/* Statistical Significance Callout */}
+        {/* Evaluation Design Callout */}
         <div className="p-4.5 rounded-xl bg-dark-bg/60 border border-dark-border text-xs space-y-1.5 text-slate-300">
           <div className="flex items-center gap-2 font-bold text-white text-sm">
             <span>🔬</span>
-            <span>Non-Parametric Statistical Significance Testing</span>
+            <span>Common Chronological Evaluation</span>
           </div>
           <p className="leading-relaxed text-slate-400">
-            To ensure model ranking differences are not simply artifacts of random market noise, ForecastPH applies <strong className="text-slate-200">Diebold-Mariano (DM) tests</strong> to compare pair-wise model errors within companies, and stock-level <strong className="text-slate-200">Friedman non-parametric tests</strong> with post-hoc corrections across the complete universe of equities.
+            ForecastPH evaluates Lag-Informed Regression, ARIMA, LSTM, and the Naive benchmark on the same held-out target dates for each company. Principal models are ranked by full-precision evaluation RMSE.
           </p>
         </div>
       </section>
@@ -731,7 +731,7 @@ export default async function AboutPage() {
                 Models
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Compare aggregate metrics, error distributions, and statistical tests across Lag Reg, ARIMA, and LSTM.
+                Compare current evaluation metrics, RMSE winners, and Naive-benchmark performance across Lag Reg, ARIMA, and LSTM.
               </p>
             </div>
             <div className="pt-4 mt-3 border-t border-dark-border/60 flex items-center justify-between text-xs font-semibold text-purple-400">
@@ -767,4 +767,3 @@ export default async function AboutPage() {
     </div>
   );
 }
-

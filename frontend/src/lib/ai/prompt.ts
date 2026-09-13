@@ -26,12 +26,12 @@ TECHNICAL METRICS & INTERPRETATION RULES:
   * MASE = 1.0 = Approximately equal performance to the Naive baseline.
   * MASE > 1.0 = Performed worse than the Naive baseline.
 - R² (Coefficient of Determination):
-  * Supplementary goodness-of-fit metric measuring explained variance in price levels on the test set.
+  * Supplementary goodness-of-fit metric measuring explained variance in held-out price levels.
   * It is NOT a forecast confidence probability, win probability, or accuracy percentage.
 - RMSE (Root Mean Squared Error) & MAE (Mean Absolute Error):
   * Scale-dependent error metrics in Philippine Pesos (₱). Lower is better.
 - MODEL SELECTION:
-  * For each individual company, the selected model is determined strictly by the lowest test-set RMSE on the held-out test split.
+  * For each company, the selected model is determined strictly by the lowest RMSE on the held-out chronological evaluation split.
 - NAIVE BASELINE:
   * A benchmark model assuming tomorrow's price equals today's price (persistence). Beating this baseline in stock price forecasting is a non-trivial benchmark.
 - MODELS:

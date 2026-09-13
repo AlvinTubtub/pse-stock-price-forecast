@@ -17,7 +17,11 @@ def test_current_complete_frontend_export_is_valid() -> None:
     files = validate_frontend_forecasts(FRONTEND_FORECASTS_DIR)
 
     assert len(operational_forecast_paths()) == 34
-    assert len(files) >= 34
+    assert len(files) == 34
+
+
+def test_operational_tree_has_no_separate_study_directory() -> None:
+    assert not (FRONTEND_FORECASTS_DIR / "formal").exists()
 
 
 @pytest.mark.parametrize("constant", ("NaN", "Infinity", "-Infinity"))

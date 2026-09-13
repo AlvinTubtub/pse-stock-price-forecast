@@ -62,11 +62,6 @@ function getPageAssistantContent(pathname: string, symbol?: string) {
       description: "Ask about the research scope, methodology, or project limitations.",
       questions: ["What is ForecastPH designed to do?", "Which forecasting models are evaluated?", "What are the project's limitations?", "Why is this not investment advice?"],
     },
-    "/live": {
-      label: "Context: Live Forecast Status",
-      description: "Ask about the live forecast refresh and how it relates to research evaluation.",
-      questions: ["When is the latest forecast for?", "What does the live forecast status mean?", "Do live forecasts change backtest metrics?", "Why can a forecast differ from the actual close?"],
-    },
   };
 
   return pages[pathname] ?? pages["/"];

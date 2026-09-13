@@ -46,7 +46,7 @@ def test_training_workflow_has_fresh_fail_closed_sequence() -> None:
     positions = [text.index(item) for item in required_in_order]
 
     assert positions == sorted(positions)
-    assert 'cron: "0 0 3 * *"' in text
+    assert 'cron: "0 0 28 2,5,8,11 *"' in text
     assert "group: pse-pipeline" in text
     assert "timeout-minutes: 360" in text
     assert "name: forecastph-backend-artifacts" in text
