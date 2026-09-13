@@ -2,7 +2,7 @@ import Link from "next/link";
 import CompanyLogo from "@/components/CompanyLogo";
 import ChangeBadge from "@/components/ChangeBadge";
 import { getCompanies, getDashboard } from "@/lib/data";
-import { formatDate, formatDateTimePht, formatPeso } from "@/lib/format";
+import { formatDate, formatDateTimePht, formatPct, formatPeso } from "@/lib/format";
 
 interface SectorCardItem {
   name: string;
@@ -274,7 +274,74 @@ export default async function HomePage() {
         </a>
       </section>
 
-      {/* 3. Top Forecasted Gainer & Loser Spotlight Cards */}
+      {/* 3. Compact company outlook */}
+      <section className="overflow-hidden rounded-2xl border border-dark-border bg-dark-card shadow-sm">
+        <div className="border-b border-dark-border px-5 py-5 sm:px-6">
+          <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
+            Companies at a Glance
+          </h2>
+          <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+            Quickly compare the latest close and next-day ForecastPH outlook across all tracked companies.
+          </p>
+        </div>
+
+        <div className="max-h-[400px] overflow-y-scroll overscroll-contain" aria-label="All tracked companies">
+          <div
+            className="sticky top-0 z-10 hidden grid-cols-[0.8fr_1.2fr_repeat(3,minmax(0,1fr))] border-b border-dark-border bg-dark-card px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:grid sm:px-6"
+            aria-hidden="true"
+          >
+            <span>Company</span>
+            <span>Sector</span>
+            <span className="text-right">Close</span>
+            <span className="text-right">Next-Day</span>
+            <span className="text-right">Expected Change</span>
+          </div>
+
+          <ul className="divide-y divide-dark-border/60">
+            {companies.map((company) => {
+              const changeColor =
+                company.pctChange > 0
+                  ? "text-emerald-400"
+                  : company.pctChange < 0
+                    ? "text-rose-400"
+                    : "text-slate-400";
+
+              return (
+                <li key={company.symbol}>
+                  <Link
+                    href={`/companies/${company.symbol}`}
+                    className="group grid cursor-pointer grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 outline-none transition-colors hover:bg-brand-500/5 focus-visible:bg-brand-500/10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400 sm:grid-cols-[0.8fr_1.2fr_repeat(3,minmax(0,1fr))] sm:items-center sm:gap-0 sm:px-6 sm:py-3 motion-reduce:transition-none"
+                    aria-label={`View ${company.symbol}: close ${formatPeso(company.latestClose)}, next-day forecast ${formatPeso(company.predictedClose)}, expected change ${formatPct(company.pctChange)}`}
+                  >
+                    <span className="flex items-center gap-2 font-bold text-white transition-colors group-hover:text-brand-300">
+                      <CompanyLogo symbol={company.symbol} name={company.name} size="xs" />
+                      {company.symbol}
+                    </span>
+                    <span className="text-right text-xs text-slate-400 sm:text-left sm:text-sm">
+                      <span className="sr-only sm:hidden">Sector: </span>
+                      {company.sector}
+                    </span>
+                    <span className="text-sm text-slate-300 sm:text-right">
+                      <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">Close</span>
+                      {formatPeso(company.latestClose)}
+                    </span>
+                    <span className="text-right text-sm font-semibold text-white">
+                      <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">Next-Day</span>
+                      {formatPeso(company.predictedClose)}
+                    </span>
+                    <span className={`col-span-2 text-right text-sm font-semibold tabular-nums sm:col-span-1 ${changeColor}`}>
+                      <span className="mr-2 text-[10px] font-medium uppercase tracking-wide text-slate-500 sm:hidden">Expected Change</span>
+                      {formatPct(company.pctChange)}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </section>
+
+      {/* 4. Top Forecasted Gainer & Loser Spotlight Cards */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Top Forecasted Gainer Spotlight Card */}
         {dashboard?.topGainer ? (

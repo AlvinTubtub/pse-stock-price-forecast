@@ -12,6 +12,9 @@
   --chart-actual-line: #0f172a;
   --chart-actual-dot-fill: #ffffff;
   --chart-actual-dot-stroke: #0f172a;
+  --chart-axis-text: #64748b;
+  --chart-grid: #e2e8f0;
+  --chart-hover: rgba(15, 23, 42, 0.04);
 }
 
 .dark {
@@ -24,6 +27,14 @@
   --chart-actual-line: #f8fafc;
   --chart-actual-dot-fill: #0f172a;
   --chart-actual-dot-stroke: #f8fafc;
+  --chart-axis-text: #cbd5e1;
+  --chart-grid: #475569;
+  --chart-hover: rgba(255, 255, 255, 0.04);
+}
+
+.models-chart .recharts-wrapper,
+.models-chart .recharts-surface {
+  background: transparent !important;
 }
 
 /* Native date input styling & contrast guarantees */

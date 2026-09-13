@@ -12,6 +12,8 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
+import ChartGestureControls, { ChartResetButton } from "./ChartGestureControls";
+import { useChartInteractions } from "@/hooks/useChartTouchGestures";
 
 const MODEL_COLORS: Record<string, string> = {
   ARIMA: "#f59e0b",
@@ -78,10 +80,20 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
     });
   }, [actual, dates, byModel]);
 
+  const gestures = useChartInteractions({
+    totalPoints: data.length,
+    minWindow: 5,
+    resetKey: `${data.length}:${data[0]?.step ?? ""}:${data[data.length - 1]?.step ?? ""}`,
+  });
+  const visibleData = useMemo(
+    () => data.slice(gestures.viewport.startIndex, gestures.viewport.endIndex + 1),
+    [data, gestures.viewport.endIndex, gestures.viewport.startIndex],
+  );
+
   // Compute zero-centered symmetric Y-axis range
   const yLimit = useMemo(() => {
     const allErrors: number[] = [];
-    for (const row of data) {
+    for (const row of visibleData) {
       for (const key of Object.keys(byModel)) {
         const val = row[key];
         if (typeof val === "number" && !isNaN(val)) {
@@ -93,7 +105,7 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
     const maxAbs = Math.max(...allErrors.map(Math.abs));
     // Add 15% padding so peaks are not pressed against boundary
     return Math.max(0.05, Number((maxAbs * 1.15).toFixed(2)));
-  }, [data, byModel]);
+  }, [visibleData, byModel]);
 
   const seriesNames = Object.keys(byModel);
 
@@ -172,7 +184,7 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
     <div className="w-full select-none space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
         <span className="text-slate-400">
-          Showing {data.length} trading sessions &middot; Positive =
+          Showing {visibleData.length} of {data.length} trading sessions &middot; Positive =
           Overprediction, Negative = Underprediction
         </span>
         {liveStartDate && (
@@ -183,10 +195,18 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
         )}
       </div>
 
-      <div className="w-full">
+      <ChartGestureControls {...gestures} />
+
+      <div
+        ref={gestures.surfaceRef}
+        className={`relative w-full touch-pan-y select-none ${gestures.isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+        style={{ touchAction: "pan-y" }}
+        {...gestures.handlers}
+      >
+        <ChartResetButton visible={gestures.isViewportModified} onReset={gestures.reset} />
         <ResponsiveContainer width="100%" height={360}>
           <LineChart
-            data={data}
+            data={visibleData}
             margin={{ top: 10, right: 15, left: 10, bottom: 5 }}
           >
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
@@ -202,7 +222,7 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
               dataKey="step"
               tick={{ fill: "#94a3b8", fontSize: 11 }}
               tickFormatter={(val) => {
-                const item = data.find((d) => d.step === val);
+                const item = visibleData.find((d) => d.step === val);
                 return item ? item.displayDate : val;
               }}
               minTickGap={35}
@@ -263,7 +283,7 @@ export default function ErrorChart({ dates, actual, byModel, selectedModel, live
                   stroke={MODEL_COLORS[name] ?? "#94a3b8"}
                   strokeWidth={isSelected ? 2.5 : 1.5}
                   strokeDasharray={isNaive ? "4 4" : undefined}
-                  dot={data.length === 1 ? { r: 4 } : false}
+                  dot={visibleData.length === 1 ? { r: 4 } : false}
                   activeDot={{ r: 4 }}
                 />
               );

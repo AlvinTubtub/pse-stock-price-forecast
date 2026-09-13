@@ -12,6 +12,8 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
+import ChartGestureControls, { ChartResetButton } from "./ChartGestureControls";
+import { useChartInteractions } from "@/hooks/useChartTouchGestures";
 import type { OhlcvPoint } from "@/lib/types";
 
 /**
@@ -132,6 +134,16 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
     return data.filter((p) => p.date >= appliedStartDate && p.date <= appliedEndDate);
   }, [data, appliedStartDate, appliedEndDate]);
 
+  const gestures = useChartInteractions({
+    totalPoints: filteredData.length,
+    minWindow: 8,
+    resetKey: `${appliedStartDate}:${appliedEndDate}`,
+  });
+  const chartData = useMemo(
+    () => filteredData.slice(gestures.viewport.startIndex, gestures.viewport.endIndex + 1),
+    [filteredData, gestures.viewport.endIndex, gestures.viewport.startIndex],
+  );
+
   const [visibleSeries, setVisibleSeries] = useState({
     open: true,
     high: true,
@@ -144,8 +156,8 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
     setVisibleSeries((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const visibleStartDate = filteredData[0]?.date;
-  const visibleEndDate = filteredData[filteredData.length - 1]?.date;
+  const visibleStartDate = chartData[0]?.date;
+  const visibleEndDate = chartData[chartData.length - 1]?.date;
 
   return (
     <div className="w-full select-none space-y-3.5">
@@ -240,7 +252,7 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
         <div className="text-slate-400 text-[11px] font-mono whitespace-nowrap ml-auto">
           {visibleStartDate && visibleEndDate ? `${visibleStartDate} – ${visibleEndDate}` : null}{" "}
           <span className="text-slate-500">
-            ({filteredData.length.toLocaleString()} pts)
+            ({chartData.length.toLocaleString()} of {filteredData.length.toLocaleString()} pts)
           </span>
         </div>
       </div>
@@ -331,10 +343,18 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
           </p>
         </div>
       ) : (
-        <div className="w-full">
+        <div className="w-full space-y-2">
+          <ChartGestureControls {...gestures} />
+          <div
+            ref={gestures.surfaceRef}
+            className={`relative w-full touch-pan-y select-none ${gestures.isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+            style={{ touchAction: "pan-y" }}
+            {...gestures.handlers}
+          >
+          <ChartResetButton visible={gestures.isViewportModified} onReset={gestures.reset} />
           <ResponsiveContainer width="100%" height={430}>
             <ComposedChart
-              data={filteredData}
+              data={chartData}
               margin={{ top: 15, right: 10, left: 0, bottom: 0 }}
             >
               <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
@@ -426,6 +446,7 @@ export default function HistoryChart({ data }: { data: OhlcvPoint[] }) {
               )}
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
     </div>

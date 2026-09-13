@@ -36,7 +36,7 @@ export default function WatchlistStar({
       onClick={handleClick}
       title={watching ? `Remove ${symbol} from Watchlist` : `Add ${symbol} to Watchlist`}
       aria-label={watching ? `Watching ${symbol}` : `Add ${symbol} to Watchlist`}
-      className={`inline-flex items-center gap-1 transition-all cursor-pointer select-none rounded-lg font-medium ${
+      className={`inline-flex items-center gap-1 transition-all cursor-pointer select-none rounded-lg font-medium outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-card ${
         showLabel
           ? watching
             ? "px-2 py-1 text-[10px] bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25"

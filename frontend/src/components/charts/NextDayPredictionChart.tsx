@@ -10,6 +10,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import ChartGestureControls, { ChartResetButton } from "./ChartGestureControls";
+import { useChartInteractions } from "@/hooks/useChartTouchGestures";
 import type { OhlcvPoint } from "@/lib/types";
 import { formatDate, formatPeso } from "@/lib/format";
 
@@ -52,7 +54,7 @@ export default function NextDayPredictionChart({
 }: NextDayPredictionChartProps) {
   const [windowSize, setWindowSize] = useState<number>(25);
 
-  const chartData = useMemo(() => {
+  const fullChartData = useMemo(() => {
     if (!ohlcv || ohlcv.length === 0) return [];
 
     const historicalSlice = ohlcv.slice(-windowSize);
@@ -92,6 +94,16 @@ export default function NextDayPredictionChart({
 
     return items;
   }, [ohlcv, windowSize, forecastDate, nextClose]);
+
+  const gestures = useChartInteractions({
+    totalPoints: fullChartData.length,
+    minWindow: Math.min(6, fullChartData.length),
+    resetKey: `${windowSize}:${fullChartData[0]?.dateKey ?? ""}:${fullChartData[fullChartData.length - 1]?.dateKey ?? ""}`,
+  });
+  const chartData = useMemo(
+    () => fullChartData.slice(gestures.viewport.startIndex, gestures.viewport.endIndex + 1),
+    [fullChartData, gestures.viewport.endIndex, gestures.viewport.startIndex],
+  );
 
   // Compute dynamic Y-axis domain
   const yDomain = useMemo(() => {
@@ -195,10 +207,11 @@ export default function NextDayPredictionChart({
   };
 
   const renderActualDot = (props: any) => {
-    const { cx, cy, index } = props;
-    const total = chartData.length;
-    if (index === total - 1) return <React.Fragment key={index} />;
-    const isLatest = index === total - 2;
+    const { cx, cy, index, payload } = props;
+    if (payload?.isForecastPoint || typeof payload?.actualClose !== "number") {
+      return <React.Fragment key={index} />;
+    }
+    const isLatest = payload?.isLatestActual;
 
     return (
       <circle
@@ -214,9 +227,8 @@ export default function NextDayPredictionChart({
   };
 
   const renderPredictionDot = (color: string) => (props: any) => {
-    const { cx, cy, index } = props;
-    const total = chartData.length;
-    if (index !== total - 1) return <React.Fragment key={index} />;
+    const { cx, cy, index, payload } = props;
+    if (!payload?.isForecastPoint) return <React.Fragment key={index} />;
 
     return (
       <circle
@@ -281,8 +293,16 @@ export default function NextDayPredictionChart({
         </div>
       </div>
 
+      <ChartGestureControls {...gestures} />
+
       {/* 2. Chart Canvas */}
-      <div className="w-full relative">
+      <div
+        ref={gestures.surfaceRef}
+        className={`relative w-full touch-pan-y select-none ${gestures.isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+        style={{ touchAction: "pan-y" }}
+        {...gestures.handlers}
+      >
+        <ChartResetButton visible={gestures.isViewportModified} onReset={gestures.reset} />
         <ResponsiveContainer width="100%" height={380}>
           <LineChart
             data={chartData}

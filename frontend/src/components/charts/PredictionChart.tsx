@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -12,6 +12,8 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
+import ChartGestureControls, { ChartResetButton } from "./ChartGestureControls";
+import { useChartInteractions } from "@/hooks/useChartTouchGestures";
 
 const MODEL_COLORS: Record<string, string> = {
   Actual: "#22c55e",
@@ -67,7 +69,7 @@ export default function PredictionChart({
   selectedModel,
   liveStartDate,
 }: PredictionChartProps) {
-  const data = actual.map((value, i) => {
+  const data = useMemo(() => actual.map((value, i) => {
     const rawDate = dates?.[i] || `Day ${i + 1}`;
     const row: Record<string, any> = {
       step: rawDate,
@@ -79,7 +81,17 @@ export default function PredictionChart({
       if (series[i] !== undefined) row[model] = series[i];
     }
     return row;
+  }), [actual, byModel, dates]);
+
+  const gestures = useChartInteractions({
+    totalPoints: data.length,
+    minWindow: 5,
+    resetKey: `${data.length}:${data[0]?.step ?? ""}:${data[data.length - 1]?.step ?? ""}`,
   });
+  const visibleData = useMemo(
+    () => data.slice(gestures.viewport.startIndex, gestures.viewport.endIndex + 1),
+    [data, gestures.viewport.endIndex, gestures.viewport.startIndex],
+  );
 
   const seriesNames = ["Actual", ...Object.keys(byModel)];
 
@@ -156,7 +168,7 @@ export default function PredictionChart({
     <div className="w-full select-none space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
         <span className="text-slate-400">
-          Showing {data.length} trading sessions &middot; Hover points to inspect prices
+          Showing {visibleData.length} of {data.length} trading sessions &middot; Hover points to inspect prices
         </span>
         {liveStartDate && (
           <span className="inline-flex items-center gap-1.5 rounded-md border border-teal-400/40 bg-teal-400/10 px-2 py-1 font-semibold text-teal-100">
@@ -166,10 +178,18 @@ export default function PredictionChart({
         )}
       </div>
 
-      <div className="w-full">
+      <ChartGestureControls {...gestures} />
+
+      <div
+        ref={gestures.surfaceRef}
+        className={`relative w-full touch-pan-y select-none ${gestures.isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+        style={{ touchAction: "pan-y" }}
+        {...gestures.handlers}
+      >
+        <ChartResetButton visible={gestures.isViewportModified} onReset={gestures.reset} />
         <ResponsiveContainer width="100%" height={360}>
           <LineChart
-            data={data}
+            data={visibleData}
             margin={{ top: 10, right: 15, left: 10, bottom: 5 }}
           >
             <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
@@ -185,7 +205,7 @@ export default function PredictionChart({
               dataKey="step"
               tick={{ fill: "#94a3b8", fontSize: 11 }}
               tickFormatter={(val) => {
-                const item = data.find((d) => d.step === val);
+                const item = visibleData.find((d) => d.step === val);
                 return item ? item.displayDate : val;
               }}
               minTickGap={35}
@@ -232,7 +252,7 @@ export default function PredictionChart({
                   stroke={MODEL_COLORS[name] ?? "#94a3b8"}
                   strokeWidth={isActual ? 2.5 : isSelected ? 2.5 : 1.5}
                   strokeDasharray={isNaive ? "4 4" : undefined}
-                  dot={data.length === 1 ? { r: 4 } : false}
+                  dot={visibleData.length === 1 ? { r: 4 } : false}
                   activeDot={{ r: 4 }}
                 />
               );
